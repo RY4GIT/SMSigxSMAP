@@ -1,0 +1,9 @@
+name: SMAP
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - pandas
+  - numpy
+  - matplotlib
+  - requests
