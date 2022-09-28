@@ -93,9 +93,10 @@ print(task_response)
 task_id = task_response['task_id']
 
 import time
+import datetime
 starttime = time.time()
-while task_response['status']=='pending' or task_response['status']=='processing':
-    print("Still processing the request at %s" % {time.time()})
+while task_response['status'] =='pending' or task_response['status']=='processing':
+    print("Still processing the request at %s" % {datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')})
     response = requests.get(
         'https://appeears.earthdatacloud.nasa.gov/api/task/{0}'.format(task_id),
         headers={'Authorization': 'Bearer {0}'.format(token)}
@@ -112,11 +113,12 @@ bundle_response = response.json()
 print(bundle_response)
 len(bundle_response)
 for i in range(len(bundle_response)):
-    print(bundle_response['files'][i])
 
     # get a stream to the bundle file
     file_id = bundle_response['files'][i]['file_id']
     filename = bundle_response['files'][i]['file_name']
+    print("Download a file %s" % filename)
+
     response = requests.get(
         'https://appeears.earthdatacloud.nasa.gov/api/bundle/{0}/{1}'.format(task_id,file_id),
         headers={'Authorization': 'Bearer {0}'.format(token)},
