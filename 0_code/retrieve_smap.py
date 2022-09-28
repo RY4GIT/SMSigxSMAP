@@ -38,11 +38,13 @@ params = {'pretty': True}
 network_name = 'OZNET'
 in_path = 'G:/Shared drives/Ryoko and Hilary/SMSigxISMN/analysis/0_data_raw/ISMN'
 data_net = ISMN_Interface(in_path, network=[network_name])
+station_name_ismn=[]
 lat_ismn=[]
 lon_ismn=[]
 for network, station, sensor in data_net.collection.iter_sensors(variable='soil_moisture'): # Only select the surface soil moisture within 0-5cm sensor depth to compare with SMAP data
     # Read metadata
     meta_pd = sensor.metadata.to_pd()
+    station_name_ismn.append(meta_pd['station'][0])
     lat_ismn.append(meta_pd['latitude'].values[0])
     lon_ismn.append(meta_pd['longitude'].values[0])
 
@@ -51,7 +53,22 @@ sample_request_path = "./sample_point_request.json"
 with open(sample_request_path) as json_file:
     task = json.load(json_file)
 
+# task_template['params']['dates'][0]['endDate'] = '02-01-2020'
+# task_template['params']['dates'][0]['startDate'] = '01-01-2020'
+
+for i in range(len(lat_ismn)):
+    sensor_coord = {
+        'id': station_name_ismn[0],
+        'category': station_name_ismn[0],
+        'latitude': lat_ismn[0],
+        'longitude': lon_ismn[0]
+    }
+    task['params']['coordinates'].append(sensor_coord)
+
 # Write a json for target point locations
+my_request_path = "./my_test_request.json"
+with open(my_request_path, 'w') as json_file:
+    json.dump(task, json_file, indent=4)
 
 ## Login to appears
 my_credential_path = "./auth.json"
@@ -67,7 +84,8 @@ token = token_response['token']
 response = requests.post(
     'https://appeears.earthdatacloud.nasa.gov/api/task',
     json=task,
-    headers={'Authorization': 'Bearer {0}'.format(token)})
+    headers={'Authorization': 'Bearer {0}'.format(token)}
+)
 task_response = response.json()
 print(task_response)
 
