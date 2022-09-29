@@ -48,7 +48,7 @@ df_ts_sync = pd.merge(df_ts_smap_daily, df_ts_ismn_daily, how='inner', left_inde
 df_ts_sync.rename(columns={"SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_soil_moisture": "soil_moisture_smap", "soil_moisture": "soil_moisture_ismn"}, inplace=True)
 import matplotlib.dates as mdates
 
-# Plot both sensors
+# Plot the timesereis of data
 fig, ax = plt.subplots()
 line1, = ax.plot(df_ts_sync['soil_moisture_ismn'], label='In-situ')
 line2, = ax.plot(df_ts_sync['soil_moisture_smap'], 'o', markersize=4, alpha=0.5, label='SMAP')
@@ -65,7 +65,7 @@ fig.autofmt_xdate()
 fig.savefig('../3_data_out/test_ts.png')
 del fig, ax
 
-# Plot for the whole period
+# Plot the histogram
 fig, ax = plt.subplots()
 ax.hist(df_ts_sync['soil_moisture_ismn'], label='In-situ',  bins=30, alpha = 0.5)
 ax.hist(df_ts_sync['soil_moisture_smap'], label='SMAP',     bins=30, alpha = 0.5)
@@ -79,4 +79,4 @@ del fig, ax
 # TODO: check the timezone UTC? local time?
 # TODO: check the definition of quality flag. Am I looking at the right column?
 # TODO: check the definition of soil moisture data. Am I looking at the right column?
-# TODO: generalize more 
+# TODO: generalize more
