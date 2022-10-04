@@ -6,14 +6,18 @@
 # ======================= THE DATA ===============================
 # This script downloads SMAP Enhanced L3 Radiometer Global and Polar Grid Daily 9 km EASE-Grid Soil Moisture, Version 5 (SPL3SMP_E)
 # https://nsidc.org/data/spl3smp_e/versions/5#anchor-2
+# TODO: which product to use, L2 or L3?
 
 # Layers downloaded are as follows:
-# Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag (have different versions)
+# Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag
 # Soil_Moisture_Retrieval_Data_AM_soil_moisture
 # Soil_Moisture_Retrieval_Data_AM_soil_moisture_error
 # Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm
 # Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm
 # Soil_Moisture_Retrieval_Data_PM_soil_moisture_error_pm
+
+# The product includes includes soil moisture retrievals from three algorithms:
+# the ones I picked (the ones without notation) are from Dual Channel Algorithm (DCA)
 
 # A list of product code is here
 # https://appeears.earthdatacloud.nasa.gov/products
@@ -36,6 +40,7 @@ params = {'pretty': True}
 
 # Get the target point locations (ISMN sensor coordinates)
 network_name = 'OZNET'
+# TODO: Generalize the operation
 in_path = 'G:/Shared drives/Ryoko and Hilary/SMSigxISMN/analysis/0_data_raw/ISMN'
 data_net = ISMN_Interface(in_path, network=[network_name])
 station_name_ismn=[]
@@ -43,6 +48,8 @@ lat_ismn=[]
 lon_ismn=[]
 for network, station, sensor in data_net.collection.iter_sensors(variable='soil_moisture'): # Only select the surface soil moisture within 0-5cm sensor depth to compare with SMAP data
     # Read metadata
+    # TODO: add a depth information to cut off the stations to look at
+    # TODO: add a start & end of record to cut off the stations to look at
     meta_pd = sensor.metadata.to_pd()
     station_name_ismn.append(meta_pd['station'][0])
     lat_ismn.append(meta_pd['latitude'].values[0])
@@ -102,7 +109,7 @@ while task_response['status'] =='pending' or task_response['status']=='processin
         headers={'Authorization': 'Bearer {0}'.format(token)}
     )
     task_response = response.json()
-    time.sleep(60.0 - ((time.time() - starttime) % 60.0))
+    time.sleep(300.0 - ((time.time() - starttime) % 300.0)) # check the request every 300 sec
 print("Done processing on Appears' side")
 
 # To bundle download
@@ -129,7 +136,7 @@ for i in range(len(bundle_response)):
     )
 
     # create a destination directory to store the file in
-    dest_dir = "../1_data/SMAP"
+    dest_dir = "../1_data/SMAP/OZNET"
     filepath = os.path.join(dest_dir, filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
 

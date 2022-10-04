@@ -15,6 +15,14 @@
             {
                 "layer": "Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag",
                 "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm",
+                "product": "SPL3SMP_E.005"
             }
         ],
         "output": {
