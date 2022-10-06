@@ -9,6 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt  # matplotlib is not installed automatically
 from datetime import datetime
 import warnings
+from sklearn.metrics import mean_squared_error
+from math import sqrt
 
 # Specify current directory and create output directory if it does not exist
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
@@ -20,7 +22,7 @@ class SMAPxISMN():
         self.insitu_network_name = insitu_network_name
         self.out_path = out_path
 
-    def load_data(self, plot=True):
+    def load_data(self, plot=False):
 
         #################
         #   READ DATA   #
@@ -85,23 +87,26 @@ class SMAPxISMN():
 
         # Merge and sync ISMN and SMAP data
         df_ts_sync = pd.merge(df_ts_smap_daily, df_ts_ismn_daily, how='inner', left_index=True, right_index=True)
-        df_ts_sync.rename(columns={"soil_moisture": "soil_moisture_ismn"}, inplace=True)
+        df_ts_sync.rename(columns={"soil_moisture": "ismn", "soil_moisture_smap": "smap"}, inplace=True)
 
         # Filter out the portion of timeseries where either ISMN or SMAP data is unavailable
-        df_ts_sync['rolling_ismn'] = df_ts_sync['soil_moisture_ismn'].rolling(window='7d', center=True, closed='both').mean()
-        df_ts_sync['rolling_smap'] = df_ts_sync['soil_moisture_smap'].rolling(window='7d', center=True, closed='both').mean()
+        df_ts_sync['rolling_ismn'] = df_ts_sync['ismn'].rolling(window='7d', center=True, closed='both').mean()
+        df_ts_sync['rolling_smap'] = df_ts_sync['smap'].rolling(window='7d', center=True, closed='both').mean()
         no_data_idx = df_ts_sync[df_ts_sync['rolling_ismn'].isnull() | df_ts_sync['rolling_smap'].isnull()].index
-        df_ts_sync['soil_moisture_ismn'][no_data_idx]=np.NaN
-        df_ts_sync['soil_moisture_smap'][no_data_idx]=np.NaN
+        df_ts_sync['ismn'][no_data_idx]=np.NaN
+        df_ts_sync['smap'][no_data_idx]=np.NaN
 
-        self.sm_ts = df_ts_sync
+        self.soil_moisture_ts = df_ts_sync
+        self.soil_moisture_Ndata_smap = df_ts_sync['smap'].count() # Count the number of data which is not NaN. len(df_ts_sync['ismn'])
+        self.both_data_notnull_idx = df_ts_sync[df_ts_sync['smap'].notnull() & df_ts_sync['ismn'].notnull()].index
+        print('test')
 
         if plot:
             # Plot the timesereis of data
 
             fig, ax = plt.subplots()
-            line1, = ax.plot(df_ts_sync['soil_moisture_ismn'], label='In-situ')
-            line2, = ax.plot(df_ts_sync['soil_moisture_smap'], 'o', markersize=4, alpha=0.5, label='SMAP')
+            line1, = ax.plot(df_ts_sync['ismn'], label='In-situ')
+            line2, = ax.plot(df_ts_sync['smap'], 'o', markersize=4, alpha=0.5, label='SMAP')
             fig.legend()
             xax = ax.xaxis
             ax.set_title(f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})")
@@ -126,6 +131,40 @@ class SMAPxISMN():
             fig.savefig(os.path.join(self.out_path, 'test_hist.png'))
             del fig, ax
 
+    def calc_bias(self):
+        bias = sum(self.soil_moisture_ts['smap'][self.both_data_notnull_idx]-self.soil_moisture_ts['ismn'][self.both_data_notnull_idx])/len(self.both_data_notnull_idx)
+        return bias
+
+    def count_N(self):
+        return len(self.both_data_notnull_idx)
+
+    def calc_RMSE(self):
+        RMSE = mean_squared_error(self.soil_moisture_ts['ismn'][self.both_data_notnull_idx], self.soil_moisture_ts['smap'][self.both_data_notnull_idx], squared=False)
+        return RMSE
+
+    def calc_ubRMSE(self):
+        RMSE = mean_squared_error(self.soil_moisture_ts['ismn'][self.both_data_notnull_idx],
+                                  self.soil_moisture_ts['smap'][self.both_data_notnull_idx], squared=False)
+        bias = sum(self.soil_moisture_ts['smap'][self.both_data_notnull_idx] - self.soil_moisture_ts['ismn'][
+            self.both_data_notnull_idx]) / len(self.both_data_notnull_idx)
+        ubRMSE = sqrt(RMSE**2 - bias**2)
+        return ubRMSE
+
+    def calc_R(self, plot=False):
+        R = np.corrcoef(self.soil_moisture_ts['ismn'][self.both_data_notnull_idx], self.soil_moisture_ts['smap'][self.both_data_notnull_idx])
+        if plot:
+            fig, ax = plt.subplots()
+            scatter = ax.scatter(self.soil_moisture_ts['ismn'][self.both_data_notnull_idx].values, self.soil_moisture_ts['smap'][self.both_data_notnull_idx].values)
+            ax.set_title("Volumetric soil water content [m^3/m^3]")
+            ax.set_xlabel("In-situ")
+            ax.set_ylabel("SMAP")
+            ax.axis('square')
+            fig.savefig(os.path.join(self.out_path, 'test_scatter.png'))
+            del fig, ax
+        return R[0][1]
+
+
+
 
 def main():
 
@@ -137,7 +176,12 @@ def main():
         os.mkdir(out_path)
 
     mySMAP = SMAPxISMN(input_path_smap=input_path_smap, input_path_ismn=input_path_ismn, insitu_network_name='OZNET', out_path=out_path)
-    mySMAP.load_data()
+    mySMAP.load_data(plot=False)
+    print(f"  Bias [m^3/m^3]: {mySMAP.calc_bias()}")
+    print(f"  RMSE [m^3/m^3]: {mySMAP.calc_RMSE()}")
+    print(f"ubRMSE [m^3/m^3]: {mySMAP.calc_ubRMSE()}")
+    print(f"     R       [-]: {mySMAP.calc_R()}")
+    print(f"     N   [count]: {mySMAP.count_N()}")
 
 if __name__ == '__main__':
     main()
