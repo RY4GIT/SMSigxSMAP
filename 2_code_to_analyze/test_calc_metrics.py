@@ -10,10 +10,55 @@ import matplotlib.pyplot as plt  # matplotlib is not installed automatically
 from datetime import datetime
 import warnings
 from sklearn.metrics import mean_squared_error
+from sklearn.neighbors import KernelDensity
+from sklearn.model_selection import GridSearchCV
+from scipy.signal import find_peaks
 from math import sqrt
 
 # Specify current directory and create output directory if it does not exist
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
+
+def calc_kerneldensity(ts, plot=False):
+
+    # Prep
+    bandwidths = np.arange(0.005, 0.1, 0.001)
+    maxsm = np.max(ts.dropna().values)
+    minsm = np.min(ts.dropna().values)
+    x_plot = np.linspace(minsm, maxsm, 100)[:, np.newaxis]
+    x_test = ts.dropna().values[:, np.newaxis]
+    bandwidth_fact = 1.5
+
+    # Calculation
+    kde0 = KernelDensity(kernel='gaussian')
+    grid = GridSearchCV(kde0, {'bandwidth': bandwidths})
+    grid.fit(x_test)
+    kde_optimal = grid.best_estimator_
+    log_dens_optimal = kde_optimal.score_samples(x_plot)
+    log_dens_smoothed = KernelDensity(kernel='gaussian', bandwidth=kde_optimal.bandwidth * bandwidth_fact).fit(
+        x_test).score_samples(x_plot)
+
+    peaks, heights = find_peaks(np.exp(log_dens_smoothed), height=0)
+    wilting_point = np.min(x_plot[:, 0][peaks])
+    field_capacity = np.max(x_plot[:, 0][peaks])
+
+    if plot:
+        # Plot the histogram
+        if ts.name == 'smap':
+            color = '#ff7f0e'
+        elif ts.name == 'ismn':
+            color = '#1f77b4'
+
+        fig, ax = plt.subplots()
+        ax.hist(x_test[:, 0], label='Observed', color=color, bins=50, alpha=0.5, density=True, stacked=True)
+        ax.plot(x_plot[:, 0], np.exp(log_dens_optimal), color="k", linestyle='--', label=f'Gaussian Kernel density (bandwidth={kde_optimal.bandwidth})')
+        ax.plot(x_plot[:, 0], np.exp(log_dens_smoothed), color="k", linestyle='-', label=f'Gaussian Kernel density (bandwidth=optimal * {bandwidth_fact})')
+        ax.plot(x_plot[:, 0][peaks], np.exp(log_dens_smoothed)[peaks], marker='x', markersize=12, color="k", label='Peaks')
+        fig.legend()
+        ax.set_xlabel("Volmetric soil water content [m^3/m^3]")
+        ax.set_ylabel("Normalized frequency [-]")
+
+    return wilting_point, field_capacity, fig, ax
+
 
 class SMAPxISMN():
     def __init__(self, input_path_ismn, input_path_smap, insitu_network_name, out_path):
@@ -101,6 +146,11 @@ class SMAPxISMN():
         self.both_data_notnull_idx = df_ts_sync[df_ts_sync['smap'].notnull() & df_ts_sync['ismn'].notnull()].index
         print('test')
 
+        self.plottitle = f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})"
+        self.station = station
+        self.longitude = df_SMAP['Longitude'][0]
+        self.latitude = df_SMAP['Latitude'][0]
+
         if plot:
             # Plot the timesereis of data
 
@@ -163,8 +213,39 @@ class SMAPxISMN():
             del fig, ax
         return R[0][1]
 
+    def calc_dist(self, plot=True):
+        # Get the field_capacity and wilting points
+        # SMAP
+        wilting_point_smap, field_capacity_smap, fig, ax = calc_kerneldensity(self.soil_moisture_ts['smap'], plot=True)
+        ax.set_title(self.plottitle)
+        fig.savefig(os.path.join(self.out_path, 'test_kernel_smap.png'))
 
+        # ISMN
+        ts = self.soil_moisture_ts['ismn']
+        wilting_point_ismn, field_capacity_ismn, fig, ax = calc_kerneldensity(ts, plot=True)
+        ax.set_title(self.plottitle)
+        fig.savefig(os.path.join(self.out_path, 'test_kernel_ismn.png'))
 
+        if plot:
+
+            fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
+            ax1.plot(self.soil_moisture_ts['smap'], 'o', label='SMAP', color='#ff7f0e')
+            ax1.axhline(y=wilting_point_smap)
+            ax1.axhline(y=field_capacity_smap)
+            ax1.set_xlabel("Time")
+            ax1.set_ylabel("Volumetric soil water content [m^3/m^3]")
+
+            ax2.plot(self.soil_moisture_ts['ismn'], 'o', label='In-situ', color='#1f77b4')
+            ax2.axhline(y=wilting_point_ismn)
+            ax2.axhline(y=field_capacity_ismn)
+            ax2.set_xlabel("Time")
+            ax2.set_ylabel("Volumetric soil water content [m^3/m^3]")
+
+            fig.legend()
+            fig.autofmt_xdate()
+
+            fig.savefig(os.path.join(self.out_path, 'test_kernel_ts.png'))
+            del fig, ax
 
 def main():
 
@@ -177,11 +258,12 @@ def main():
 
     mySMAP = SMAPxISMN(input_path_smap=input_path_smap, input_path_ismn=input_path_ismn, insitu_network_name='OZNET', out_path=out_path)
     mySMAP.load_data(plot=False)
-    print(f"  Bias [m^3/m^3]: {mySMAP.calc_bias()}")
-    print(f"  RMSE [m^3/m^3]: {mySMAP.calc_RMSE()}")
-    print(f"ubRMSE [m^3/m^3]: {mySMAP.calc_ubRMSE()}")
-    print(f"     R       [-]: {mySMAP.calc_R()}")
-    print(f"     N   [count]: {mySMAP.count_N()}")
+    # print(f"  Bias [m^3/m^3]: {mySMAP.calc_bias()}")
+    # print(f"  RMSE [m^3/m^3]: {mySMAP.calc_RMSE()}")
+    # print(f"ubRMSE [m^3/m^3]: {mySMAP.calc_ubRMSE()}")
+    # print(f"     R       [-]: {mySMAP.calc_R()}")
+    # print(f"     N   [count]: {mySMAP.count_N()}")
+    mySMAP.calc_dist(plot=True)
 
 if __name__ == '__main__':
     main()
