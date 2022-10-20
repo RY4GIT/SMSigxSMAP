@@ -18,28 +18,32 @@ from math import sqrt
 # Specify current directory and create output directory if it does not exist
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
 
-def calc_kerneldensity(ts, plot=False):
+def calc_kerneldensity(ts, bandwidth_fact=1, plot=False):
 
     # Prep
+    kd_method = 'gaussian'
+
     bandwidths = np.arange(0.005, 0.1, 0.001)
     maxsm = np.max(ts.dropna().values)
     minsm = np.min(ts.dropna().values)
     x_plot = np.linspace(minsm, maxsm, 100)[:, np.newaxis]
     x_test = ts.dropna().values[:, np.newaxis]
-    bandwidth_fact = 1.5
 
     # Calculation
-    kde0 = KernelDensity(kernel='gaussian')
+    kde0 = KernelDensity(kernel=kd_method)
     grid = GridSearchCV(kde0, {'bandwidth': bandwidths})
     grid.fit(x_test)
     kde_optimal = grid.best_estimator_
     log_dens_optimal = kde_optimal.score_samples(x_plot)
-    log_dens_smoothed = KernelDensity(kernel='gaussian', bandwidth=kde_optimal.bandwidth * bandwidth_fact).fit(
+    log_dens_smoothed = KernelDensity(kernel=kd_method, bandwidth=kde_optimal.bandwidth * bandwidth_fact).fit(
         x_test).score_samples(x_plot)
 
-    peaks, heights = find_peaks(np.exp(log_dens_smoothed), height=0)
-    wilting_point = np.min(x_plot[:, 0][peaks])
-    field_capacity = np.max(x_plot[:, 0][peaks])
+    peaks_smoothed, properties = find_peaks(np.exp(log_dens_smoothed), height=0, prominence=0)
+    peaks_optimal, properties = find_peaks(np.exp(log_dens_optimal), height=0, prominence=0)
+    print(properties)
+    wilting_point = np.min(x_plot[:, 0][peaks_optimal])
+    field_capacity = np.max(x_plot[:, 0][peaks_smoothed])
+    n_modes = len(peaks_smoothed)
 
     if plot:
         # Plot the histogram
@@ -50,14 +54,18 @@ def calc_kerneldensity(ts, plot=False):
 
         fig, ax = plt.subplots()
         ax.hist(x_test[:, 0], label='Observed', color=color, bins=50, alpha=0.5, density=True, stacked=True)
-        ax.plot(x_plot[:, 0], np.exp(log_dens_optimal), color="k", linestyle='--', label=f'Gaussian Kernel density (bandwidth={kde_optimal.bandwidth})')
-        ax.plot(x_plot[:, 0], np.exp(log_dens_smoothed), color="k", linestyle='-', label=f'Gaussian Kernel density (bandwidth=optimal * {bandwidth_fact})')
-        ax.plot(x_plot[:, 0][peaks], np.exp(log_dens_smoothed)[peaks], marker='x', markersize=12, color="k", label='Peaks')
+        ax.plot(x_plot[:, 0], np.exp(log_dens_optimal), color="k", linestyle='--', label=f'{kd_method} (bandwidth={kde_optimal.bandwidth})')
+        ax.plot(x_plot[:, 0], np.exp(log_dens_smoothed), color="k", linestyle='-', label=f'{kd_method} (bandwidth=optimal * {bandwidth_fact})')
+        ax.plot(x_plot[:, 0][peaks_smoothed], np.exp(log_dens_smoothed)[peaks_smoothed], marker='x', markersize=12, markeredgecolor="k", linestyle = 'None', label='Peaks')
+        ax.plot(x_plot[:, 0][peaks_optimal], np.exp(log_dens_optimal)[peaks_optimal], marker='x', markersize=12,
+                markeredgecolor="k", linestyle='None', label=None)
+
         fig.legend()
         ax.set_xlabel("Volmetric soil water content [m^3/m^3]")
         ax.set_ylabel("Normalized frequency [-]")
+        ax.set_title(ts.name)
 
-    return wilting_point, field_capacity, fig, ax
+    return wilting_point, field_capacity, n_modes, fig, ax
 
 
 class SMAPxISMN():
@@ -66,8 +74,12 @@ class SMAPxISMN():
         self.input_path_smap = input_path_smap
         self.insitu_network_name = insitu_network_name
         self.out_path = out_path
+        self.smap_color = '#ff7f0e'
+        self.ismn_color = '#1f77b4'
 
-    def load_data(self, plot=False):
+    def load_data(self, data_treatment_option=None, plot=False):
+
+        self.data_treatment_option = data_treatment_option
 
         #################
         #   READ DATA   #
@@ -141,10 +153,20 @@ class SMAPxISMN():
         df_ts_sync['ismn'][no_data_idx]=np.NaN
         df_ts_sync['smap'][no_data_idx]=np.NaN
 
+        # Extra data treatment
+        if self.data_treatment_option == 'limit_data_to_smap_available_dates':
+            no_data_idx = df_ts_sync[df_ts_sync['smap'].isnull()].index
+            df_ts_sync['ismn'][no_data_idx] = np.NaN
+
+        if self.data_treatment_option == 'linear_interpolation_on_smap':
+            # Interpolate up to 3 days window on before and after (in total, 1 week window)
+            df_ts_before_interp = df_ts_sync.copy()
+            df_ts_sync['smap'] = df_ts_sync['smap'].interpolate(method='linear', limit=3, limit_direction='both')
+
+        # Variables to return
         self.soil_moisture_ts = df_ts_sync
         self.soil_moisture_Ndata_smap = df_ts_sync['smap'].count() # Count the number of data which is not NaN. len(df_ts_sync['ismn'])
         self.both_data_notnull_idx = df_ts_sync[df_ts_sync['smap'].notnull() & df_ts_sync['ismn'].notnull()].index
-        print('test')
 
         self.plottitle = f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})"
         self.station = station
@@ -155,8 +177,14 @@ class SMAPxISMN():
             # Plot the timesereis of data
 
             fig, ax = plt.subplots()
-            line1, = ax.plot(df_ts_sync['ismn'], label='In-situ')
-            line2, = ax.plot(df_ts_sync['smap'], 'o', markersize=4, alpha=0.5, label='SMAP')
+            if self.data_treatment_option == 'limit_data_to_smap_available_dates':
+                line1, = ax.plot(df_ts_sync['ismn'], 'o', markersize=4, alpha=0.5, label='In-situ')
+            else:
+                line1, = ax.plot(df_ts_sync['ismn'], label='In-situ')
+            if self.data_treatment_option == 'linear_interpolation_on_smap':
+                line2, = ax.plot(df_ts_sync['smap'], alpha=0.5, label='SMAP')
+            else:
+                line2, = ax.plot(df_ts_sync['smap'], 'o', markersize=4, alpha=0.5, label='SMAP')
             fig.legend()
             xax = ax.xaxis
             ax.set_title(f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})")
@@ -172,13 +200,36 @@ class SMAPxISMN():
 
             # Plot the histogram
             fig, ax = plt.subplots()
-            ax.hist(df_ts_sync['soil_moisture_ismn'], label='In-situ',  bins=30, alpha = 0.5, density=True, stacked=True)
-            ax.hist(df_ts_sync['soil_moisture_smap'], label='SMAP',     bins=30, alpha = 0.5, density=True, stacked=True)
+            ax.hist(df_ts_sync['ismn'], label='In-situ',  bins=30, alpha = 0.5, density=True, stacked=True, color=self.ismn_color)
+            ax.hist(df_ts_sync['smap'], label='SMAP',     bins=30, alpha = 0.5, density=True, stacked=True, color=self.smap_color)
             fig.legend()
             ax.set_title(f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})")
             ax.set_xlabel("Volmetric soil water content [m^3/m^3]")
             ax.set_ylabel("Normalized frequency [-]")
             fig.savefig(os.path.join(self.out_path, 'test_hist.png'))
+            del fig, ax
+
+            # Plot the close-up
+            if self.data_treatment_option == 'linear_interpolation_on_smap':
+                date_limit_start = '2015-06-01'
+                date_limit_end = '2016-05-31'
+                df_limit_range = df_ts_sync.loc[date_limit_start:date_limit_end].copy()
+                fig, ax = plt.subplots()
+                line1, = ax.plot(df_limit_range['ismn'], label='In-situ', color=self.ismn_color)
+                line2, = ax.plot(df_limit_range['smap'], alpha=0.5, label='SMAP', color=self.smap_color)
+                line3, = ax.plot(df_ts_before_interp['smap'].loc[date_limit_start:date_limit_end], 'o', markersize=4, alpha=0.5, label='SMAP', color=self.smap_color)
+            fig.legend()
+            xax = ax.xaxis
+            ax.set_title(
+                f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})")
+            ax.set_xlabel("Time")
+            ax.set_ylabel("Volumetric soil water content [m^3/m^3]")
+            # formatter = mdates.DateFormatter("%Y") ### formatter of the date
+            # locator = mdates.YearLocator() ### where to put the labels
+            # ax.xaxis.set_major_formatter(formatter) ## calling the formatter for the x-axis
+            # ax.xaxis.set_major_locator(locator) ## calling the locator for the x-axis
+            fig.autofmt_xdate()
+            fig.savefig(os.path.join(self.out_path, f'test_ts_close_up_{date_limit_start}_{date_limit_end}.png'))
             del fig, ax
 
     def calc_bias(self):
@@ -215,49 +266,65 @@ class SMAPxISMN():
 
     def calc_dist(self, plot=True):
         # Get the field_capacity and wilting points
+
+        # When the data is coarse (e.g., SMAP data without data interpolation)
+        #     bandwidth_fact = 1.5
+        # When the data is daily (e.g., ISMN, or SMAP data after interpolation)
+        #     bandwidth_fact = 3
+
         # SMAP
-        wilting_point_smap, field_capacity_smap, fig, ax = calc_kerneldensity(self.soil_moisture_ts['smap'], plot=True)
-        ax.set_title(self.plottitle)
+        wilting_point_smap, field_capacity_smap, n_modes_smap, fig, ax = calc_kerneldensity(self.soil_moisture_ts['smap'], bandwidth_fact = 2, plot=True)
         fig.savefig(os.path.join(self.out_path, 'test_kernel_smap.png'))
+        del fig, ax
 
         # ISMN
-        ts = self.soil_moisture_ts['ismn']
-        wilting_point_ismn, field_capacity_ismn, fig, ax = calc_kerneldensity(ts, plot=True)
-        ax.set_title(self.plottitle)
+        wilting_point_ismn, field_capacity_ismn, n_modes_ismn, fig, ax = calc_kerneldensity(self.soil_moisture_ts['ismn'],  bandwidth_fact = 3, plot=True)
         fig.savefig(os.path.join(self.out_path, 'test_kernel_ismn.png'))
+        del fig, ax
+
+        print(f"SMAP: wilting point: {wilting_point_ismn:.2f}, field capacity: {field_capacity_ismn:.2f}, Number of modes: {n_modes_ismn}")
+        print(f"ISMN: wilting point: {wilting_point_smap:.2f}, field capacity: {field_capacity_smap:.2f}, Number of modes: {n_modes_smap}")
 
         if plot:
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True)
-            ax1.plot(self.soil_moisture_ts['smap'], 'o', label='SMAP', color='#ff7f0e')
-            ax1.axhline(y=wilting_point_smap)
-            ax1.axhline(y=field_capacity_smap)
+            fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, sharex=True,  figsize=(10, 5))
+            if self.data_treatment_option=='limit_data_to_smap_available_dates':
+                ax1.plot(self.soil_moisture_ts['ismn'], 'o', alpha=0.5, label='In-situ', color='#1f77b4')
+            else:
+                ax1.plot(self.soil_moisture_ts['ismn'], '-', label='In-situ', color='#1f77b4')
+            ax1.axhline(y=wilting_point_ismn, color='#1f77b4')
+            ax1.axhline(y=field_capacity_ismn, color='#1f77b4')
             ax1.set_xlabel("Time")
             ax1.set_ylabel("Volumetric soil water content [m^3/m^3]")
+            # ax2.set_ylabel("Volumetric soil water content [m^3/m^3]")
 
-            ax2.plot(self.soil_moisture_ts['ismn'], 'o', label='In-situ', color='#1f77b4')
-            ax2.axhline(y=wilting_point_ismn)
-            ax2.axhline(y=field_capacity_ismn)
+            if self.data_treatment_option == 'linear_interpolation_on_smap':
+                ax2.plot(self.soil_moisture_ts['smap'], label='SMAP', color='#ff7f0e')
+            else:
+                ax2.plot(self.soil_moisture_ts['smap'], 'o', label='SMAP', color='#ff7f0e',  alpha=0.5)
+            ax2.axhline(y=wilting_point_smap, color='#ff7f0e')
+            ax2.axhline(y=field_capacity_smap, color='#ff7f0e')
             ax2.set_xlabel("Time")
-            ax2.set_ylabel("Volumetric soil water content [m^3/m^3]")
 
             fig.legend()
+            fig.suptitle(self.plottitle)
             fig.autofmt_xdate()
 
             fig.savefig(os.path.join(self.out_path, 'test_kernel_ts.png'))
-            del fig, ax
+            del fig, ax1, ax2
 
 def main():
 
     input_path_smap = "../1_data/SMAP/OZNET/Point-Example-SPL3SMP-E-005-results.csv"
     input_path_ismn = "G:/Shared drives/Ryoko and Hilary/SMSigxISMN/analysis/0_data_raw/ISMN"
-    out_path = "../3_data_out/"
+    out_path = "../3_data_out/linear_interpolation_on_smap"
 
     if not os.path.exists(out_path):
         os.mkdir(out_path)
 
     mySMAP = SMAPxISMN(input_path_smap=input_path_smap, input_path_ismn=input_path_ismn, insitu_network_name='OZNET', out_path=out_path)
-    mySMAP.load_data(plot=False)
+    mySMAP.load_data(data_treatment_option='linear_interpolation_on_smap', plot=True)
+    # data_treatment_option = 'limit_data_to_smap_available_dates', 'linear_interpolation_on_smap'
     # print(f"  Bias [m^3/m^3]: {mySMAP.calc_bias()}")
     # print(f"  RMSE [m^3/m^3]: {mySMAP.calc_RMSE()}")
     # print(f"ubRMSE [m^3/m^3]: {mySMAP.calc_ubRMSE()}")
