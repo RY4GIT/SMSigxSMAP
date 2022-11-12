@@ -44,6 +44,9 @@ sample_request_path = "./my_test_request_w_LAI_Kenya.json"
 # Specify the output directory
 dest_dir = os.path.join("../1_data/SMAP", network_name)
 
+# How often would you want to check the results in seconds
+check_request_interval_sec = 300.0
+
 # ===================================================# 
 
 # Parameters
@@ -85,7 +88,7 @@ while task_response['status'] =='pending' or task_response['status']=='processin
         headers={'Authorization': 'Bearer {0}'.format(token)}
     )
     task_response = response.json()
-    time.sleep(600.0 - ((time.time() - starttime) % 300.0)) # check the request every 300 sec
+    time.sleep(check_request_interval_sec - ((time.time() - starttime) % check_request_interval_sec)) # check the request every 300 sec
 print("Done processing on Appears' side")
 
 # To bundle download

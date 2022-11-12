@@ -2,7 +2,7 @@
     "params": {
         "dates": [
             {
-                "endDate": "03-30-2022",
+                "endDate": "04-30-2022",
                 "recurring": false,
                 "startDate": "03-31-2015"
             }
@@ -23,6 +23,10 @@
             {
                 "layer": "Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm",
                 "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Geophysical_Data_precipitation_total_surface_flux",
+                "product": "SPL4SMGP.006"
             },
             {
                 "layer": "Lai_500m",
