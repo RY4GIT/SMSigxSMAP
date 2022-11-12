@@ -15,7 +15,6 @@
 # Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm
 # Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm
 # Soil_Moisture_Retrieval_Data_PM_soil_moisture_error_pm
-# MOD15A2H.061 LAI 500m
 
 # The product includes includes soil moisture retrievals from three algorithms:
 # the ones I picked (the ones without notation) are from Dual Channel Algorithm (DCA)
@@ -31,23 +30,52 @@ import requests
 import os
 from ismn.interface import ISMN_Interface
 
-# ============ User-defined parameters ==========# 
 # Specify current directory and create output directory if it does not exist
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
 
-# Get the target point locations 
-network_name = 'KENYA'
-
-# File path to the sample request json
-sample_request_path = "./my_test_request_w_LAI_Kenya.json"
-
-# Specify the output directory
-dest_dir = os.path.join("../1_data/SMAP", network_name)
-
-# ===================================================# 
+## Prepare tasks
 
 # Parameters
 params = {'pretty': True}
+
+# Get the target point locations (ISMN sensor coordinates)
+network_name = 'OZNET'
+# TODO: Generalize the operation
+in_path = 'G:/Shared drives/Ryoko and Hilary/SMSigxISMN/analysis/0_data_raw/ISMN'
+data_net = ISMN_Interface(in_path, network=[network_name])
+station_name_ismn=[]
+lat_ismn=[]
+lon_ismn=[]
+for network, station, sensor in data_net.collection.iter_sensors(variable='soil_moisture'): # Only select the surface soil moisture within 0-5cm sensor depth to compare with SMAP data
+    # Read metadata
+    # TODO: add a depth information to cut off the stations to look at
+    # TODO: add a start & end of record to cut off the stations to look at
+    meta_pd = sensor.metadata.to_pd()
+    station_name_ismn.append(meta_pd['station'][0])
+    lat_ismn.append(meta_pd['latitude'].values[0])
+    lon_ismn.append(meta_pd['longitude'].values[0])
+
+# Load the task request template from a file
+sample_request_path = "./sample_point_request.json"
+with open(sample_request_path) as json_file:
+    task = json.load(json_file)
+
+task['params']['dates'][0]['startDate'] = '03-31-2015'
+task['params']['dates'][0]['endDate'] = '03-30-2022'
+
+# for i in range(len(lat_ismn)):
+sensor_coord = {
+    'id': '0',
+    'category': station_name_ismn[0],
+    'latitude': lat_ismn[0],
+    'longitude': lon_ismn[0]
+}
+task['params']['coordinates'].append(sensor_coord)
+
+# Write a json for target point locations
+my_request_path = "./my_test_request.json"
+with open(my_request_path, 'w') as json_file:
+    json.dump(task, json_file, indent=4)
 
 ## Login to appears
 my_credential_path = "./auth.json"
@@ -58,10 +86,6 @@ response = requests.post('https://appeears.earthdatacloud.nasa.gov/api/login', a
 token_response = response.json()
 print(token_response)
 
-# Get a request from json file
-with open(sample_request_path) as json_file:
-    task = json.load(json_file)
-    
 # Submit the task request
 token = token_response['token']
 response = requests.post(
@@ -85,7 +109,7 @@ while task_response['status'] =='pending' or task_response['status']=='processin
         headers={'Authorization': 'Bearer {0}'.format(token)}
     )
     task_response = response.json()
-    time.sleep(600.0 - ((time.time() - starttime) % 300.0)) # check the request every 300 sec
+    time.sleep(300.0 - ((time.time() - starttime) % 300.0)) # check the request every 300 sec
 print("Done processing on Appears' side")
 
 # To bundle download
@@ -112,6 +136,7 @@ for i in range(len(bundle_response)):
     )
 
     # create a destination directory to store the file in
+    dest_dir = "../1_data/SMAP/OZNET"
     filepath = os.path.join(dest_dir, filename)
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
@@ -122,3 +147,16 @@ for i in range(len(bundle_response)):
 
 
 # ======================= END OF THE CODE ===============================
+
+# Point sampling returns the results as csv file
+# Area sampling returns the results as nc file
+
+"""
+## Request a sample
+product_id = 'SPL3SMP_E.005'
+response = requests.get(
+    'https://appeears.earthdatacloud.nasa.gov/api/product/{0}'.format(product_id),
+    params=params)
+product_response = response.text
+print(product_response)
+"""
