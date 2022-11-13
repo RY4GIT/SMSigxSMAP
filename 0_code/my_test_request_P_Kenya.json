@@ -9,24 +9,8 @@
         ],
         "layers": [
             {
-                "layer": "Soil_Moisture_Retrieval_Data_AM_soil_moisture",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Lai_500m",
-                "product": "MOD15A2H.061"
+                "layer": "Geophysical_Data_precipitation_total_surface_flux",
+                "product": "SPL4SMGP.006"
             }
         ],
         "output": {

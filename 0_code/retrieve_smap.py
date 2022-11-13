@@ -36,10 +36,10 @@ from ismn.interface import ISMN_Interface
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
 
 # Get the target point locations 
-network_name = 'KENYA'
+network_name = 'KENYA_short'
 
 # File path to the sample request json
-sample_request_path = "./my_test_request_w_LAI_Kenya.json"
+sample_request_path = "./my_test_request_Kenya_1mo.json"
 
 # Specify the output directory
 dest_dir = os.path.join("../1_data/SMAP", network_name)
