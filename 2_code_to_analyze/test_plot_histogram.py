@@ -75,7 +75,6 @@ df_ts_sync['soil_moisture_smap'][no_data_idx]=np.NaN
 
 
 # Plot the timesereis of data
-
 fig, ax = plt.subplots()
 line1, = ax.plot(df_ts_sync['soil_moisture_ismn'], label='In-situ')
 line2, = ax.plot(df_ts_sync['soil_moisture_smap'], 'o', markersize=4, alpha=0.5, label='SMAP')
@@ -84,10 +83,6 @@ xax = ax.xaxis
 ax.set_title(f"{station.name} station, OZNET, Australia\n({df_SMAP['Longitude'][0]}, {df_SMAP['Latitude'][0]})")
 ax.set_xlabel("Time")
 ax.set_ylabel("Volumetric soil water content [m^3/m^3]")
-# formatter = mdates.DateFormatter("%Y") ### formatter of the date
-# locator = mdates.YearLocator() ### where to put the labels
-# ax.xaxis.set_major_formatter(formatter) ## calling the formatter for the x-axis
-# ax.xaxis.set_major_locator(locator) ## calling the locator for the x-axis
 fig.autofmt_xdate()
 fig.savefig('../3_data_out/test_ts.png')
 del fig, ax
