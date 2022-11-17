@@ -1,45 +1,45 @@
 {
     "params": {
-        "dates": [
-            {
-                "endDate": "03-30-2022",
-                "recurring": false,
-                "startDate": "03-31-2015"
-            }
-        ],
-        "layers": [
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_AM_soil_moisture",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm",
-                "product": "SPL3SMP_E.005"
-            },
-            {
-                "layer": "Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm",
-                "product": "SPL3SMP_E.005"
-            }
-        ],
-        "output": {
-            "format": {
-                "type": "netcdf4"
-            },
-            "projection": "geographic"
+      "geo": {
+        "type": "FeatureCollection",
+        "features": [{
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [147.535, -35.324],
+                [147.535, -35.323],
+                [147.534, -35.323],
+                [147.534, -35.324]
+              ]
+            ]
+          },
+          "properties": {}
+        }]
+      },
+      "dates": [{
+        "endDate": "03-30-2022",
+        "startDate": "03-31-2015",
+        "recurring": false
+      }],
+      "layers": [
+        {
+            "layer": "Lai_500m",
+            "product": "MOD15A2H.061"
         },
-        "coordinates": [
-            {
-                "id": "0",
-                "category": "Alabama",
-                "latitude": -35.32395,
-                "longitude": 147.5348
-            }
-        ]
+        {
+            "layer": "Geophysical_Data_precipitation_total_surface_flux",
+            "product": "SPL4SMGP.006"
+        }
+      ],
+      "output": {
+        "format": {
+          "type": "netcdf4"
+        },
+        "projection": "geographic"
+      }
     },
-    "task_name": "Point Example",
-    "task_type": "point"
-}
+    "task_name": "Oznet area example",
+    "task_type": "area"
+  }

@@ -1,0 +1,44 @@
+{
+  "params": {
+    "geo": {
+      "type": "FeatureCollection",
+      "features": [{
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [
+            [
+              [-104.29394567012787, 43.375488325953484],
+              [-104.29394567012787, 44.562011763453484],
+              [-103.17334020137787, 44.562011763453484],
+              [-103.17334020137787, 43.375488325953484],
+              [-104.29394567012787, 43.375488325953484]
+            ]
+          ]
+        },
+        "properties": {}
+      }]
+    },
+    "dates": [{
+      "endDate": "09-30-2018",
+      "startDate": "05-01-2017",
+      "recurring": false,
+      "yearRange": [2000, 2050]
+    }],
+    "layers": [{
+      "layer": "_500m_16_days_EVI",
+      "product": "MOD13A1.061"
+    }, {
+      "layer": "LST_Day_1km",
+      "product": "MOD11A1.061"
+    }],
+    "output": {
+      "format": {
+        "type": "geotiff"
+      },
+      "projection": "albers_weld_conus"
+    }
+  },
+  "task_name": "Area Example",
+  "task_type": "area"
+}

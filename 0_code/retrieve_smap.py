@@ -36,16 +36,16 @@ from ismn.interface import ISMN_Interface
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
 
 # Get the target point locations 
-network_name = 'KENYA_short'
+network_name = 'OZNET'
 
 # File path to the sample request json
-sample_request_path = "./my_test_request_Kenya_1mo.json"
+sample_request_path = "./my_test_request.json"
 
 # Specify the output directory
 dest_dir = os.path.join("../1_data/SMAP", network_name)
 
 # How often would you want to check the results in seconds
-check_request_interval_sec = 300.0
+check_request_interval_sec = 600.0
 
 # ===================================================# 
 
