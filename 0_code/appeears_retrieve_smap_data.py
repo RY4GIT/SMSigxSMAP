@@ -29,23 +29,22 @@
 import json
 import requests
 import os
-from ismn.interface import ISMN_Interface
 
 # ============ User-defined parameters ==========# 
 # Specify current directory and create output directory if it does not exist
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
 
 # Get the target point locations 
-network_name = 'OZNET'
+network_name = 'KENYA'
 
 # File path to the sample request json
-sample_request_path = "./my_test_request.json"
+sample_request_path = "./appeears_request_jsons/point_request_Kenya.json"
 
 # Specify the output directory
-dest_dir = os.path.join("../1_data/SMAP", network_name)
+dest_dir = os.path.join("../1_data/APPEEARS_subsetting", network_name)
 
 # How often would you want to check the results in seconds
-check_request_interval_sec = 600.0
+check_request_interval_sec = 60*10
 
 # ===================================================# 
 
