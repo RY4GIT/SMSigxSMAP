@@ -38,11 +38,13 @@ warnings.filterwarnings("ignore")
 # %%
 
 input_path = r"G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis\1_data"
+output_path = r"G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis\3_data_out"
 appears_path = r".\APPEEARS_subsetting"
 SMAPL3_path = r".\SPL3SMP_E"
 SMAPL4_path = r".\SPL4SMGP"
 SMAPL4_grid_path = r".\SMAPL4SMGP_EASEreference"
 MODIS_path = r".\MOD15A2H"
+# os.chdir("G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis")
 
 network_name = "KENYA"
 
@@ -72,8 +74,8 @@ full_varname_ease_column = f'HDF5:"{file_path}"://{varname_ease_column}'
 varname_ease_row = "cell_row"
 full_varname_ease_row = f'HDF5:"{file_path}"://{varname_ease_row}'
 
-lat = rioxarray.open_rasterio(full_varname_lat)
-lon = rioxarray.open_rasterio(full_varname_lon)
+ease_lat = rioxarray.open_rasterio(full_varname_lat)
+ease_lon = rioxarray.open_rasterio(full_varname_lon)
 ease_column = rioxarray.open_rasterio(full_varname_ease_column)
 ease_row = rioxarray.open_rasterio(full_varname_ease_row)
 
@@ -97,7 +99,7 @@ coordinates
 for i in range(len(coordinates)): 
     target_lat = coordinates[i]['latitude']
     target_lon = coordinates[i]['longitude']
-    target_station = coordinates[i]['category']
+    target_station = coordinates[i]['category'].split()[0]
     
     print(f'processing{i}/{len(coordinates)} station: {target_station}')
 
@@ -131,8 +133,8 @@ for i in range(len(coordinates)):
         continue
     
     print(df_ts_sync.head())
-    df_ts_sync['soil_moisture_smapL3'] = df_ts_sync[['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_soil_moisture','SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm']].mean(axis=1, skipna=True)
-    df_ts_sync['soil_moisture_smapL3'] = df_ts_sync['soil_moisture_smapL3'].resample('D', axis=0).mean()
+    df_ts_sync['soil_moisture_smapL3'] = df_ts_sync[['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_soil_moisture','SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm']].mean(axis=1, skipna=True).copy()
+    df_ts_sync['soil_moisture_smapL3'] = df_ts_sync['soil_moisture_smapL3'].resample('D', axis=0).mean().copy()
 
 
     # %% [markdown]
@@ -170,7 +172,7 @@ for i in range(len(coordinates)):
     # ## Get corresponding EASE grid to the sample request
 
     # %%
-    distance = np.sqrt((target_lat-lat[0].values)**2+(target_lon-lon[0].values)**2)
+    distance = np.sqrt((target_lat-ease_lat[0].values)**2+(target_lon-ease_lon[0].values)**2)
 
     minElement  = np.where(abs(distance) == np.nanmin(abs(distance)))
     print(np.nanmin(distance))
@@ -178,20 +180,20 @@ for i in range(len(coordinates)):
     if len(minElement[0])!=1:
         print('There are more than two closest cells')
         
-    lat_center = lat[0].values[minElement]
-    lon_center = lon[0].values[minElement]
+    lat_center = ease_lat[0].values[minElement]
+    lon_center = ease_lon[0].values[minElement]
     ease_center_column = ease_column[0].values[minElement]
     ease_center_row = ease_row[0].values[minElement]
 
     print(f'The closest cell to the point ({target_lat}, {target_lon}) is\
         ({lat_center[0]}, {lon_center[0]}:\
         EASE GRID ({ease_center_row[0]}, {ease_center_column[0]})),\
-        d={distance[minElement]} degrees')
+        d={distance[minElement][0]} degrees')
 
-    bbox_lat_max = (lat[0].values[minElement]+lat[0].values[minElement[0][0]-1][minElement[1][0]])/2
-    bbox_lat_min = (lat[0].values[minElement]+lat[0].values[minElement[0][0]+1][minElement[1][0]])/2
-    bbox_lon_max = (lon[0].values[minElement]+lon[0].values[minElement[0][0]][minElement[1][0]+1])/2
-    bbox_lon_min = (lon[0].values[minElement]+lon[0].values[minElement[0][0]][minElement[1][0]-1])/2
+    bbox_lat_max = (ease_lat[0].values[minElement]+ease_lat[0].values[minElement[0][0]-1][minElement[1][0]])/2
+    bbox_lat_min = (ease_lat[0].values[minElement]+ease_lat[0].values[minElement[0][0]+1][minElement[1][0]])/2
+    bbox_lon_max = (ease_lon[0].values[minElement]+ease_lon[0].values[minElement[0][0]][minElement[1][0]+1])/2
+    bbox_lon_min = (ease_lon[0].values[minElement]+ease_lon[0].values[minElement[0][0]][minElement[1][0]-1])/2
 
     bounding_box = f'{bbox_lon_min[0]},{bbox_lat_min[0]},{bbox_lon_max[0]},{bbox_lat_max[0]}'
     print(bounding_box)
@@ -223,7 +225,7 @@ for i in range(len(coordinates)):
     }
 
     # Change this 
-    time_range = "2015-03-01/2022-03-30" # "2019-03-01/2019-04-30" # 
+    time_range = "2015-03-31/2022-03-30" # "2019-03-01/2019-04-30" # 
 
     search = catalog.search(
         collections=["modis-15A3H-061"],
@@ -332,13 +334,11 @@ for i in range(len(coordinates)):
 
     # %%
     # prep
-    lat = target_lat
-    lon = target_lon
 
     smap_color = '#ff7f0e'
     precip_color = '#779eb2'
 
-    title = f"{network_name}\n({lat:.2f}, {lon:.2f})"
+    title = f"{network_name}\n({target_lat:.2f}, {target_lon:.2f})"
 
     save_title = f"{network_name}_{target_station}"
 
@@ -352,7 +352,7 @@ for i in range(len(coordinates)):
     df_ts_sync['values_while_drydown'][noprecip_with_buffer==False] = np.nan
 
     # SMAP timeseries 
-    fig = plt.figure(figsize=(9, 15))
+    fig = plt.figure(figsize=(18, 15))
     # fig.subplots(1, 2, sharey=True, sharex=True,  figsize=(10, 5))
     ax1 = fig.add_subplot(3,1,1)
     line1, = ax1.plot(df_ts_sync['soil_moisture_smapL3'], '-o', markersize=4, alpha=0.5, label='SMAP L4', color=smap_color)
@@ -365,32 +365,29 @@ for i in range(len(coordinates)):
     ax1.legend()
 
     # Precipitation
-    ax2 =  fig.add_subplot(3,1,2)
-    df_ts_sync['precip'].plot.bar(y='first', ax=ax2, label='SMAPL4', color=precip_color, sharex=ax1)
+    ax2 =  fig.add_subplot(3,1,2) #, sharex = ax1)
+    df_ts_sync['precip'].plot.bar(y='first', ax=ax2, label='SMAPL4', color=precip_color)
     ax2.set_title(title)
     ax2.set_xlabel("Time")
     ax2.set_ylabel("Precipitation [kg/m2]")
     ax2.legend()
 
     # Precipitation
-    ax5 =  fig.add_subplot(3,1,3)
-    line5, = ax5.plot(df_ts_sync['MODISmeanLAI_SMAPgrid'], '-', label='MODIS LAI', sharex=ax1)
+    ax5 =  fig.add_subplot(3,1,3) #, sharex = ax1)
+    line5, = ax5.plot(df_ts_sync['MODISmeanLAI_SMAPgrid'], '-', label='MODIS LAI')
     ax5.set_title(title)
     ax5.set_xlabel("Time")
     ax5.set_ylabel("LAI")
     ax5.legend()
 
-    for ind, label in enumerate(ax5.get_xticklabels()):
-        if ind % 30 == 0:  # every 10th label is kept
+    for ind, label in enumerate(ax2.get_xticklabels()):
+        if ind % 90 == 0:  # every 10th label is kept
             label.set_visible(True)
         else:
             label.set_visible(False)
             
     fig.autofmt_xdate()
-    fig.savefig(f'../3_data_out/{save_title}_ts.png')
-
-
-
+    fig.savefig(os.path.join(output_path, f'{save_title}_ts.png'))
 
     # %% [markdown]
     # 
@@ -403,26 +400,48 @@ for i in range(len(coordinates)):
     # 
     # 
 
-    # %%
-    fig = plt.figure(figsize=(7, 10))
+    fig = plt.figure(figsize=(15, 10))
+    fig.tight_layout(pad=5)
     sm = df_ts_sync['soil_moisture_smapL3'][df_ts_sync['noprecip']].values
     neg_dSdt = df_ts_sync['dSdt(t+1)'][df_ts_sync['noprecip']].values*-1
     lai = df_ts_sync['MODISmeanLAI_SMAPgrid'][df_ts_sync['noprecip']].values
 
-    ax3 =  fig.add_subplot(2,1,1)
-    scatter = ax3.scatter(x=sm, y=neg_dSdt, c=lai, cmap= 'Oranges', marker='o', alpha=0.5, label='SMAP L4')
-    xax = ax3.xaxis
-    ax3.set_title(title)
-    ax3.set_xlabel("Soil moisture content from SMAPL3E [-]")
-    ax3.set_ylabel("-dS/dt")
-    cbar = plt.colorbar(scatter, ax=ax3)
+    ax1 =  fig.add_subplot(2,2,1)
+    scatter = ax1.scatter(x=sm, y=neg_dSdt, c=lai, cmap= 'Oranges', marker='o', alpha=0.5, label='SMAP L4')
+    xax = ax1.xaxis
+    ax1.set_title(title)
+    ax1.set_xlabel("Soil moisture content from SMAPL3E [-]")
+    ax1.set_ylabel("-dS/dt")
+    cbar = plt.colorbar(scatter, ax=ax1)
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.set_ylabel('MODIS LAI', rotation=270)
     fig.autofmt_xdate()
 
+    ax2 =  fig.add_subplot(2,2,2)
+    scatter = ax2.scatter(x=sm, y=lai, c=np.log10(neg_dSdt), cmap= 'Oranges', marker='o', alpha=0.5, label='SMAP L4')
+    xax = ax2.xaxis
+    # ax2.set_title(title)
+    ax2.set_xlabel("Soil moisture content from SMAPL3E [-]")
+    ax2.set_ylabel("LAI")
+    cbar = plt.colorbar(scatter, ax=ax2)
+    cbar.ax.get_yaxis().labelpad = 15
+    cbar.ax.set_ylabel('log10(-dS/dt)', rotation=270)
+    fig.autofmt_xdate()
+
+    ax3 =  fig.add_subplot(2,2,3)
+    scatter = ax3.scatter(x=lai, y=neg_dSdt, c=sm, cmap= 'Oranges', marker='o', alpha=0.5, label='SMAP L4')
+    xax = ax3.xaxis
+    # ax3.set_title(title)
+    ax3.set_xlabel("LAI")
+    ax3.set_ylabel("-dS/dt")
+    cbar = plt.colorbar(scatter, ax=ax3)
+    cbar.ax.get_yaxis().labelpad = 15
+    cbar.ax.set_ylabel('Soil moisture content from SMAPL3E [-]', rotation=270)
+    fig.autofmt_xdate()
+
     from mpl_toolkits import mplot3d
 
-    ax4 =  fig.add_subplot(2,1,2, projection='3d')
+    ax4 =  fig.add_subplot(2,2,4, projection='3d')
 
     # Data for a three-dimensional line
     ax4.scatter3D(sm, neg_dSdt, lai, c=lai, cmap='Oranges');
@@ -430,8 +449,7 @@ for i in range(len(coordinates)):
     ax4.set_ylabel('-dS/dt')
     ax4.set_zlabel('MODIS LAI')
 
-    fig.savefig(f'../3_data_out/{save_title}_Ltheta.png')
-
+    fig.savefig(os.path.join(output_path, f'{save_title}_Ltheta.png'))
 
 
 
