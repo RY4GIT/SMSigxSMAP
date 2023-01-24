@@ -35,10 +35,10 @@ import os
 os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
 
 # Get the target point locations 
-network_name = 'KENYA'
+network_name = 'various_geographic_locations'
 
 # File path to the sample request json
-sample_request_path = "./appeears_request_jsons/point_request_Kenya.json"
+sample_request_path = "./appeears_request_jsons/point_request_various_geographic_locations_P.json"
 
 # Specify the output directory
 dest_dir = os.path.join("../1_data/APPEEARS_subsetting", network_name)
