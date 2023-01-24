@@ -5,7 +5,7 @@ channels:
 dependencies:
   - pandas
   - numpy
-  - matl=plotib
+  - matplotib
   - shutil
   - geopandas
   - rasterio
@@ -21,11 +21,8 @@ dependencies:
   - rich.table
   - sklearn
   - scipy
+  - netcdf4
+  - pygeogrids
+  - tqdm
   - pip:
     - ismn
-    - modis-tools
-    - more-itertools
-    - netcdf4
-    - pygeogrids
-    - pykdtree
-    - tqdm

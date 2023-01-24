@@ -65,7 +65,7 @@ file_path = os.path.join(input_path, SMAPL4_grid_path, fn)
 #     print('The file exists')
 # else:
 #     print('The file does NOT exist')
-print(file_path)
+# print(file_path)
 g = gdal.Open(file_path)
 subdatasets = g.GetSubDatasets()
 
@@ -103,10 +103,10 @@ coordinates
 # ## Loop for the target coordinates (currently set i=0)
 
 # %%
-for i in range(0,1): # range(len(coordinates)): 
+for i in range(len(coordinates)): 
     target_lat = coordinates[i]['latitude']
     target_lon = coordinates[i]['longitude']
-    target_station = coordinates[i]['category'].split()[0]
+    target_station = coordinates[i]['category'] #.split()[0]
     
     print(f'processing{i}/{len(coordinates)} station: {target_station}')
 
@@ -326,7 +326,7 @@ for i in range(0,1): # range(len(coordinates)):
     df_ts_sync['skippable'] = (df_ts_sync['soil_moisture_smapL3'].isnull()) & (df_ts_sync['noprecip']==True)
     df_ts_sync.drop(df_ts_sync.index[df_ts_sync['skippable']==True], inplace=True)
     df_ts_sync[['soil_moisture_smapL3','noprecip', 'MODISmeanLAI_SMAPgrid', 'skippable']].head(30)
-    file_path = os.path.join(input_path, appears_path, network_name, f'timeseries_synced_{target_station}.csv')
+    file_path = os.path.join(input_path, appears_path, network_name.replace(" ", "_"), f'timeseries_synced_{target_station}.csv')
     df_ts_sync.to_csv(file_path, header=True, index=True)
 
 
