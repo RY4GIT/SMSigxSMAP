@@ -16,7 +16,8 @@ import json
 import requests
 from pyproj import CRS
 import pyproj
-pyproj.datadir.set_data_dir("C:\Users\flipl\miniconda3\pkgs\pyproj-3.4.1-py310h0e9dbc5_0\")
+# pyproj.datadir.set_data_dir("C:\Users\flipl\miniconda3\pkgs\pyproj-3.4.1-py310h0e9dbc5_0\")
+# pyproj.datadir.set_data_dir(r"C:\Users\flipl\miniconda3\Library\share\proj")
 # pyproj.datadir.set_data_dir(r"C:\Users\flipl\miniconda3\share\zoneinfo")
 
 from osgeo import gdal
@@ -42,15 +43,15 @@ warnings.filterwarnings("ignore")
 # %%
 
 ###### CHANGE HERE ###########
-network_name = "various_geographic_locations"
+network_name = "various-geographic-locations"
 ###### CHANGE HERE ###########
 
-input_path = r"G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis\1_data"
-output_path = r"G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis\3_data_out"
-appears_path = r".\APPEEARS_subsetting"
-SMAPL3_path = r".\SPL3SMP_E"
-SMAPL4_path = r".\SPL4SMGP"
-SMAPL4_grid_path = r".\SMAPL4SMGP_EASEreference"
+input_path = r".\1_data"
+output_path = r".\3_data_out"
+appears_path = "APPEEARS_subsetting"
+SMAPL3_path = "SPL3SMP_E"
+SMAPL4_path = "SPL4SMGP"
+SMAPL4_grid_path = "SMAPL4SMGP_EASEreference"
 MODIS_path = r".\MOD15A2H"
 # os.chdir("G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis")
 
@@ -64,7 +65,7 @@ file_path = os.path.join(input_path, SMAPL4_grid_path, fn)
 #     print('The file exists')
 # else:
 #     print('The file does NOT exist')
-
+print(file_path)
 g = gdal.Open(file_path)
 subdatasets = g.GetSubDatasets()
 
@@ -147,7 +148,7 @@ for i in range(0,1): # range(len(coordinates)):
     # ## Load APPEEARS output (SMAPL4)
 
     # %%
-    file_path = os.path.join(input_path, appears_path, network_name, f'{network_name}-SPL4SMGP-006-results.csv')
+    file_path = os.path.join(input_path, appears_path, network_name, f'{network_name}-P-SPL4SMGP-006-results.csv')
     SMAPL4_pt_sample = pd.read_csv(file_path)
     SMAPL4_pt_sample = SMAPL4_pt_sample[(SMAPL4_pt_sample['Latitude'] == target_lat) & (SMAPL4_pt_sample['Longitude'] == target_lon)].copy()
     # print(SMAPL4_pt_sample.columns)
