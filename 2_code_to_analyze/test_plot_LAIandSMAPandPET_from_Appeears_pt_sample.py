@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore")
 # %% [markdown]
 # ## Load target station info 
 # network_name = 'various-geographic-locations'
-network_name = 'Kenya'
+network_name = 'Oznet'
 
 input_path = r".\1_data"
 appeears_path = r"APPEEARS_subsetting"
