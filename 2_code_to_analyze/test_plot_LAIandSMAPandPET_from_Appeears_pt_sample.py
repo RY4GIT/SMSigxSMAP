@@ -14,7 +14,8 @@ warnings.filterwarnings("ignore")
 
 # %% [markdown]
 # ## Load target station info 
-network_name = 'various-geographic-locations'
+# network_name = 'various-geographic-locations'
+network_name = 'Kenya'
 
 input_path = r".\1_data"
 appeears_path = r"APPEEARS_subsetting"
@@ -192,6 +193,7 @@ for coordinate in range(len(coordinates)):
     # fig.tight_layout(pad=5)
     sm = ds_synced2['soil_moisture_smapL3'][ds_synced2['noprecip']].values
     neg_dSdt = ds_synced2['dSdt(t+1)'][ds_synced2['noprecip']].values*-1
+    neg_dSdt[~np.isfinite(neg_dSdt)] = np.nan
     lai = ds_synced2['MODISmeanLAI_SMAPgrid'][ds_synced2['noprecip']].values
 
     ax1 =  fig.add_subplot(2,2,1)
@@ -257,6 +259,8 @@ for coordinate in range(len(coordinates)):
     ax1.set_title(title)
     ax1.set_xlabel("Soil moisture content from SMAPL3E [-]")
     ax1.set_ylabel("-dS/dt")
+    ax1.set_xlim([0, 0.60])
+    ax1.set_ylim([0, 0.200])
     cbar = plt.colorbar(scatter, ax=ax1)
     cbar.ax.get_yaxis().labelpad = 15
     cbar.ax.set_ylabel(label_PET, rotation=270)
