@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt  # matplotlib is not installed automatically
 from datetime import datetime
 import warnings
 warnings.filterwarnings("ignore")
+from sklearn.linear_model import LinearRegression
 
 # %% [markdown]
 # ## Load target station info 
@@ -129,8 +130,8 @@ noprecip_with_buffer = (ds_synced2['noprecip']==True) | (ds_synced2['noprecip'].
 ds_synced2['values_while_drydown'][noprecip_with_buffer==False] = np.nan
 
 # %%
-ds_synced2['PET_quantile']  = pd.qcut(ds_synced2['PET'][ds_synced2['noprecip']], 10, labels=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
-# ds_synced2['PET_quantile']  = pd.qcut(ds_synced2['PET'][ds_synced2['noprecip']], 5, labels=[20, 40, 60, 80, 100])
+# ds_synced2['PET_quantile']  = pd.qcut(ds_synced2['PET'][ds_synced2['noprecip']], 10, labels=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+ds_synced2['PET_quantile']  = pd.qcut(ds_synced2['PET'][ds_synced2['noprecip']], 5, labels=[20, 40, 60, 80, 100])
 # print(ds_synced2['PET'].quantile())
 
 # print(ds_synced2[['PET','PET_quantile']])
@@ -140,10 +141,10 @@ x_upper = ds_synced2['soil_moisture_smapL3'][ds_synced2['PET_quantile']==100].va
 y_upper = ds_synced2['dSdt(t+1)'][ds_synced2['PET_quantile']==100].values *-1
 nans_upper = np.isnan(x_upper) | np.isnan(y_upper)
 
-x_lower = ds_synced2['soil_moisture_smapL3'][ds_synced2['PET_quantile']==10].values
-y_lower = ds_synced2['dSdt(t+1)'][ds_synced2['PET_quantile']==10].values *-1
-# x_lower = ds_synced2['soil_moisture_smapL3'][ds_synced2['PET_quantile']==20].values
-# y_lower = ds_synced2['dSdt(t+1)'][ds_synced2['PET_quantile']==20].values *-1
+# x_lower = ds_synced2['soil_moisture_smapL3'][ds_synced2['PET_quantile']==10].values
+# y_lower = ds_synced2['dSdt(t+1)'][ds_synced2['PET_quantile']==10].values *-1
+x_lower = ds_synced2['soil_moisture_smapL3'][ds_synced2['PET_quantile']==20].values
+y_lower = ds_synced2['dSdt(t+1)'][ds_synced2['PET_quantile']==20].values *-1
 nans_lower = np.isnan(x_lower) | np.isnan(y_lower)
 
 
@@ -152,131 +153,61 @@ y_upper = np.delete(y_upper, nans_upper)
 x_lower = np.delete(x_lower, nans_lower)
 y_lower = np.delete(y_lower, nans_lower)
 
-# Assume variance increase with x
+# %% Fig regression
 
-# Without weight
-m_upper, b_upper = np.polyfit(x_upper, y_upper, deg=1)
-# Residuals
-m_res, b_res = np.polyfit(x_upper, abs(m_upper*x_upper+b_upper-y_upper), deg=1)
-# With weight
-weight_res = m_res*x_upper+b_res
-m_upper, b_upper = np.polyfit(x_upper, y_upper, deg=1, w=1/weight_res**2)
-# m_upper, b_upper = np.polyfit(x_upper, y_upper, deg=1, w=1/x_upper)
-# plt.plot(x_upper, y_upper, 'o', x_upper, m_upper*x_upper+b_upper, '--k')
-# plt.ylim([0, 0.08])
-# plt.show()
+def fit_linear_line(x, y, forced_intercept_x, weight_regression=True, plot_results=False):
+    ## Using Scikit learn
 
-# Wightout weight
-m_lower, b_lower = np.polyfit(x_lower, y_lower, deg=1)
-# Residuals
-m_res, b_res = np.polyfit(x_lower, abs(m_lower*x_lower+b_lower-y_lower), deg=1)
-# With weight
-weight_res = m_res*x_lower+b_res
-m_lower, b_lower = np.polyfit(x_lower, y_lower, deg=1, w=1/weight_res**2)
-# 
-# m_lower, b_lower = np.polyfit(x_lower, y_lower, deg=1, w=1/x_lower)
-# plt.plot(x_lower, y_lower, 'o', x_lower, m_lower*x_lower+b_lower, '--k')
+    # Shift x values by forced_intercept_x
+    new_x = x - forced_intercept_x
+    new_x = new_x.reshape((-1,1))
 
-# plt.ylim([0, 0.08])
-# plt.show()
+    # Linear regression wighout weight
+    model = LinearRegression(fit_intercept=False).fit(new_x, y)
 
-
-#%%
-# https://stackoverflow.com/questions/34235530/how-to-get-high-and-low-envelope-of-a-signal
-def hl_envelopes_idx(s, dmin=1, dmax=1, split=False):
-    """
-    Input :
-    s: 1d-array, data signal from which to extract high and low envelopes
-    dmin, dmax: int, optional, size of chunks, use this if the size of the input signal is too big
-    split: bool, optional, if True, split the signal in half along its mean, might help to generate the envelope in some cases
-    Output :
-    lmin,lmax : high/low envelope idx of input signal s
-    """
-
-    # locals min      
-    lmin = (np.diff(np.sign(np.diff(s))) > 0).nonzero()[0] + 1 
-    # locals max
-    lmax = (np.diff(np.sign(np.diff(s))) < 0).nonzero()[0] + 1 
+    # r = model.score(new_x_upper,y_upper)
+    a = model.coef_
+    b = -1 * a * forced_intercept_x
     
+    if not weight_regression:
+        a_out = a
+        b_out = b
 
-    if split:
-        # s_mid is zero if s centered around x-axis or more generally mean of signal
-        s_mid = np.mean(s) 
-        # pre-sorting of locals min based on relative position with respect to s_mid 
-        lmin = lmin[s[lmin]<s_mid]
-        # pre-sorting of local max based on relative position with respect to s_mid 
-        lmax = lmax[s[lmax]>s_mid]
+    if weight_regression:
+        # Residuals
+        residuals = y - (a*x+b)
 
-
-    # global max of dmax-chunks of locals max 
-    lmin = lmin[[i+np.argmin(s[lmin[i:i+dmin]]) for i in range(0,len(lmin),dmin)]]
-    # global min of dmin-chunks of locals min 
-    lmax = lmax[[i+np.argmax(s[lmax[i:i+dmax]]) for i in range(0,len(lmax),dmax)]]
+        # Linear regression with weight
+        model_weighted = LinearRegression(fit_intercept=False).fit(new_x, y, sample_weight=1/residuals**2)
+        a_weighted = model_weighted.coef_
+        b_weighted = -1 * a_weighted * forced_intercept
+        a_out = a_weighted
+        b_out = b_weighted
+        
+    if plot_results:
+        plt.plot(x,y,'o')
+        plt.plot(x,a_out*x+b_out)
+        plt.show()
+        
+    return a_out, b_out
     
-    return lmin,lmax
+## Using Scikit learn
+forced_intercept = 0.02 # The minimum possible SMAP value [m3/m3] according to Akbar et al., (2018)
 
-#%%
-
-sort_data_upper = pd.DataFrame(data={'x': x_upper, 'y': y_upper})
-s = sort_data_upper.sort_values(by='x')['y'].values
-t = sort_data_upper.sort_values(by='x')['x'].values
-high_idx, low_idx = hl_envelopes_idx(s, dmax=2)
-
-# Without weight
-m_upper, b_upper = np.polyfit(t[low_idx], s[low_idx], deg=1)
-# Residuals
-m_res, b_res = np.polyfit(t[low_idx], abs(m_upper*t[low_idx]+b_upper-s[low_idx]), deg=1)
-# With weight
-weight_res = m_res*t[low_idx]+b_res
-m_upper, b_upper = np.polyfit(t[low_idx], s[low_idx], deg=1, w=1/weight_res**2)
-
-# plt.plot(t[low_idx], m_res*t[low_idx]+b_res, '--k')
-# plt.scatter(t[low_idx], abs(m_upper*t[low_idx]+b_upper-s[low_idx]), marker='o', label='signal')
-# plt.show()
-
-# plt.plot(t[low_idx], m_upper*t[low_idx]+b_upper, '--k')
-# plt.ylim([0, 0.08])
-# plt.scatter(t, s, marker='o', label='signal')
-# plt.scatter(t[high_idx], s[high_idx],  marker='o', label='low')
-# plt.scatter(t[low_idx], s[low_idx],  marker='o', label='high')
+m_upper, b_upper = fit_linear_line(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, plot_results=True)
+m_lower, b_lower = fit_linear_line(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, plot_results=True)
 
 
 
-# #%%
-sort_data_lower = pd.DataFrame(data={'x': x_lower, 'y': y_lower})
-s = sort_data_lower.sort_values(by='x')['y'].values
-t = sort_data_lower.sort_values(by='x')['x'].values
-high_idx, low_idx = hl_envelopes_idx(s, dmax=2)
-
-# Wightout weight
-m_lower, b_lower = np.polyfit(t[low_idx], s[low_idx], deg=1)
-# Residuals
-m_res, b_res = np.polyfit(t[low_idx], abs(m_lower*t[low_idx]+b_lower-s[low_idx]), deg=1)
-# With weight
-weight_res = m_res*t[low_idx]+b_res
-m_lower, b_lower = np.polyfit(t[low_idx], s[low_idx], deg=1, w=1/weight_res**2)
-
-
-# plt.plot(t[low_idx], m_lower*t[low_idx]+b_lower, '--k')
-# plt.ylim([0, 0.08])
-# plt.scatter(t, s, marker='o', label='signal')
-# plt.scatter(t[high_idx], s[high_idx],  marker='o', label='low')
-# plt.scatter(t[low_idx], s[low_idx],  marker='o', label='high')
-
-
-# ds_synced2['PET_quantile'] 
-# https://towardsdatascience.com/weighted-linear-regression-2ef23b12a6d7
-# Heteroskedasticity
-# Heteroskedasticity refers to situations where the variance of the residuals is unequal over a range of measured values. When running a regression analysis, heteroskedasticity results in an unequal scatter of the residuals (also known as the error term).
 # %%
-
+m_upper[0]
 # %% [markdown]
 ## 2D plot  (PET as Z-axis)
 # %%
 from pylab import cm
 
 
-title = f"{network_name}: {target_station} ({lat:.2f}, {lon:.2f})\nSlope upper-lower = {m_upper-m_lower:.3f}"
+title = f"{network_name}: {target_station} ({lat:.2f}, {lon:.2f})\nSlope upper-lower = {m_upper[0]-m_lower[0]:.3f}"
 
 fig = plt.figure(figsize=(15, 5))
 fig.tight_layout(pad=5)
@@ -304,8 +235,9 @@ ax2 =  fig.add_subplot(1,2,2)
 
 scatter1 = ax2.scatter(x=x_upper, y=y_upper, c='sienna', marker='o', alpha=0.5, label='Upper')
 scatter2 = ax2.scatter(x=x_lower, y=y_lower, c='bisque', marker='o', alpha=0.5, label='Lower')
-plt.plot(x_upper, m_upper*x_upper+b_upper, '-k')
-plt.plot(x_lower, m_lower*x_lower+b_lower, '-k')
+x_array = np.arange(0, max(x_lower), 0.01)
+plt.plot(x_array, m_upper*x_array+b_upper, '-k')
+plt.plot(x_array, m_lower*x_array+b_lower, '-k')
 # plt.scatter(x_lower[~nans_lower], y_lower[~nans_lower], marker='o', s=50,facecolors='none',edgecolors='grey')
 # plt.scatter(x_upper[~nans_upper], y_upper[~nans_upper], marker='o', s=50,facecolors='none',edgecolors='grey')
 xax = ax2.xaxis
@@ -325,49 +257,71 @@ fig.savefig(os.path.join(output_path, f'Ltheta_PET_fit.png'))
 
 
 
-# %%
-fig = plt.figure(figsize=(15, 5))
-fig.tight_layout(pad=5)
-sm = ds_synced2['soil_moisture_smapL3'][ds_synced2['noprecip']].values
-neg_dSdt = ds_synced2['dSdt(t+1)'][ds_synced2['noprecip']].values*-1
-pet = ds_synced2['PET'][ds_synced2['noprecip']].values
-pet_quantile = ds_synced2['PET_quantile'][ds_synced2['noprecip']].values
-cmap_descrete = cm.get_cmap('Oranges', 5)
 
-ax1 =  fig.add_subplot(1,2,1)
-scatter = ax1.scatter(x=np.log(sm), y=np.log(neg_dSdt), c=pet_quantile, cmap= cmap_descrete, marker='o', alpha=0.5, label='SMAP L4')
-xax = ax1.xaxis
-# ax1.set_title(title)
-ax1.set_xlabel(label_SM)
-ax1.set_ylabel(label_dSdt)
-# ax1.set_xlim([0, 0.60])
-# ax1.set_ylim([0, 0.200])
-cbar = plt.colorbar(scatter, ax=ax1)
-cbar.ax.get_yaxis().labelpad = 15
-cbar.ax.set_ylabel("PET quantile", rotation=270)
-fig.autofmt_xdate()
-
-ax2 =  fig.add_subplot(1,2,2)
+# %% Snipped
 
 
-scatter1 = ax2.scatter(x=np.log(x_upper), y=np.log(y_upper), c='sienna', marker='o', alpha=0.5, label='Upper')
-scatter2 = ax2.scatter(x=np.log(x_lower), y=np.log(y_lower), c='bisque', marker='o', alpha=0.5, label='Lower')
-plt.plot(x_upper, m_upper*x_upper+b_upper, '-k')
-plt.plot(x_lower, m_lower*x_lower+b_lower, '-k')
-# plt.scatter(x_lower[~nans_lower], y_lower[~nans_lower], marker='o', s=50,facecolors='none',edgecolors='grey')
-# plt.scatter(x_upper[~nans_upper], y_upper[~nans_upper], marker='o', s=50,facecolors='none',edgecolors='grey')
-xax = ax2.xaxis
-# ax2.set_title(title)
-ax2.set_xlabel(label_SM)
-ax2.set_ylabel(label_dSdt)
-# ax2.set_xlim([0, 0.60])
-# ax2.set_ylim([0, 0.200])
-ax2.legend()
-# cbar = plt.colorbar(scatter, ax=ax2)
-# cbar.ax.get_yaxis().labelpad = 15
-# cbar.ax.set_ylabel("PET quantile", rotation=270)
-fig.autofmt_xdate()
-fig.suptitle(title)
+# #%%
+# # https://stackoverflow.com/questions/34235530/how-to-get-high-and-low-envelope-of-a-signal
+# def hl_envelopes_idx(s, dmin=1, dmax=1, split=False):
+#     """
+#     Input :
+#     s: 1d-array, data signal from which to extract high and low envelopes
+#     dmin, dmax: int, optional, size of chunks, use this if the size of the input signal is too big
+#     split: bool, optional, if True, split the signal in half along its mean, might help to generate the envelope in some cases
+#     Output :
+#     lmin,lmax : high/low envelope idx of input signal s
+#     """
 
-fig.savefig(os.path.join(output_path, f'Ltheta_PET_fit_test2.png'))
+#     # locals min      
+#     lmin = (np.diff(np.sign(np.diff(s))) > 0).nonzero()[0] + 1 
+#     # locals max
+#     lmax = (np.diff(np.sign(np.diff(s))) < 0).nonzero()[0] + 1 
+    
+
+#     if split:
+#         # s_mid is zero if s centered around x-axis or more generally mean of signal
+#         s_mid = np.mean(s) 
+#         # pre-sorting of locals min based on relative position with respect to s_mid 
+#         lmin = lmin[s[lmin]<s_mid]
+#         # pre-sorting of local max based on relative position with respect to s_mid 
+#         lmax = lmax[s[lmax]>s_mid]
+
+
+#     # global max of dmax-chunks of locals max 
+#     lmin = lmin[[i+np.argmin(s[lmin[i:i+dmin]]) for i in range(0,len(lmin),dmin)]]
+#     # global min of dmin-chunks of locals min 
+#     lmax = lmax[[i+np.argmax(s[lmax[i:i+dmax]]) for i in range(0,len(lmax),dmax)]]
+    
+#     return lmin,lmax
+
+# #%%
+
+# ## Upper quantile
+# sort_data_upper = pd.DataFrame(data={'x': x_upper, 'y': y_upper})
+# s = sort_data_upper.sort_values(by='x')['y'].values
+# t = sort_data_upper.sort_values(by='x')['x'].values
+# high_idx, low_idx = hl_envelopes_idx(s, dmax=2)
+
+# # Without weight
+# m_upper, b_upper = np.polyfit(t[low_idx], s[low_idx], deg=1)
+# # Residuals
+# m_res, b_res = np.polyfit(t[low_idx], abs(m_upper*t[low_idx]+b_upper-s[low_idx]), deg=1)
+# # With weight
+# weight_res = m_res*t[low_idx]+b_res
+# m_upper, b_upper = np.polyfit(t[low_idx], s[low_idx], deg=1, w=1/weight_res**2)
+
+# ## Lower quantile
+# sort_data_lower = pd.DataFrame(data={'x': x_lower, 'y': y_lower})
+# s = sort_data_lower.sort_values(by='x')['y'].values
+# t = sort_data_lower.sort_values(by='x')['x'].values
+# high_idx, low_idx = hl_envelopes_idx(s, dmax=2)
+
+# # Wightout weight
+# m_lower, b_lower = np.polyfit(t[low_idx], s[low_idx], deg=1)
+# # Residuals
+# m_res, b_res = np.polyfit(t[low_idx], abs(m_lower*t[low_idx]+b_lower-s[low_idx]), deg=1)
+# # With weight
+# weight_res = m_res*t[low_idx]+b_res
+# m_lower, b_lower = np.polyfit(t[low_idx], s[low_idx], deg=1, w=1/weight_res**2)
 # %%
