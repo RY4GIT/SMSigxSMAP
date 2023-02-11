@@ -103,7 +103,7 @@ coordinates
 # ## Loop for the target coordinates (currently set i=0)
 
 # %%
-for i in range(len(coordinates)): 
+for i in range(9, 10): #range(len(coordinates)): 
     target_lat = coordinates[i]['latitude']
     target_lon = coordinates[i]['longitude']
     target_station = coordinates[i]['category'] #.split()[0]
