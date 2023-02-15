@@ -2,7 +2,7 @@
 import os
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import rasterio as rio
 import xarray as xr
 import rioxarray
@@ -29,7 +29,7 @@ maxx = 148.172738
 maxy = -35.190465
 
 startDate = datetime(2016, 1, 1)
-endDate = datetime(2016, 7, 1)
+endDate = datetime(2016, 2, 1)
 currentDate = startDate
 
 ###### CHANGE HERE ###########
@@ -108,10 +108,34 @@ def load_SMAPL4_precip(bbox=None, currentDate=None):
 
 # %%
 bbox = {'minx':minx, 'maxx':maxx, 'miny':miny, 'maxy':maxy}
-# TODO: This to be in the time loop
-ds_SMAPL4_P = load_SMAPL4_precip(bbox=bbox, currentDate=currentDate)
+# Loop for the timeperiod
+delta = timedelta(days=1)
+data_list = []
+while currentDate <= endDate:
+    print(currentDate)
+    data_list.append(load_SMAPL4_precip(bbox=bbox, currentDate=currentDate))
+    currentDate += delta
 
+stacked_ds_SMAPL4_P = xr.concat(data_list, dim='time')
+
+#%%
+# https://docs.xarray.dev/en/stable/user-guide/plotting.html
+# stacked_ds_SMAPL4_P.plot()
+# Plot just in case
+import cartopy.crs as ccrs
+
+p = stacked_ds_SMAPL4_P.sel(time=currentDate-delta).plot(
+    transform=ccrs.PlateCarree(),
+    subplot_kws=dict(projection=ccrs.Orthographic(minx, miny), facecolor="gray")
+)
+
+p.axes.set_global()
+p.axes.coastlines()
+
+plt.draw()
 # %%
+# https://docs.xarray.dev/en/stable/user-guide/time-series.html
+
 # 3. SMAP L3
 # Stack of the data for the mini raster
 # 3.1. Get a snapshot of SMAP L3 data for the area of interest
