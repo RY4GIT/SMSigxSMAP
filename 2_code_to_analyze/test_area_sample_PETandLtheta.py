@@ -27,6 +27,7 @@ minx = 147.291085
 miny = -35.903334
 maxx = 148.172738
 maxy = -35.190465
+bbox = {'minx':minx, 'maxx':maxx, 'miny':miny, 'maxy':maxy}
 
 startDate = datetime(2016, 1, 1)
 endDate = datetime(2016, 2, 1)
@@ -107,7 +108,7 @@ def load_SMAPL4_precip(bbox=None, currentDate=None):
     return ds_SMAPL4_P
 
 # %%
-bbox = {'minx':minx, 'maxx':maxx, 'miny':miny, 'maxy':maxy}
+
 # Loop for the timeperiod
 delta = timedelta(days=1)
 data_list = []
@@ -120,6 +121,7 @@ stacked_ds_SMAPL4_P = xr.concat(data_list, dim='time')
 
 #%%
 # https://docs.xarray.dev/en/stable/user-guide/plotting.html
+# https://docs.xarray.dev/en/stable/user-guide/time-series.html
 # stacked_ds_SMAPL4_P.plot()
 # Plot just in case
 import cartopy.crs as ccrs
@@ -133,16 +135,61 @@ p.axes.set_global()
 p.axes.coastlines()
 
 plt.draw()
-# %%
-# https://docs.xarray.dev/en/stable/user-guide/time-series.html
 
+# %%
 # 3. SMAP L3
-# Stack of the data for the mini raster
-# 3.1. Get a snapshot of SMAP L3 data for the area of interest
-# 
-# 
-# 
-# 3.2. Get SMAPL3 data according to the EASE GRID point
+# 3.1. Get a snapshot of SMAP L4 data and stack of the data along time axis the area of interest
+def load_SMAPL3_SM(bbox=None, currentDate=None):
+    
+    minx = bbox['minx']
+    maxx = bbox['maxx']
+    miny = bbox['miny']
+    maxy = bbox['maxy']
+
+    # Load file 
+    fn = os.path.join(input_path, SMAPL3_path, f'SMAP_L3_SM_P_E_{currentDate.strftime("%Y%m%d")}_R18290_001_HEGOUT.nc')
+    if not os.path.exists(fn):
+        fn = os.path.join(input_path, SMAPL3_path, f'SMAP_L3_SM_P_E_{currentDate.strftime("%Y%m%d")}_R18290_002_HEGOUT.nc')
+        if not os.path.exists(fn):
+            print(f'The file does not exist: {fn}')
+    ds_SMAPL3_0 = rioxarray.open_rasterio(fn)
+
+    # Clip and mask data using quality flag
+    # Thankfully the y axis is not flipped for SMAPL3 dataset
+    ds_SMAPL3_clipped = ds_SMAPL3_0.rio.clip_box(minx=minx, miny=miny, maxx=maxx, maxy=maxy).copy()
+    mask_am = (ds_SMAPL3_clipped.retrieval_qual_flag == 0) | (ds_SMAPL3_clipped.retrieval_qual_flag == 8)
+    ds_SMAPL3_am = ds_SMAPL3_clipped['soil_moisture'].where(mask_am).copy()
+    mask_pm = (ds_SMAPL3_clipped.retrieval_qual_flag_pm == 0) | (ds_SMAPL3_clipped.retrieval_qual_flag_pm == 8)
+    ds_SMAPL3_pm = ds_SMAPL3_clipped['soil_moisture_pm'].where(mask_pm).copy()
+    del mask_am, mask_pm
+
+    # Concatenate AM and PM data, take average between AM and PM data, and assign a time coordinate
+    ds_SMAPL3 = xr.concat([ds_SMAPL3_am, ds_SMAPL3_pm], dim='band').mean(dim='band', skipna=True).assign_coords({"time": currentDate})
+    del ds_SMAPL3_am, ds_SMAPL3_pm
+
+    return ds_SMAPL3
+# %%
+# Loop for the timeperiod
+delta = timedelta(days=1)
+data_list = []
+while currentDate <= endDate:
+    print(currentDate)
+    data_list.append(load_SMAPL3_SM(bbox=bbox, currentDate=currentDate))
+    currentDate += delta
+stacked_ds_SMAPL3_SM = xr.concat(data_list, dim='time')
+
+#%%
+import cartopy.crs as ccrs
+
+p = stacked_ds_SMAPL3_SM.sel(time=currentDate-delta).plot(
+    transform=ccrs.PlateCarree(),
+    subplot_kws=dict(projection=ccrs.Orthographic(minx, miny), facecolor="gray")
+)
+
+p.axes.set_global()
+p.axes.coastlines()
+
+plt.draw()
 
 # %% 
 # 4. MODIS LAI
