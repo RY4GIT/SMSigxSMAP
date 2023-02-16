@@ -20,6 +20,8 @@ import rich.table
 import warnings
 warnings.filterwarnings("ignore")
 
+from singerPET_create_datarods_v3 import wrapper_singlepoint_returnarray
+
 # %%
 ###### CHANGE HERE ###########
 network_name = "Oznet_Alabama_area"
@@ -42,7 +44,9 @@ SMAPL4_grid_path = "SMAPL4SMGP_EASEreference"
 PET_path = "PET"
 
 # %%
+#############################
 # 2. SMAP L4
+#############################
 # 2.1. Get a snapshot of SMAP L4 data and stack of the data along time axis the area of interest
 
 # %%
@@ -137,7 +141,10 @@ p.axes.coastlines()
 plt.draw()
 
 # %%
+#############################
 # 3. SMAP L3
+#############################
+
 # 3.1. Get a snapshot of SMAP L4 data and stack of the data along time axis the area of interest
 def load_SMAPL3_SM(bbox=None, currentDate=None):
     
@@ -192,22 +199,146 @@ p.axes.coastlines()
 plt.draw()
 
 # %% 
-# 4. MODIS LAI
-# 4.1. Get a snapshot of MODIS LAI data for the area of interest
-# 
-# 
-# 
-# 4.2. Get MODIS LAI data according to the EASE GRID point
+#############################
+# 3. PET and synthesis
+#############################
+
+# 3. Calculate dtheta/dt with precipitation mask for the mini raster data
+
+i = 0
+lon = stacked_ds_SMAPL3_SM.x.values[i]
+j = 0
+lat = stacked_ds_SMAPL3_SM.y.values[i]
+
+# 2d da -> 1d df for SMAP and P data 
+SM1d = stacked_ds_SMAPL3_SM.isel(x=i, y=j)
+P1d = stacked_ds_SMAPL4_P.sel(x=lon, y=lat, method='nearest')
+df_SM = SM1d.to_pandas()
+df_P = P1d.to_pandas()
+df_SM.name = 'soil_moisture_smapL3'
+df_P.name = 'precip'
+
+df_synced = pd.merge(df_SM, df_P, on='time')
+df_synced['noprecip'] = df_synced['precip'] < 0.00002
+df_synced.drop(df_synced.index[(df_synced['noprecip']==True) & (df_synced['soil_moisture_smapL3'].isnull())], inplace=True)
+df_synced['dt'] = df_synced.index.to_series().diff().dt.days.values
+df_synced['dSdt'] = df_synced['soil_moisture_smapL3'].diff() / df_synced['dt']
+df_synced['dSdt'][df_synced['dSdt']>0] = np.nan
+df_synced['dSdt(t+1)'] = df_synced['dSdt'].shift(periods=-1).copy()
+df_synced
+# %%
+# Read corresponding PET data and sync it with SMAP data 
+startyear = 2015
+endyear = 2021
+lat = 35
+lon = 147
+wrapper_singlepoint_returnarray(startyear=startyear, endyear=endyear, latval=lat, lonval=lon, regionname='test', t_resolution='daily', data_path=r'../1_data/PET/', output_path=r'../3_data_out/')
+
+
+
+# Calculate correlation strength between PET and SM data and assign the value in an array
+
+
+
+
+
+
+
+#%%
+
+#################################
+# 4. Get some satellite img etc. for the bbox for comparison
+#################################
+
+
+
+
+
+
+# %%
+# For plotting
+df_synced['values_while_drydown'] = df_synced['soil_moisture_smapL3']
+drydown_period = df_synced['dSdt(t+1)'].notna()
+drydown_period = drydown_period.shift(periods=+1) | drydown_period
+df_synced['values_while_drydown'][drydown_period==False] = np.nan
+noprecip_with_buffer = (df_synced['noprecip']==True) | (df_synced['noprecip'].shift(periods=-1)==True)
+df_synced['values_while_drydown'][noprecip_with_buffer==False] = np.nan
+
+# %%
+# lat = target_lat
+# lon = target_lon
+
+smap_color = '#ff7f0e'
+precip_color = '#779eb2'
+
+label_SM = r"$\theta [m^3/m^3]$"
+label_dSdt = r"$-d\theta/dt$"
+label_lai = r"$LAI [m^2/m^2]$"
+label_PET = r"$PET [mm/d]$"
+
+# title = f"{network_name}: {target_station}\n({lat:.2f}, {lon:.2f})"
+# save_title = f"{network_name}_{target_station}"
+plt.rcParams['font.size'] = 12
+
+# SMAP timeseries 
+fig = plt.figure(figsize=(9, 9))
+
+# fig.subplots(1, 2, sharey=True, sharex=True,  figsize=(10, 5))
+ax1 = fig.add_subplot(3,1,1)
+line1, = ax1.plot(df_synced.index, df_synced['soil_moisture_smapL3'].values, '-', alpha=0.5, label='SMAP L3', color=smap_color)
+line2, = ax1.plot(df_synced['values_while_drydown'], '-', alpha=0.5, label='SMAP L3 drydown', color='red')
+xax = ax1.xaxis
+# ax1.set_title(title)
+ax1.set_xlabel("Time")
+ax1.set_ylabel(r"$\theta [m^3/m^3]$")
+# ax1.set_ylabel("Surface soil moisture [mm/max25mm]")
+ax1.legend(loc='upper right')
+
+# Precipitation
+ax2 =  fig.add_subplot(3,1,2) #, sharex = ax1)
+df_synced['precip'].plot.bar(y='first', ax=ax2, label='SMAPL4', color=precip_color)
+ax2.set_xlabel("Time")
+ax2.set_ylabel("Precip [kg/m2]")
+ax2.legend(loc='upper right')
+
+# # Precipitation
+# ax3 =  fig.add_subplot(3,1,3) #, sharex = ax1)
+# ax4 = ax3.twinx()
+
+# # line3, = ax3.plot(df_synced['MODISmeanLAI_SMAPgrid'], '-', label='MODIS LAI', color='#1b9e77')
+# # line4, = ax4.plot(df_synced['PET'], '-', label=label_PET, color='#7570b3')
+# ax3.set_xlabel("Time")
+# ax3.set_ylabel("LAI")
+# ax4.set_ylabel("PET [mm/day]")
+# ax3.legend(loc='upper left')
+# ax4.legend(loc='upper right')
+
+for ind, label in enumerate(ax2.get_xticklabels()):
+    if ind % 365 == 0:
+        label.set_visible(True)
+    else:
+        label.set_visible(False)
+
+# for ind, label in enumerate(ax4.get_xticklabels()):
+#     if ind % 365 == 0:
+#         label.set_visible(True)
+#     else:
+#         label.set_visible(False)
+        
+# fig.autofmt_xdate()
+# fig.savefig(os.path.join(output_path, f'ts.png'))
 
 # %% 
 # 4. Singer PET 
-# 4.1. Get a snapshot ofSinger PET data for the area of interest
+# Get a timseries of Singer PET data for the point of interest, sync it with SM data, and save it 
 # 
 # 
 # 
-# 4.2. Get Singer PET data according to the EASE GRID point
-
-
+# Plot 
+# 
+# 
+# 
+# 
 
 # %% 5. Sync all the data and save 
 
