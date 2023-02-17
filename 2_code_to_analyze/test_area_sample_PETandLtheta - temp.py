@@ -33,7 +33,6 @@ bbox = {'minx':minx, 'maxx':maxx, 'miny':miny, 'maxy':maxy}
 startDate = datetime(2016, 1, 1)
 endDate = datetime(2016, 2, 1)
 
-
 ###### CHANGE HERE ###########
 input_path = r"..\1_data"
 output_path = r"..\3_data_out"
@@ -115,6 +114,7 @@ def load_SMAPL4_precip(bbox=None, currentDate=None):
 # Loop for the timeperiod
 delta = timedelta(days=1)
 data_list = []
+currentDate = startDate
 while currentDate <= endDate:
     print(currentDate)
     data_list.append(load_SMAPL4_precip(bbox=bbox, currentDate=currentDate))
@@ -178,6 +178,7 @@ def load_SMAPL3_SM(bbox=None, currentDate=None):
 # Loop for the timeperiod
 delta = timedelta(days=1)
 data_list = []
+currentDate = startDate
 while currentDate <= endDate:
     print(currentDate)
     data_list.append(load_SMAPL3_SM(bbox=bbox, currentDate=currentDate))

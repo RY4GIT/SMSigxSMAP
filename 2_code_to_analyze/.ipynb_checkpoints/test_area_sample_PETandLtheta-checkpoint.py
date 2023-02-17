@@ -32,7 +32,7 @@ bbox = {'minx':minx, 'maxx':maxx, 'miny':miny, 'maxy':maxy}
 
 startDate = datetime(2016, 1, 1)
 endDate = datetime(2016, 2, 1)
-
+currentDate = startDate
 
 ###### CHANGE HERE ###########
 input_path = r"..\1_data"
