@@ -134,6 +134,45 @@ def wrapper_singlepoint(startyear,endyear,latval,lonval,regionname,t_resolution,
         singlepoint_extract(datapath,year,latval,lonval,regionname,t_resolution,output_path)
         print(year)
 
+def wrapper_singlepoint_returnarray(startyear,endyear,latval,lonval,regionname,t_resolution,data_path,output_path):
+    """
+    This is a wrapper function to run for downloading hPET and dPET data.
+    All the arguments need to be given at the end of the script before running
+    the script.
+
+    :param startyear: the begging year to start the data download (min = 1981, max = 2019)
+    :param endyear: the last year of data to be  downloaded (min = 1981, max = 2019)
+    :param latmin: the minimum latitude value of the region (float)
+    :param latmax: the maximum latitude value of the region (float)
+    :param lonmin: the minimum longitude value of the region (float)
+    :param lonmax: the maximum longitude value of the region (float)
+    :param regionname: name of the region (it could be any name the user wants) (string)
+    :param t_resolution: the time resolution to be downloaded (daily or hourly)
+    :param data_path:  the file path that contain the downloaded data (string)
+    :param output_path:  the file path to store the extracted subset of the data (string)
+    :return:
+    """
+
+    if t_resolution == 'daily':
+        datapath = data_path
+    elif t_resolution == 'hourly':
+        datapath = data_path
+    else:
+        raise ValueError("t_resolution is wrong please write 'daily' or 'hourly'")
+
+    # set up the year array loop through each year to download the data
+    years = np.arange(startyear,endyear+1)
+    all_PET = []
+    all_years = []
+    for y in range(0,len(years)):
+        year=int(years[y])
+        PET_for_a_year = singlepoint_extract_returnarray(datapath,year,latval,lonval,regionname,t_resolution,output_path)
+        all_PET.append(PET_for_a_year)
+        all_years.append(np.repeat(year, len(PET_for_a_year)))
+        print(year)
+
+    return all_PET, all_years
+
 
 def region_extract(datapath,year,latmin,latmax,lonmin,lonmax,regionname,t_resolution,output_path):
     """
@@ -248,6 +287,62 @@ def singlepoint_extract(datapath,year,latval,lonval,regionname,t_resolution,outp
     
     return None   
 
+
+def singlepoint_extract_returnarray(datapath,year,latval,lonval,regionname,t_resolution,output_path):
+    """
+    This function extract the data from the global hPET and dPET file and write a new
+    netCDF file with a file name <year>_<t_resolution>_pet_<regionname>.nc in the output_path
+    provided.
+
+    :param datapath: the file path where the hPET data is stored (url)
+    :param year: the year for which data is going to be downloaded (integer)
+    :param latmin: the minimum latitude value (float)
+    :param latmax: the maximum latitude value (float)
+    :param lonmin: the minimum longitude value (float)
+    :param lonmax: the maximum longitude value (float)
+    :param regionname: name of the region (it could be any name the user wants) (string)
+    :param t_resolution: the time resolution to be downloaded (daily or hourly)
+    :param output_path:  the file path to store the downloaded data (string)
+    :return: hPET or dPET data in a netCDF file
+    """
+
+    if t_resolution == 'daily':
+        fname = '_daily_pet.nc'
+        tunits='days since '+str(year)+'-01-01' # time unit for the new netcdf file
+        
+    elif t_resolution == 'hourly':
+        fname = '_hourly_pet.nc'
+        tunits='hours since '+str(year)+'-01-01 00:00:00'
+        
+    else:
+        raise ValueError("t_resolution is wrong please write 'daily' or 'hourly'")
+
+    pet_hr = Dataset(datapath + str(year) + fname)
+    lats = pet_hr.variables['latitude'][:]
+    lons = pet_hr.variables['longitude'][:]
+    
+    # extract the min and max index
+    latind, lonind = nearest_point(latval, lonval, lats, lons)
+ 
+    # print(latind)
+    # print(lonind)
+    # read the data pet
+    point_data=pet_hr.variables['pet'][:, latind, lonind]  
+
+    # # Extract the timezone values for the grid
+    # nc_offset=Dataset(datapath + 'timezone_offset.nc')
+    # offset=nc_offset.variables['offset'][latind, lonind]
+    # if t_resolution == 'daily':
+    #     # filename='dPET_'+str(latval)+'_'+str(lonval)+'_'+str(year)+'.txt'
+    #     filename='dPET_'+str(year)+'.txt'
+    # elif t_resolution == 'hourly':
+    #     filename='hPET_'+str(latval)+'_'+str(lonval)+'_'+str(offset)+'_'+str(year)+'.txt'
+    # else:
+    #     raise ValueError("t_resolution is wrong please write 'daily' or 'hourly'")
+    # # save the data in a text file
+    # np.savetxt(output_path+filename,point_data,fmt='%0.5f')
+    
+    return point_data   
 
 def nearest_point(lat_var, lon_var, lats, lons):
     """
