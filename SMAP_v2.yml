@@ -1,6 +1,7 @@
 name: SMAP_v2
 channels:
   - conda-forge
+  - travis
   - defaults
 dependencies:
   - pandas
@@ -26,4 +27,4 @@ dependencies:
   - scipy
   - netcdf4
   - pygeogrids
-  - tqdm
+  - tqdm 
