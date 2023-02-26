@@ -1,4 +1,4 @@
-name: SMAP
+name: SMAP_v2
 channels:
   - conda-forge
   - defaults
@@ -6,6 +6,8 @@ dependencies:
   - pandas
   - numpy
   - matplotlib
+  - dask
+  - bottleneck
   - pytest-shutil
   - geopandas
   - rasterio
@@ -25,5 +27,3 @@ dependencies:
   - netcdf4
   - pygeogrids
   - tqdm
-  - pip:
-    - ismn

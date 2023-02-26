@@ -4,6 +4,7 @@
 *.pdf
 *.docx
 *.xlsx
+*.nc
 
 1_data/*
 3_data_out/*
