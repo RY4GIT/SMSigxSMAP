@@ -4,8 +4,9 @@ channels:
   - travis
   - defaults
 dependencies:
+  - python = 3.9
   - pandas
-  - numpy
+  - numpy = 1.23.5
   - matplotlib
   - dask
   - bottleneck
@@ -29,3 +30,6 @@ dependencies:
   - pygeogrids
   - tqdm
   - sparse
+  - ipykernel
+  - xclim
+  - pint=0.19.2
