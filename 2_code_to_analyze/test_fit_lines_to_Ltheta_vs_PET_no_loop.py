@@ -153,9 +153,11 @@ y_upper = np.delete(y_upper, nans_upper)
 x_lower = np.delete(x_lower, nans_lower)
 y_lower = np.delete(y_lower, nans_lower)
 
+#%%
+
 # %% Fig regression
 
-def fit_linear_line(x, y, forced_intercept_x, weight_regression=True, plot_results=False):
+def fit_linear_line(x, y, forced_intercept_x, weight_regression=True, weight_type=None, plot_results=False):
     ## Using Scikit learn
 
     # Shift x values by forced_intercept_x
@@ -163,7 +165,7 @@ def fit_linear_line(x, y, forced_intercept_x, weight_regression=True, plot_resul
     new_x = new_x.reshape((-1,1))
 
     # Linear regression wighout weight
-    model = LinearRegression(fit_intercept=False).fit(new_x, y)
+    model = LinearRegression().fit(x.reshape((-1,1)), y)
 
     # r = model.score(new_x_upper,y_upper)
     a = model.coef_
@@ -174,28 +176,126 @@ def fit_linear_line(x, y, forced_intercept_x, weight_regression=True, plot_resul
         b_out = b
 
     if weight_regression:
-        # Residuals
-        residuals = y - (a*x+b)
 
-        # Linear regression with weight
-        model_weighted = LinearRegression(fit_intercept=False).fit(new_x, y, sample_weight=1/residuals**2)
+        if weight_type == 'residuals':
+            # Residuals
+            pre_residuals = y - (a*x+b)
+
+            # Linear regression with weight
+            model_weighted = LinearRegression(fit_intercept=False).fit(new_x, y, sample_weight=1/pre_residuals**2)
+        elif weight_type == 'x':
+            model_weighted = LinearRegression(fit_intercept=False).fit(new_x, y, sample_weight=1/(x - forced_intercept_x))
+        elif weight_type == 'x2':
+            model_weighted = LinearRegression(fit_intercept=False).fit(new_x, y, sample_weight=1/(x - forced_intercept_x)**2)
+            
         a_weighted = model_weighted.coef_
-        b_weighted = -1 * a_weighted * forced_intercept
+        b_weighted = -1 * a_weighted * forced_intercept_x
         a_out = a_weighted
         b_out = b_weighted
+
+    residuals = y - (a_out*x+b_out)
         
     if plot_results:
-        plt.plot(x,y,'o')
-        plt.plot(x,a_out*x+b_out)
+        plt.plot(a_out*x+b_out,residuals,'o')
+        plt.title(f'Weight {weight_regression} - {weight_type}')
         plt.show()
         
-    return a_out, b_out
+    return a_out, b_out, residuals
     
 ## Using Scikit learn
-forced_intercept = 0.02 # The minimum possible SMAP value [m3/m3] according to Akbar et al., (2018)
+# forced_intercept = 0.02 # The minimum possible SMAP value [m3/m3] according to Akbar et al., (2018)
+forced_intercept = ds_synced2['soil_moisture_smapL3'].min()
 
-m_upper, b_upper = fit_linear_line(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, plot_results=True)
-m_lower, b_lower = fit_linear_line(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, plot_results=True)
+m_upper, b_upper, res_upper = fit_linear_line(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, weight_regression=True, weight_type='residuals', plot_results=True)
+m_lower, b_lower, res_lower = fit_linear_line(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, weight_regression=True, weight_type='residuals', plot_results=True)
+
+m_upper_residual_method = m_upper.copy()
+m_lower_residual_method = m_lower.copy()
+
+m_upper, b_upper, res_upper = fit_linear_line(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, weight_regression=True, weight_type='x', plot_results=True)
+m_lower, b_lower, res_lower = fit_linear_line(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, weight_regression=True, weight_type='x',plot_results=True)
+
+m_upper_LR_prop_x = m_upper.copy()
+m_lower_LR_prop_x = m_lower.copy()
+
+m_upper, b_upper, res_upper = fit_linear_line(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, weight_regression=True, weight_type='x2', plot_results=True)
+m_lower, b_lower, res_lower = fit_linear_line(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, weight_regression=True, weight_type='x2',plot_results=True)
+
+m_upper_LR_prop_x2 = m_upper.copy()
+m_lower_LR_prop_x2 = m_lower.copy()
+
+# %% 
+
+def WRO_weight_x_simple(x, y, forced_intercept_x, weight_regression=True, weight_type=None, plot_results=True):
+    # Shift x values by forced_intercept_x
+    new_x = x - forced_intercept_x
+
+    # Linear regression with weight
+    if not weight_regression:
+        a_out = sum(new_x*y) / sum(new_x**2)
+    else:
+        if weight_type == 'x':
+            a_out = sum(y) / sum(new_x)
+        elif weight_type == 'x2':
+            a_out = sum(y/new_x) / len(new_x)
+
+    residuals = y - a_out*new_x
+
+    if plot_results:
+        plt.plot(a_out*x,residuals,'o')
+        plt.title(f'Weight {weight_regression} - {weight_type}')
+        plt.show()
+
+    return a_out, residuals
+
+a_upper, res_upper = WRO_weight_x_simple(x=x_upper, y=y_upper, weight_regression=False, forced_intercept_x=forced_intercept, plot_results=True)
+a_lower, res_lower = WRO_weight_x_simple(x=x_lower, y=y_lower, weight_regression=False, forced_intercept_x=forced_intercept, plot_results=True)
+
+m_upper_original = a_upper.copy()
+m_lower_original = a_lower.copy()
+
+a_upper, res_upper = WRO_weight_x_simple(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, weight_type='x', plot_results=True)
+a_lower, res_lower = WRO_weight_x_simple(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, weight_type='x',plot_results=True)
+
+m_upper_simple_prop_x = a_upper.copy()
+m_lower_simple_prop_x = a_lower.copy()
+
+a_upper, res_upper = WRO_weight_x_simple(x=x_upper, y=y_upper, forced_intercept_x=forced_intercept, weight_type='x2',plot_results=True)
+a_lower, res_lower = WRO_weight_x_simple(x=x_lower, y=y_lower, forced_intercept_x=forced_intercept, weight_type='x2',plot_results=True)
+
+m_upper_simple_prop_x2 = a_upper.copy()
+m_lower_simple_prop_x2 = a_lower.copy()
+
+
+# %%
+
+new_x_upper = x_upper - forced_intercept
+fig, ax = plt.subplots(1)
+ax.plot(new_x_upper,y_upper,'o')
+ax.plot(new_x_upper,m_upper_residual_method*new_x_upper, label=f'Residual (a={m_upper_residual_method[0]:.2f})')
+ax.plot(new_x_upper,m_upper_LR_prop_x*new_x_upper, label=f'W=1/x (a={m_upper_LR_prop_x[0]:.2f})')
+ax.plot(new_x_upper,m_upper_LR_prop_x2*new_x_upper, label=f'W=1/x2 (a={m_upper_LR_prop_x2[0]:.2f})')
+ax.plot(new_x_upper,m_upper_original*new_x_upper, label=f'Simple WOS (a={m_upper_original:.2f})')
+ax.plot(new_x_upper,m_upper_simple_prop_x*new_x_upper, label=f'Simple WOS, w=1/x (a={m_upper_simple_prop_x:.2f})')
+ax.plot(new_x_upper,m_upper_simple_prop_x2*new_x_upper, label=f'Simple WOS, w=1/x2 (a={m_upper_simple_prop_x2:.2f})')
+fig.legend()
+# fig.show()
+
+new_x_lower = x_lower - forced_intercept
+fig2, ax2 = plt.subplots(1)
+ax2.plot(x_lower - forced_intercept,y_lower,'o')
+ax2.plot(new_x_lower,m_lower_residual_method*new_x_lower, label=f'Residual (a={m_lower_residual_method[0]:.2f})')
+ax2.plot(new_x_lower,m_lower_LR_prop_x*new_x_lower, label=f'W=1/x (a={m_lower_LR_prop_x[0]:.2f})')
+ax.plot(new_x_lower,m_lower_LR_prop_x2*new_x_lower, label=f'W=1/x2 (a={m_lower_LR_prop_x2[0]:.2f})')
+ax2.plot(new_x_lower,m_lower_original*new_x_lower, label=f'Simple WOS (a={m_lower_original:.2f})')
+ax2.plot(new_x_lower,m_lower_simple_prop_x*new_x_lower, label=f'Simple WOS, w=1/x (a={m_lower_simple_prop_x:.2f})')
+ax2.plot(new_x_lower,m_lower_simple_prop_x2*new_x_lower, label=f'Simple WOS, w=1/x2 (a={m_lower_simple_prop_x2:.2f})')
+fig2.legend()
+# plt.show()
+
+
+# %%
+
 
 
 
@@ -232,6 +332,8 @@ fig.autofmt_xdate()
 
 ax2 =  fig.add_subplot(1,2,2)
 
+m_upper = m_upper_simple_prop_x2
+m_lower = m_lower_simple_prop_x2
 
 scatter1 = ax2.scatter(x=x_upper, y=y_upper, c='sienna', marker='o', alpha=0.5, label='Upper')
 scatter2 = ax2.scatter(x=x_lower, y=y_lower, c='bisque', marker='o', alpha=0.5, label='Lower')
