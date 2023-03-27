@@ -11,7 +11,7 @@ import json
 def main():
 
     # Read appears request 
-    filename = r'.\0_code\appeears_request_jsons\point_request_various_geographic_locations.json'
+    filename = r'.\0_code\appeears_request_jsons\point_request_California.json'
     with open(filename, 'r') as infile:
         request_content = json.load(infile)
     points = request_content['params']['coordinates']
@@ -51,10 +51,10 @@ def main():
         # what is the directory where you download and put the hPET data?
         # download the data from the Birstol repository manually and save it 
         # in your local machine.
-        data_path = r'../1_data/PET/'
+        data_path = r'./1_data/PET/'
 
         # where do you want the extracted subset of the data to be?
-        output_path = r'../1_data/PET/' + regionname + r'/'
+        output_path = r'./1_data/PET/' + regionname + r'/'
         if not os.path.exists(output_path):
             os.makedirs(output_path)
 
