@@ -32,16 +32,17 @@ import os
 
 # ============ User-defined parameters ==========# 
 # Specify current directory and create output directory if it does not exist
-os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
+# os.chdir("G:/Shared drives/Ryoko and Hilary/SMSigxSMAP/analysis/0_code")
+print(os.getcwd())
 
 # Get the target point locations 
-network_name = 'various_geographic_locations'
+network_name = 'California'
 
 # File path to the sample request json
-sample_request_path = "./appeears_request_jsons/point_request_various_geographic_locations_P.json"
+sample_request_path = "./0_code/appeears_request_jsons/point_request_California.json"
 
 # Specify the output directory
-dest_dir = os.path.join("../1_data/APPEEARS_subsetting", network_name)
+dest_dir = os.path.join("./1_data/APPEEARS_subsetting", network_name)
 
 # How often would you want to check the results in seconds
 check_request_interval_sec = 60*10
@@ -52,7 +53,7 @@ check_request_interval_sec = 60*10
 params = {'pretty': True}
 
 ## Login to appears
-my_credential_path = "./auth.json"
+my_credential_path = "./0_code/auth.json"
 with open(my_credential_path, 'r') as infile:
     my_credentials = json.load(infile)
 
@@ -103,6 +104,7 @@ for i in range(len(bundle_response)):
 
     # get a stream to the bundle file
     file_id = bundle_response['files'][i]['file_id']
+    # This part started giving error
     filename = bundle_response['files'][i]['file_name']
     print("Download a file %s" % filename)
 
