@@ -35,6 +35,8 @@ import rich.table
 import warnings
 warnings.filterwarnings("ignore")
 
+from tqdm import tqdm
+
 
 
 # %% [markdown]
@@ -53,6 +55,7 @@ SMAPL3_path = "SPL3SMP_E"
 SMAPL4_path = "SPL4SMGP"
 SMAPL4_grid_path = "SMAPL4SMGP_EASEreference"
 MODIS_path = r".\MOD15A2H"
+MODIS_LAI_path = r".\MODIS_LAI"
 # os.chdir("G:\Shared drives\Ryoko and Hilary\SMSigxSMAP\analysis")
 
 # %% [markdown]
@@ -103,77 +106,12 @@ coordinates
 # ## Loop for the target coordinates (currently set i=0)
 
 # %%
-for i in range(9, 10): #range(len(coordinates)): 
+for i in range(len(coordinates)): 
     target_lat = coordinates[i]['latitude']
     target_lon = coordinates[i]['longitude']
     target_station = coordinates[i]['category'] #.split()[0]
     
     print(f'processing{i}/{len(coordinates)} station: {target_station}')
-
-    # %% [markdown]
-    # ## Load APPEEARS output (SMAPL3)
-
-    # %%
-    file_path = os.path.join(input_path, appears_path, network_name, f'{network_name}-SPL3SMP-E-005-results.csv')
-    SMAPL3_pt_sample = pd.read_csv(file_path)
-    SMAPL3_pt_sample = SMAPL3_pt_sample[(SMAPL3_pt_sample['Latitude'] == target_lat) & (SMAPL3_pt_sample['Longitude'] == target_lon)].copy()
-    SMAPL3_pt_sample.columns
-
-    # %%
-    df_ts_smap_am = SMAPL3_pt_sample[['Date', 'SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_soil_moisture','SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag']].copy()
-    df_ts_smap_am['Date'] = pd.to_datetime(df_ts_smap_am['Date'])
-    df_ts_smap_am.set_index('Date', inplace=True)
-    bad_data_idx_smap = df_ts_smap_am[(df_ts_smap_am['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag'] != 0.0) & (df_ts_smap_am['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag'] != 8.0)].index
-    df_ts_smap_am.drop(bad_data_idx_smap, inplace=True)
-    df_ts_smap_am_daily = df_ts_smap_am['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_soil_moisture'].resample('D', axis=0).mean()
-
-    df_ts_smap_pm = SMAPL3_pt_sample[['Date', 'SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm','SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm']].copy()
-    df_ts_smap_pm['Date'] = pd.to_datetime(df_ts_smap_pm['Date'])
-    df_ts_smap_pm.set_index('Date', inplace=True)
-    bad_data_idx_smap = df_ts_smap_pm[(df_ts_smap_pm['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm'] != 0.0) & (df_ts_smap_pm['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm'] != 8.0)].index
-    df_ts_smap_pm.drop(bad_data_idx_smap, inplace=True)
-    df_ts_smap_pm_daily = df_ts_smap_pm['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm'].resample('D', axis=0).mean()
-
-    df_ts_sync = pd.merge(df_ts_smap_am_daily, df_ts_smap_pm_daily, how='inner', left_index=True, right_index=True)
-    if df_ts_sync.empty:
-        print(f'probably {target_station} did not have any good data')
-        continue
-    
-    # print(df_ts_sync.head())
-    df_ts_sync['soil_moisture_smapL3'] = df_ts_sync[['SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_AM_soil_moisture','SPL3SMP_E_005_Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm']].mean(axis=1, skipna=True).copy()
-    df_ts_sync['soil_moisture_smapL3'] = df_ts_sync['soil_moisture_smapL3'].resample('D', axis=0).mean().copy()
-
-
-    # %% [markdown]
-    # ## Load APPEEARS output (SMAPL4)
-
-    # %%
-    file_path = os.path.join(input_path, appears_path, network_name, f'{network_name}-P-SPL4SMGP-006-results.csv')
-    SMAPL4_pt_sample = pd.read_csv(file_path)
-    SMAPL4_pt_sample = SMAPL4_pt_sample[(SMAPL4_pt_sample['Latitude'] == target_lat) & (SMAPL4_pt_sample['Longitude'] == target_lon)].copy()
-    # print(SMAPL4_pt_sample.columns)
-
-    SMAPL4_pt_sample[['SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_0', 
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_1',
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_2',
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_3',
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_4',
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_5',
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_6',
-                    'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_7']].plot()
-
-    # %%
-    df_ts_smap_precip = SMAPL4_pt_sample[['Date', 'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_0']].copy()
-    df_ts_smap_precip = df_ts_smap_precip.rename({'SPL4SMGP_006_Geophysical_Data_precipitation_total_surface_flux_0': 'precip'}, axis='columns')
-    df_ts_smap_precip['Date'] = pd.to_datetime(df_ts_smap_precip['Date'])
-    df_ts_smap_precip.set_index('Date', inplace=True)
-    df_ts_smap_precip.plot()
-    df_ts_sync = pd.merge(df_ts_sync, df_ts_smap_precip, how='inner', left_index=True, right_index=True)
-
-    noprecip = df_ts_smap_precip['precip'] < 0.00002
-    df_ts_sync['noprecip'] = noprecip
-
-    df_ts_sync
 
     # %% [markdown]
     # ## Get corresponding EASE grid to the sample request
@@ -259,7 +197,7 @@ for i in range(9, 10): #range(len(coordinates)):
     unique_dates = set(unique_dates)
 
     # Iterate through the unique dates 
-    for i, unique_date in enumerate(unique_dates):
+    for i, unique_date in tqdm(enumerate(unique_dates), total=len(unique_dates)):
         item_for_the_unique_date = []
         # print(f'processing{i}/{len(unique_dates)}')
         
@@ -312,22 +250,11 @@ for i in range(9, 10): #range(len(coordinates)):
     # %%
     meanLAI_ts_daily = meanLAI_ts['MODISmeanLAI_SMAPgrid'].resample('D', axis=0).interpolate()
     meanLAI_ts_daily.plot()
-    df_ts_sync = pd.merge(df_ts_sync, meanLAI_ts_daily, how='inner', left_index=True, right_index=True)
-    df_ts_sync.head()
-
-    # %% [markdown]
-    # ## Get Ltheta with LAI 
-
-    # %% [markdown]
-    # ### Get dS/dt
-    # 
-
-    # %%
-    df_ts_sync['skippable'] = (df_ts_sync['soil_moisture_smapL3'].isnull()) & (df_ts_sync['noprecip']==True)
-    df_ts_sync.drop(df_ts_sync.index[df_ts_sync['skippable']==True], inplace=True)
-    df_ts_sync[['soil_moisture_smapL3','noprecip', 'MODISmeanLAI_SMAPgrid', 'skippable']].head(30)
-    file_path = os.path.join(input_path, appears_path, network_name.replace(" ", "_"), f'timeseries_synced_{target_station}.csv')
-    df_ts_sync.to_csv(file_path, header=True, index=True)
+    
+    if not os.path.exists(os.path.join(input_path, MODIS_LAI_path, network_name.replace(" ", "_"))):
+        os.makedirs(os.path.join(input_path, MODIS_LAI_path, network_name.replace(" ", "_")))
+    file_path = os.path.join(input_path, MODIS_LAI_path, network_name.replace(" ", "_"), f'daily_LAI_{target_station}.csv')
+    meanLAI_ts_daily.to_csv(file_path, header=True, index=True)
 
 
     # # %%
