@@ -45,7 +45,8 @@ from tqdm import tqdm
 # %%
 
 ###### CHANGE HERE ###########
-network_name = "various-geographic-locations"
+# network_name = "various-geographic-locations"
+network_name = "California"
 ###### CHANGE HERE ###########
 
 input_path = r".\1_data"
