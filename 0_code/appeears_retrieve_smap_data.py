@@ -39,7 +39,7 @@ print(os.getcwd())
 network_name = 'California'
 
 # File path to the sample request json
-sample_request_path = "./0_code/appeears_request_jsons/point_request_California.json"
+sample_request_path = "./0_code/appeears_request_jsons/point_request_various_geographic_locations2_P.json"
 
 # Specify the output directory
 dest_dir = os.path.join("./1_data/APPEEARS_subsetting", network_name)

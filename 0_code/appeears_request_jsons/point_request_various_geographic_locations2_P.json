@@ -1,0 +1,93 @@
+{
+    "params": {
+        "dates": [
+            {
+                "endDate": "04-30-2022",
+                "recurring": false,
+                "startDate": "03-31-2015"
+            }
+        ],
+        "layers": [
+            {
+                "layer": "Geophysical_Data_precipitation_total_surface_flux",
+                "product": "SPL4SMGP.006"
+            }
+        ],
+        "output": {
+            "format": {
+                "type": "netcdf4"
+            },
+            "projection": "geographic"
+        },
+        "coordinates": [
+            {
+                "id": "0",
+                "category": "Northern Australia 2",
+                "latitude": -14.22475,
+                "longitude": 131.30407
+                },
+                {
+                "id": "1",
+                "category": "Tanzania",
+                "latitude": -10.79496,
+                "longitude": 32.78929
+                },
+                {
+                "id": "2",
+                "category": "Congo",
+                "latitude": 3.59088,
+                "longitude": 20.41612
+                },
+                {
+                "id": "3",
+                "category": "Uruguay",
+                "latitude": -28.19238,
+                "longitude": -56.943996
+                },
+                {
+                "id": "4",
+                "category": "Canada",
+                "latitude": 49.05745,
+                "longitude": -106.9893
+                },
+                {
+                "id": "5",
+                "category": "South America",
+                "latitude": 7.93398,
+                "longitude": -70.42626
+                },
+                {
+                "id": "6",
+                "category": "Afganistan",
+                "latitude": 34.9701,
+                "longitude": 66.9432
+                },
+                {
+                "id": "7",
+                "category": "Russia 2",
+                "latitude": 60.25244,
+                "longitude": 81.62763
+                },
+                {
+                "id": "8",
+                "category": "Josua Tree",
+                "latitude": 34.06429,
+                "longitude": -116.2519
+                },
+                {
+                "id": "9",
+                "category": "Chile",
+                "latitude": -47.09066,
+                "longitude": -71.30864
+                },
+                {
+                "id": "10",
+                "category": "Argentina 2",
+                "latitude": -48.00972,
+                "longitude": -69.44118
+                }
+        ]
+    },
+    "task_name": "various_geographic_locations2_P",
+    "task_type": "point"
+}
