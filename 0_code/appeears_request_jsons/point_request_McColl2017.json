@@ -1,0 +1,81 @@
+{
+    "params": {
+        "dates": [
+            {
+                "endDate": "03-31-2016",
+                "recurring": false,
+                "startDate": "03-31-2015"
+            }
+        ],
+        "layers": [
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_AM_soil_moisture",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm",
+                "product": "SPL3SMP_E.005"
+            }
+        ],
+        "output": {
+            "format": {
+                "type": "netcdf4"
+            },
+            "projection": "geographic"
+        },
+        "coordinates": [
+            {
+            "id": "0",
+            "category": "Eastern Europe",
+            "latitude": 46.0963,
+            "longitude": 19.2324
+            },
+            {
+            "id": "1",
+            "category": "Ethiopia",
+            "latitude": 7.7905,
+            "longitude": 39.7718
+            },
+            {
+            "id": "2",
+            "category": "Congo",
+            "latitude": 44.501,
+            "longitude": 20.41612
+            },
+            {
+            "id": "3",
+            "category": "Kazakhstan",
+            "latitude": -28.19238,
+            "longitude": 68.1535
+            },
+            {
+            "id": "4",
+            "category": "Oklahoma",
+            "latitude": 36.7258,
+            "longitude": -97.6556
+            },
+            {
+            "id": "5",
+            "category": "Brazil",
+            "latitude": -22.4448,
+            "longitude": -53.962
+            },
+            {
+            "id": "6",
+            "category": "Saudi Arabia",
+            "latitude": 25.2179,
+            "longitude": 45.7469
+            }
+        ]
+    },
+    "task_name": "McColl2017",
+    "task_type": "point"
+}

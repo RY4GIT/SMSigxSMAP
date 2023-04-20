@@ -11,7 +11,7 @@ import json
 def main():
 
     # Read appears request 
-    filename = r'.\0_code\appeears_request_jsons\point_request_California.json'
+    filename = r'.\0_code\appeears_request_jsons\point_request_various_geographic_locations2.json'
     with open(filename, 'r') as infile:
         request_content = json.load(infile)
     points = request_content['params']['coordinates']
