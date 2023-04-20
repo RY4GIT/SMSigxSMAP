@@ -46,7 +46,8 @@ from tqdm import tqdm
 
 ###### CHANGE HERE ###########
 # network_name = "various-geographic-locations"
-network_name = "California"
+# network_name = "California"
+network_name = "various-geographic-locations2"
 ###### CHANGE HERE ###########
 
 input_path = r".\1_data"
@@ -107,7 +108,7 @@ coordinates
 # ## Loop for the target coordinates (currently set i=0)
 
 # %%
-for i in range(len(coordinates)): 
+for i in range(9, len(coordinates)): 
     target_lat = coordinates[i]['latitude']
     target_lon = coordinates[i]['longitude']
     target_station = coordinates[i]['category'] #.split()[0]
