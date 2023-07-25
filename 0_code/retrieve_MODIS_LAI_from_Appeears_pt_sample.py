@@ -47,10 +47,12 @@ from tqdm import tqdm
 ###### CHANGE HERE ###########
 # network_name = "various-geographic-locations"
 # network_name = "California"
-network_name = "various-geographic-locations2"
+# network_name = "various-geographic-locations2"
+network_name = "McColl2017"
 ###### CHANGE HERE ###########
 
 input_path = r".\1_data"
+input_path2 = r".\0_code\appeears_request_jsons"
 output_path = r".\3_data_out"
 appears_path = "APPEEARS_subsetting"
 SMAPL3_path = "SPL3SMP_E"
@@ -96,7 +98,8 @@ ease_row = rioxarray.open_rasterio(full_varname_ease_row)
 # ## Load Appears sample request
 
 # %%
-file_path = os.path.join(input_path, appears_path, network_name, f'{network_name}-request.json')
+file_path = os.path.join(input_path2, 'point_request_McColl2017.json')
+# file_path = os.path.join(input_path, appears_path, network_name, f'{network_name}-request.json')
 with open(file_path, 'r') as infile:
     request_content = json.load(infile)
 coordinates = request_content['params']['coordinates']
@@ -108,7 +111,7 @@ coordinates
 # ## Loop for the target coordinates (currently set i=0)
 
 # %%
-for i in range(9, len(coordinates)): 
+for i in range(6,len(coordinates)): 
     target_lat = coordinates[i]['latitude']
     target_lon = coordinates[i]['longitude']
     target_station = coordinates[i]['category'] #.split()[0]
