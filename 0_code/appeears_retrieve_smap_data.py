@@ -39,7 +39,7 @@ print(os.getcwd())
 network_name = 'McColl2017'
 
 # File path to the sample request json
-sample_request_path = "./0_code/appeears_request_jsons/point_request_McColl2017.json"
+sample_request_path = "./0_code/appeears_request_jsons/point_request_vegetation_type_P.json"
 
 # Specify the output directory
 dest_dir = os.path.join("./1_data/APPEEARS_subsetting", network_name)

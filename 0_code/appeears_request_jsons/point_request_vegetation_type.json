@@ -1,0 +1,111 @@
+{
+    "params": {
+        "dates": [
+            {
+                "endDate": "04-30-2022",
+                "recurring": false,
+                "startDate": "03-31-2015"
+            }
+        ],
+        "layers": [
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_AM_soil_moisture",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_AM_retrieval_qual_flag",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm",
+                "product": "SPL3SMP_E.005"
+            },
+            {
+                "layer": "Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm",
+                "product": "SPL3SMP_E.005"
+            }
+        ],
+        "output": {
+            "format": {
+                "type": "netcdf4"
+            },
+            "projection": "geographic"
+        },
+        "coordinates": [
+            {
+                "id": "0",
+                "category": "Missouri - cropland",
+                "latitude": 38.349458,
+                "longitude": -92.113640
+                },
+                {
+                "id": "1",
+                "category": "Kentucky - cropland",
+                "latitude": 38.7471343,
+                "longitude": -84.557543
+                },
+                {
+                "id": "2",
+                "category": "Wisconsin - cropland",
+                "latitude": 43.778573,
+                "longitude": -90.72817
+                },
+                {
+                "id": "3",
+                "category": "Ontario - grasslands",
+                "latitude": 54.24085,
+                "longitude": -87.1687431
+                },
+                {
+                "id": "4",
+                "category": "WVirginia - deciduous forest",
+                "latitude": 37.95311,
+                "longitude": -82.16426
+                },
+                {
+                "id": "5",
+                "category": "Arkansas - deciduous forest",
+                "latitude": 33.91957,
+                "longitude": -92.5154
+                },
+                {
+                "id": "6",
+                "category": "Louisiana - grasslands",
+                "latitude": 29.97784,
+                "longitude": -91.34057
+                },
+                {
+                "id": "7",
+                "category": "Texas - Shrublands",
+                "latitude": 32.067705,
+                "longitude": -94.72778
+                },
+                {
+                "id": "8",
+                "category": "Oklahoma - Shrublands",
+                "latitude": 34.650496,
+                "longitude": -95.59172
+                },
+                {
+                "id": "9",
+                "category": "SCarolina - Shrublands",
+                "latitude": 34.527729,
+                "longitude": 82.3485519
+                },
+                {
+                "id": "10",
+                "category": "South Sudan - Woody savannah",
+                "latitude": 6.549795,
+                "longitude": 28.3421532
+                },
+                {
+                    "id": "11",
+                    "category": "Central African Republic - Woody savannah",
+                    "latitude": 9.5450936,
+                    "longitude": 21.1348645
+                }
+        ]
+    },
+    "task_name": "point_request_vegetation_type",
+    "task_type": "point"
+}
