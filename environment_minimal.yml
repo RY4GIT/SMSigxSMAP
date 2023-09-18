@@ -1,12 +1,11 @@
-name: SMAP_v3
+name: SMAP
 channels:
   - conda-forge
   - travis
   - defaults
 dependencies:
-  - python = 3.9
   - pandas
-  - numpy = 1.23.5
+  - numpy
   - matplotlib
   - dask
   - bottleneck
@@ -30,6 +29,3 @@ dependencies:
   - pygeogrids
   - tqdm
   - sparse
-  - ipykernel
-  - xclim
-  - pint=0.19.2
