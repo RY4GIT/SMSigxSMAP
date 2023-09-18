@@ -4,6 +4,7 @@ import sys
 import datetime as dt
 import os
 import json
+from tqdm import tqdm
 
 
 ## ***** MAKE THE NECESSARY CHANGES TO THE FUNCTION main() ***********##
@@ -11,13 +12,11 @@ import json
 def main():
 
     # Read appears request 
-    filename = r'.\0_code\appeears_request_jsons\point_request_McColl2017.json'
+    filename = r'.\0_code\appeears_request_jsons\point_request_vegetation_type.json'
     with open(filename, 'r') as infile:
         request_content = json.load(infile)
     points = request_content['params']['coordinates']
 
-
-    # example (please change these values to your specification)
     # input arguments
     # what do you want to extract single point(0) or a region(1)?
     spatial_res = 0
@@ -43,7 +42,7 @@ def main():
     
         # What is the specific naming you want to use for the area?
         regionname= points[i]['category']
-        print(f'Processing for the point {regionname}')
+        print(f'Processing for the point {regionname} [{i}/len(points)]')
 
         # what is the time resolution hPET you want hourly or daily? 
         t_resolution ='daily'
@@ -98,7 +97,7 @@ def wrapper_region(startyear,endyear,latmin,latmax,lonmin,lonmax,regionname,t_re
     for y in range(0,len(years)):
         year=int(years[y])
         region_extract(datapath,year,latmin,latmax,lonmin,lonmax,regionname,t_resolution,output_path)
-        print(year)
+        # print(year)
 
 
 def wrapper_singlepoint(startyear,endyear,latval,lonval,regionname,t_resolution,data_path,output_path):
@@ -129,10 +128,10 @@ def wrapper_singlepoint(startyear,endyear,latval,lonval,regionname,t_resolution,
 
     # set up the year array loop through each year to download the data
     years = np.arange(startyear,endyear+1)
-    for y in range(0,len(years)):
+    for y in tqdm(range(0,len(years))):
         year=int(years[y])
         singlepoint_extract(datapath,year,latval,lonval,regionname,t_resolution,output_path)
-        print(year)
+        # print(year)
 
 def wrapper_singlepoint_returnarray(startyear,endyear,latval,lonval,regionname,t_resolution,data_path,output_path):
     """
@@ -169,7 +168,7 @@ def wrapper_singlepoint_returnarray(startyear,endyear,latval,lonval,regionname,t
         PET_for_a_year = singlepoint_extract_returnarray(datapath,year,latval,lonval,regionname,t_resolution,output_path)
         all_PET.append(PET_for_a_year)
         all_years.append(np.repeat(year, len(PET_for_a_year)))
-        print(year)
+        # print(year)
 
     return all_PET, all_years
 
