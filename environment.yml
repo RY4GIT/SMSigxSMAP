@@ -1,4 +1,4 @@
-name: SMAP_v2
+name: SMAP
 channels:
   - conda-forge
   - defaults
