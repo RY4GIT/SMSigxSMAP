@@ -1,0 +1,6 @@
+https://n5eil01u.ecs.nsidc.org/SMAP_ANC/SMAP_L1_L3_ANC_STATIC.001/2016.04.21/
+clay_M09_004.float32
+sand_M09_004.float32
+
+https://n5eil01u.ecs.nsidc.org/SMAP_ANC/SMAP_L1_L3_ANC_STATIC.001/2015.01.14/	
+bulk_M09_004.float32
