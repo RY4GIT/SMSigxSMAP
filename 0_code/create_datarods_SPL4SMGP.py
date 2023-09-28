@@ -95,13 +95,13 @@ def preprocess_SMAPL4(ds):
 
     # Resample according to SMAPL3 grid
     ds.rio.write_crs('epsg:4326', inplace=True)
-    ds_SAMPL4_resampled = ds.sel(band=1).rio.reproject_match(ds_SMAPL3_coord_template.sel(band=1), resampling=Resampling.average)
+    ds = ds.sel(band=1).rio.reproject_match(ds_SMAPL3_coord_template.sel(band=1), resampling=Resampling.average)
 
     # Fillnan 
-    _FillValue = _FillValue = 3.4028235e+38
-    ds_SMAPL4_3hrly = ds_SAMPL4_resampled.where(ds_SAMPL4_resampled.precipitation_total_surface_flux != _FillValue, np.nan)
+    # _FillValue = _FillValue = 3.4028235e+38
+    # ds_SMAPL4_3hrly = ds_SAMPL4_resampled.where(ds_SAMPL4_resampled.precipitation_total_surface_flux != _FillValue, np.nan)
     
-    return ds_SMAPL4_3hrly
+    return ds
 
 # %%
 chunks = {'x': 1200, 'y': 1200, 'time':1, 'band':1}
