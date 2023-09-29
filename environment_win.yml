@@ -115,11 +115,6 @@ dependencies:
   - locket=1.0.0
   - lz4=4.3.2
   - lz4-c=1.9.4
-  - m2w64-gcc-libgfortran=5.3.0
-  - m2w64-gcc-libs=5.3.0
-  - m2w64-gcc-libs-core=5.3.0
-  - m2w64-gmp=6.1.0
-  - m2w64-libwinpthread-git=5.0.0.4634.697f757
   - mapclassify=2.5.0
   - markdown-it-py=2.1.0
   - markupsafe=2.1.2
@@ -129,7 +124,6 @@ dependencies:
   - mkl=2022.1.0
   - mock=5.0.1
   - msgpack-python=1.0.4
-  - msys2-conda-epoch=20160418
   - munch=2.5.0
   - munkres=1.1.4
   - netcdf4=1.6.2
@@ -158,7 +152,6 @@ dependencies:
   - proj=9.1.0
   - psutil=5.9.4
   - pthread-stubs=0.4
-  - pthreads-win32=2.9.1
   - pycparser=2.21
   - pydantic=1.10.5
   - pygeogrids=0.4.2
@@ -211,10 +204,7 @@ dependencies:
   - typing-extensions=4.4.0
   - typing_extensions=4.4.0
   - tzdata=2022g
-  - ucrt=10.0.22621.0
   - urllib3=1.26.14
-  - vc=14.3
-  - vs2015_runtime=14.34.31931
   - wheel=0.38.4
   - win_inet_pton=1.1.0
   - xarray=2023.2.0
@@ -251,4 +241,3 @@ dependencies:
       - stack-data==0.6.2
       - traitlets==5.9.0
       - wcwidth==0.2.6
-prefix: C:\Users\raraki8159\.conda\envs\SMAP_v2

@@ -1,0 +1,24 @@
+name: SMAP
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - rasterio
+  - netcdf4
+  - scikit-learn
+  - cartopy
+  - rioxarray
+  - tqdm
+  - pystac-client
+  - scipy
+  - pandas
+  - dask
+  - xarray
+  - planetary-computer
+  - numpy
+  - odc-stac
+  - matplotlib
+  - pyproj
+  - pip
+  - rich
+  - ipykernel
