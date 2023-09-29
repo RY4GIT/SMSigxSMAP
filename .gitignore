@@ -12,3 +12,5 @@
 0_code/datarods/*
 0_code/trash/*
 trash/*
+
+.vscode/*
