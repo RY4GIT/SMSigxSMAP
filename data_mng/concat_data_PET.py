@@ -132,7 +132,11 @@ class PET():
         ds = ds.sortby('time')
         self.data = ds
         return ds
-    
+
+    def save_data(self, out_dir):
+        _out_dir = os.path.join(out_dir, "PET", "concat_daily.nc")
+        self.data.to_netcdf(_out_dir)
+        
     def create_datarods(self, y_i, x_j):
         print(f"Processing: {y_i}, {x_j}")
         create_datarods(y_i=y_i, x_j=x_j, ds=self.data, out_dir=self.out_dir, data_variable=self.varname, variables_to_drop=['spatial_ref'])
@@ -143,12 +147,7 @@ def main():
     easegrid_template = EASEgrid_template(data_dir=data_dir)
     pet = PET(data_dir=data_dir)
     pet.read_data(resample_target=easegrid_template.data)
-    
-    # Create a multiprocessing Pool
-    num_processes = 4
-    with Pool(num_processes) as pool:
-        for _ in tqdm(pool.starmap(pet.create_datarods, product(np.arange(308, 406), easegrid_template.column_index))):
-            pass
+    pet.save_data(out_dir=data_dir)
 
 if __name__ == "__main__":
     main()

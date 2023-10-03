@@ -147,7 +147,7 @@ def main():
     # Create a multiprocessing Pool
     num_processes = 4
     with Pool(num_processes) as pool:
-        for _ in tqdm(pool.starmap(pet.create_datarods, product(easegrid_template.row_index, easegrid_template.column_index))):
+        for _ in tqdm(pool.starmap(pet.create_datarods, product(np.arange(308, 406), easegrid_template.column_index))):
             pass
 
 if __name__ == "__main__":
