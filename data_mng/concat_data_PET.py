@@ -118,7 +118,7 @@ class PET():
                 _ds_resampled = _ds.pet.interp_like(resample_target, method='linear', kwargs={'fill_value': np.nan})
                 
                 # Stacking data
-                if 'ds_PET' in locals():
+                if 'ds' in locals():
                     ds = xr.concat([ds, _ds_resampled], dim="time")
                 else:
                     ds = _ds_resampled
@@ -134,7 +134,7 @@ class PET():
         return ds
 
     def save_data(self, out_dir):
-        _out_dir = os.path.join(out_dir, "PET", "concat_daily.nc")
+        _out_dir = os.path.join(out_dir, self.varname, "concat_daily.nc")
         self.data.to_netcdf(_out_dir)
         
     def create_datarods(self, y_i, x_j):
