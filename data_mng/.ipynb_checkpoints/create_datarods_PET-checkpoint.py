@@ -118,7 +118,7 @@ class PET():
                 _ds_resampled = _ds.pet.interp_like(resample_target, method='linear', kwargs={'fill_value': np.nan})
                 
                 # Stacking data
-                if 'ds_PET' in locals():
+                if 'ds' in locals():
                     ds = xr.concat([ds, _ds_resampled], dim="time")
                 else:
                     ds = _ds_resampled
@@ -145,7 +145,7 @@ def main():
     pet.read_data(resample_target=easegrid_template.data)
     
     # Create a multiprocessing Pool
-    num_processes = 4
+    num_processes = 6
     with Pool(num_processes) as pool:
         for _ in tqdm(pool.starmap(pet.create_datarods, product(np.arange(308, 406), easegrid_template.column_index))):
             pass
