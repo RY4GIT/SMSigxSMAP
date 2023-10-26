@@ -5,6 +5,7 @@
 *.docx
 *.xlsx
 *.nc
+*.pyc
 
 1_data/*
 3_data_out/*
@@ -14,3 +15,4 @@
 trash/*
 
 */.vscode/*
+**/__pycache__/*
