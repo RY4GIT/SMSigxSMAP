@@ -6,13 +6,12 @@
 *.xlsx
 *.nc
 *.pyc
+*-checkpoint.ipynb
 
-1_data/*
-3_data_out/*
-0_code/auth.json
-0_code/datarods/*
-0_code/trash/*
 trash/*
+
+/data_mng/.ipynb_checkpoints
 
 */.vscode/*
 **/__pycache__/*
+**/.ipynb_checkpoints/*
