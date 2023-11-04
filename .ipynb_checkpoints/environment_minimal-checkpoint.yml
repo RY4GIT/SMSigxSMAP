@@ -1,24 +1,32 @@
 name: SMAP
 channels:
   - conda-forge
+  - travis
   - defaults
 dependencies:
-  - rasterio
-  - netcdf4
-  - scikit-learn
-  - cartopy
-  - rioxarray
-  - tqdm
-  - pystac-client
-  - scipy
   - pandas
-  - dask
-  - xarray
-  - planetary-computer
   - numpy
-  - odc-stac
   - matplotlib
+  - dask
+  - bottleneck
+  - pytest-shutil
+  - geopandas
+  - rasterio
+  - xarray
   - pyproj
-  - pip
+  - gdal
+  - cartopy
+  - odc-stac
+  - planetary-computer
+  - rioxarray
+  - pystac-client
+  - fiona
+  - shapely
   - rich
-  - ipykernel
+  - scikit-learn
+  - scipy
+  - netcdf4
+  - pygeogrids
+  - tqdm
+  - sparse
+  - seaborn
