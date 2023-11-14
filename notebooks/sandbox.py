@@ -264,7 +264,7 @@ pixels = df_filt.groupby(['latitude', 'longitude'])[
     ['abbreviation']
 ].agg('max').reset_index()
 
-df_agg = df_filt.groupby(['latitude', 'longitude'])['q_q'].agg('mean').reset_index()
+df_agg = df_filt.groupby(['latitude', 'longitude'])['q_q'].agg('median').reset_index()
 
 df_agg = df_agg.merge(pixels, on=['latitude', 'longitude'], how='left')
 
