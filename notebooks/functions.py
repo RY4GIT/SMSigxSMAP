@@ -12,3 +12,11 @@ def exponential_drydown(t, delta_theta, theta_w, tau):
 def loss_model(theta, q, k, theta_wp=0., theta_star=1.):
     d_theta = -k * ( ( theta - theta_wp ) / ( theta_star - theta_wp ) ) ** (q)
     return d_theta
+
+def loss_sigmoid(t, theta, s50, k, Emax, theta_wp=0.):
+    d_theta = -1 * (Emax + theta_wp) / (1 + np.exp(-k * (theta - s50)))
+    return d_theta
+
+def loss_sigmoid2(theta, s50, k, Emax, theta_wp=0.):
+    d_theta = -1 * (Emax + theta_wp) / (1 + np.exp(-k * (theta - s50)))
+    return d_theta
