@@ -3,15 +3,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-
-import seaborn as sns
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib.colors import TwoSlopeNorm
-
-
+## Define model acceptabiltiy criteria
+success_modelfit_thresh = 0.7
+sm_range_thresh = 0.3
 
 # Define the three colors in the colormap
 colors = ['#d8b365', '#f5f5f5', '#5ab4ac']
