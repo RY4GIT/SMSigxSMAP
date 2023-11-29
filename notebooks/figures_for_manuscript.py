@@ -19,6 +19,7 @@ from matplotlib import cm
 from matplotlib.colors import Normalize 
 import datashader as ds
 from datashader.mpl_ext import dsshow
+from textwrap import wrap
 
 from functions import q_drydown, exponential_drydown, loss_model
 
@@ -234,6 +235,10 @@ print(f"both q and exp model were successful & fit over {sm_range_thresh*100} pe
 
 # %% 
 ############################################################################
+# PLOTTING FUNCTION STARTS HERE
+###########################################################################
+
+############################################################################
 # Model performance comparison
 ###########################################################################
 def using_datashader(ax, x, y, cmap):
@@ -364,7 +369,6 @@ plot_boxplots(df_filt_q_and_exp_2, var_dict["sand_bins"], var_dict["q_q"])
 plot_boxplots(df_filt_q_and_exp_2, var_dict["ai_bins"], var_dict["q_q"])
 
 # %% Vegatation
-from textwrap import wrap
 def wrap_at_space(text, max_width):
     parts = text.split(" ")
     wrapped_parts = [wrap(part, max_width) for part in parts]
@@ -451,6 +455,7 @@ def plot_loss_func(df, z_var, cmap):
         denormalized_k = subset['q_k_denormalized'].median()
         q = subset['q_q'].median()
         
+        # Calculate the loss function
         theta = np.arange(theta_min, theta_max, 0.01)
         dtheta = loss_model(theta, q, denormalized_k, theta_wp=theta_min, theta_star=theta_max)
 
@@ -460,10 +465,10 @@ def plot_loss_func(df, z_var, cmap):
     ax.invert_yaxis()
     ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
     ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
     # ax.set_xlim(var_dict['theta']['lim'][0],var_dict['theta']['lim'][1])
     # ax.set_ylim(var_dict['dtheta']['lim'][1],var_dict['dtheta']['lim'][0])
-    ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
-
+    
     # Adjust the layout so the subplots fit into the figure area
     plt.tight_layout()
     # Add a legend
@@ -480,12 +485,51 @@ plot_loss_func(df_filt_q_and_exp_2, var_dict['ai_bins'], ai_cmap)
 df_filt_q_and_exp_2[['id_x','ai_bins']].groupby('ai_bins').count()
 
 # %% Vegeation
+def wrap_text(text, width):
+    return '\n'.join(wrap(text, width))
 
+def plot_loss_func_categorical(df, z_var, categories, colors):
 
+    fig, ax = plt.subplots(figsize=(4, 4))
 
+    # For each row in the subset, calculate the loss for a range of theta values
+    for i, category in enumerate(categories):
+        subset = df[df[z_var['column_name']] == category]
+        
+        # Get the median of all the related loss function parameters 
+        theta_min = subset['min_sm'].median()
+        theta_max = subset['max_sm'].median()
+        denormalized_k = subset['q_k_denormalized'].median()
+        q = subset['q_q'].median()
+        
+        # Calculate the loss function
+        theta = np.arange(theta_min, theta_max, 0.01)
+        dtheta = loss_model(theta, q, denormalized_k, theta_wp=theta_min, theta_star=theta_max)
 
-# %% Aridity index 
+        # Plot median line
+        ax.plot(theta, dtheta, label=category, color=colors[i])
 
+    ax.invert_yaxis()
+    ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
+    ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
+
+    # Adjust the layout so the subplots fit into the figure area
+    plt.tight_layout()
+    # Add a legend
+    plt.legend(bbox_to_anchor=(1, 1))
+    legend = plt.legend(bbox_to_anchor=(1, 1))
+    for text in legend.get_texts():
+        label = text.get_text()
+        wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
+        text.set_text(wrapped_label)
+    # Show the plot
+    plt.show()
+
+plot_loss_func_categorical(df_filt_q_and_exp_2, var_dict['veg_class'], categories=vegetation_color_dict.keys(), colors=list(vegetation_color_dict.values()))
+#%%
+count_veg_samples = df[df.name.isin(vegetation_color_dict.keys())]
+count_veg_samples[["id_x","name"]].groupby("name").count()
 
 
 # %%
