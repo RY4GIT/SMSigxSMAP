@@ -27,7 +27,7 @@ from functions import q_drydown, exponential_drydown, loss_model
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2023-11-28_global_sigmoid_95asmax"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -173,7 +173,8 @@ print(f"Total number of drydown event: {len(df)}")
 # %% Get some stats
 
 # Difference between R2 values of two models
-df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
+df = df.assign(diff_R2_q=df["q_r_squared"] - df["exp_r_squared"])
+df = df.assign(diff_R2_sigmoid=df["q_r_squared"] - df["exp_r_squared"])
 
 # Denormalize k and calculate the estimated ETmax values from k parameter from q model
 df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
@@ -242,30 +243,25 @@ print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp_2)}"
 )
 
-# Runs where either of the model performed satisfactory
-df_filt_q_or_exp = df[
-    (df["q_r_squared"] >= success_modelfit_thresh)
-    | (df["exp_r_squared"] >= success_modelfit_thresh)
-].copy()
-df_filt_q_or_exp_2 = df_filt_q_or_exp[
-    df_filt_q_or_exp["sm_range"] > sm_range_thresh
-].copy()
-print(f"both q and exp model fit was successful: {len(df_filt_q_or_exp)}")
+# Runs where sigmoid model performed good
+df_filt_sgm = df[df["sigmoid_r_squared"] >= success_modelfit_thresh].copy()
+df_filt_sgm_2 = df_filt_sgm[df_filt_sgm["sm_range"] > sm_range_thresh].copy()
+print(f"sigmoid model fit was successful: {len(df_filt_sgm)}")
 print(
-    f"both q and exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_or_exp_2)}"
+    f"sigmoid model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_2)}"
 )
 
 # Runs where both of the model performed satisfactory
-df_filt_q_and_exp = df[
-    (df["q_r_squared"] >= success_modelfit_thresh)
-    | (df["exp_r_squared"] >= success_modelfit_thresh)
+df_filt_sgm_and_exp = df[
+    (df["sigmoid_r_squared"] >= success_modelfit_thresh)
+    & (df["exp_r_squared"] >= success_modelfit_thresh)
 ].copy()
-df_filt_q_and_exp_2 = df_filt_q_and_exp[
-    df_filt_q_and_exp["sm_range"] > sm_range_thresh
+df_filt_sgm_and_exp_2 = df_filt_sgm_and_exp[
+    df_filt_sgm_and_exp["sm_range"] > sm_range_thresh
 ].copy()
-print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
+print(f"both q and exp model fit was successful: {len(df_filt_sgm_and_exp)}")
 print(
-    f"both q and exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_and_exp_2)}"
+    f"both q and exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_and_exp_2)}"
 )
 
 # %%
@@ -296,7 +292,7 @@ def using_datashader(ax, x, y, cmap):
 def plot_R2_models(df, R2_threshold, cmap):
     # Read data
     x = df["exp_r_squared"].values
-    y = df["q_r_squared"].values
+    y = df["sigmoid_r_squared"].values
 
     # Create a scatter plot
     fig, ax = plt.subplots(figsize=(4.5, 4))
@@ -331,7 +327,7 @@ def plot_R2_models(df, R2_threshold, cmap):
 
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
 plot_R2_models(
-    df=df_filt_q_and_exp_2, R2_threshold=success_modelfit_thresh, cmap="viridis"
+    df=df_filt_sgm_and_exp_2, R2_threshold=success_modelfit_thresh, cmap="viridis"
 )
 
 
@@ -400,7 +396,7 @@ def plot_map(df, coord_info, cmap, norm, var_item):
 
 
 # %% Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
-var_key = "q_q"
+var_key = ""
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 plot_map(
     df=df_filt_q_2,

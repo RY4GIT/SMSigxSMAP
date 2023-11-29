@@ -258,7 +258,7 @@ print(
 # Runs where both of the model performed satisfactory
 df_filt_q_and_exp = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
-    | (df["exp_r_squared"] >= success_modelfit_thresh)
+    & (df["exp_r_squared"] >= success_modelfit_thresh)
 ].copy()
 df_filt_q_and_exp_2 = df_filt_q_and_exp[
     df_filt_q_and_exp["sm_range"] > sm_range_thresh
