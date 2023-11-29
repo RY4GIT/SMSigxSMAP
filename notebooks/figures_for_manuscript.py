@@ -35,18 +35,40 @@ success_modelfit_thresh = 0.7
 sm_range_thresh = 0.3
 z_mm = 50 # Soil thickness
 
-# Define the specific order for your categories.
+# cmap for sand
+sand_bin_list = [i * 0.1 for i in range(11)]
+sand_cmap = "Oranges"
+
+# cmap for ai
+ai_bin_list = [i * 0.25 for i in range(9)]
+ai_cmap = "RdBu"
+
+# Define the specific order for vegetation categories.
 vegetation_color_dict = {
-    "BAR": "#7A422A", 
-    "OSH": "#C99728", 
-    "GRA": "#13BFB2", 
-    "SAV": "#92BA31",
-    "WSA": "#4C6903",
-    "CRO": "#F7C906",
-    "CNM": "#229954",
+    "Barren": "#7A422A", 
+    "Open shrublands": "#C99728", 
+    "Grasslands": "#13BFB2", 
+    "Savannas": "#92BA31",
+    "Woody savannas": "#4C6903",
+    "Croplands": "#F7C906",
+    "Cropland/natural vegetation mosaics": "#229954",
 }
 
 var_dict = {
+    'theta' : {
+        'column_name': 'sm',
+        'symbol' : r"$\theta$",
+        'label' : r"SMAP soil moisture $\theta$",
+        'unit' : r"$[m^3/m^3]$",
+        'lim': [0, 4],
+    },
+    'dtheta' : {
+        'column_name': '',
+        'symbol' : r"$d\theta/dt$",
+        'label' : r"Change in soil moisture $d\theta/dt$",
+        'unit' : r"$[m^3/m^3/day]$",
+        'lim': [0, 4],
+    },
     'q_q' : {
         'column_name': 'q_q',
         'symbol' : r"$q$",
@@ -54,12 +76,40 @@ var_dict = {
         'unit' : "[-]",
         'lim': [0, 4],
     },
-    'diff_R2' : {
-        'column_name': 'diff_R2',
-        'symbol' : r"$R^2$",
-        'label' : r"$R^2$ (Nonlinear - linear)",
-        'unit' : "[-]",
+    'ETmax' : {
+        'column_name': 'q_ETmax',
+        'symbol' : r"$ET_{max}$",
+        'label' : r"Estimated $ET_{max}$ by non-linear model",
+        'unit' : "[mm/day]",
+        'lim': [0, 20],
+    },
+    's*' : {
+        'column_name': 'max_sm',
+        'symbol' : r"$s_{*}$",
+        'label' : r"Estimated $s_{*}$",
+        'unit' : r"$[m^3/m^3]$",
         'lim': [-0.04, 0.04],
+    },
+    'sand_bins' : {
+        'column_name': 'sand_bins',
+        'symbol' : r"",
+        'label' : r"Sand fraction",
+        'unit' : "[-]",
+        'lim': [0.0, 1.0],
+    },
+    'ai_bins' : {
+        'column_name': 'ai_bins',
+        'symbol' : r"AI",
+        'label' : r"Aridity Index",
+        'unit' : "[MAP/MAE]",
+        'lim': [0.0, 2.0],
+    },
+    'veg_class' : {
+        'column_name': 'name',
+        'symbol' : r"",
+        'label' : r"IGBP Landcover Class",
+        'unit' : "",
+        'lim': [0, 1],
     },
 }
 ############################################################################
@@ -122,10 +172,18 @@ df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
 df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
 
 # Get the binned dataset
-sand_bin_list = [i * 0.1 for i in range(11)]
-ai_bin_list = [i * 0.25 for i in range(9)]
+
+# sand bins
 df['sand_bins'] = pd.cut(df['sand_fraction'], bins=sand_bin_list, include_lowest=True)
+first_I = df['sand_bins'].cat.categories[0]
+new_I = pd.Interval(0, first_I.right)
+df['sand_bins'] = df['sand_bins'].cat.rename_categories({first_I: new_I})
+
+# ai_bins
 df['ai_bins'] = pd.cut(df['AI'], bins=ai_bin_list, include_lowest=True)
+first_I = df['ai_bins'].cat.categories[0]
+new_I = pd.Interval(0, first_I.right)
+df['ai_bins'] = df['ai_bins'].cat.rename_categories({first_I: new_I})
 
 # %%
 # Soil mositure range covered by the observation
@@ -201,7 +259,7 @@ def plot_R2_models(df, R2_threshold, cmap):
     y = df['q_r_squared'].values
 
     # Create a scatter plot
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(4.5, 4))
     # Calculate the point density
     sc = using_datashader(ax, x, y, cmap)
 
@@ -284,6 +342,89 @@ var_key = "diff_R2"
 norm = Normalize(vmin = var_dict[var_key]['lim'][0], vmax = var_dict[var_key]['lim'][1])
 plot_map(df=df_filt_q_and_exp_2, coord_info=coord_info, cmap='RdBu', norm=norm, var_item=var_dict[var_key])
 
+# %%
+############################################################################
+# Box plots (might go supplemental)  
+###########################################################################
+
+def plot_boxplots(df, x_var, y_var):
+    plt.figure(figsize=(6, 4))
+    ax = sns.boxplot(x=x_var["column_name"], y=y_var["column_name"], data=df, boxprops=dict(facecolor='lightgray'))
+    plt.setp(ax.get_xticklabels(), rotation=45)
+    ax.set_xlabel(f'{x_var["label"]} {x_var["unit"]}')
+    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1]*5)
+    plt.tight_layout()
+    
+# %% sand
+plot_boxplots(df_filt_q_and_exp_2, var_dict["sand_bins"], var_dict["q_q"])
+
+# %% Aridity index 
+plot_boxplots(df_filt_q_and_exp_2, var_dict["ai_bins"], var_dict["q_q"])
+
+# %% Vegatation
+from textwrap import wrap
+def wrap_at_space(text, max_width):
+    parts = text.split(" ")
+    wrapped_parts = [wrap(part, max_width) for part in parts]
+    return "\n".join([" ".join(wrapped_part) for wrapped_part in wrapped_parts])
+
+def plot_boxplots_categorical(df, x_var, y_var, categories, colors):
+    # Create the figure and axes
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    # Plot the boxplot with specified colors and increased alpha
+    sns.boxplot(
+        x=x_var['column_name'],
+        y=y_var['column_name'],
+        data=df,
+        # hue=x_var['column_name'],
+        legend=False, 
+        order=categories,
+        palette=colors,
+        ax=ax
+    )
+
+    for patch in ax.artists:
+        r, g, b, a = patch.get_facecolor()
+        patch.set_facecolor(mcolors.to_rgba((r, g, b), alpha=0.5))
+
+    # Optionally, adjust layout
+    plt.tight_layout()
+    ax.set_xlabel(f'{x_var["label"]}')
+    max_label_width = 20
+    ax.set_xticklabels([wrap_at_space(label.get_text(), max_label_width) for label in ax.get_xticklabels()])
+    plt.setp(ax.get_xticklabels(), rotation=45)
+    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+    # Show the plot
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1]*2)
+    plt.tight_layout()
+    plt.show()
+
+# %%
+plot_boxplots_categorical(df_filt_q_and_exp_2, var_dict["veg_class"], var_dict["q_q"], categories=vegetation_color_dict.keys(), colors=list(vegetation_color_dict.values()))
+
+# %%
+
+def plot_violin_categorical(df, x_var, y_var, categories, colors):
+    fig, ax =  plt.subplots(figsize=(8, 4))
+    for i, category in enumerate(categories):
+        subset = df[df[x_var["column_name"]] == category]
+        sns.violinplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, order=[category], color=colors[i], ax=ax, alpha=0.75, cut=0)
+
+    # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'), 
+    ax.set_xlabel(f'{x_var["label"]}')
+    max_label_width = 20
+    ax.set_xticklabels([wrap_at_space(label.get_text(), max_label_width) for label in ax.get_xticklabels()])
+    plt.setp(ax.get_xticklabels(), rotation=45)
+    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+    # Show the plot
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1]*2)
+    plt.tight_layout()
+    plt.show()
+    
+
+plot_violin_categorical(df_filt_q_and_exp_2, var_dict["veg_class"], var_dict["q_q"], categories=vegetation_color_dict.keys(), colors=list(vegetation_color_dict.values()))
 
 # %%
 ############################################################################
