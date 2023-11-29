@@ -323,6 +323,8 @@ dependencies:
       - beautifulsoup4==4.12.2
       - bleach==6.0.0
       - cffi==1.16.0
+      - colorcet==3.0.1
+      - datashader==0.16.0
       - defusedxml==0.7.1
       - fastjsonschema==2.18.1
       - fqdn==1.5.1
@@ -345,16 +347,21 @@ dependencies:
       - jupyterlab-pygments==0.2.2
       - jupyterlab-server==2.25.0
       - jupyterlab-widgets==3.0.9
+      - llvmlite==0.41.1
       - mistune==3.0.2
+      - multipledispatch==1.0.0
       - nbclient==0.8.0
       - nbconvert==7.8.0
       - nbformat==5.9.2
       - notebook==7.0.4
       - notebook-shim==0.2.3
+      - numba==0.58.1
       - overrides==7.4.0
       - pandocfilters==1.5.0
+      - param==2.0.1
       - prometheus-client==0.17.1
       - pycparser==2.21
+      - pyct==0.5.0
       - python-json-logger==2.0.7
       - qtconsole==5.4.4
       - qtpy==2.4.0
