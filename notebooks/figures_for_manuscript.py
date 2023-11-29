@@ -40,7 +40,7 @@ sand_bin_list = [i * 0.1 for i in range(11)]
 sand_cmap = "Oranges"
 
 # cmap for ai
-ai_bin_list = [i * 0.25 for i in range(9)]
+ai_bin_list = [i * 0.25 for i in range(8)]
 ai_cmap = "RdBu"
 
 # Define the specific order for vegetation categories.
@@ -60,14 +60,14 @@ var_dict = {
         'symbol' : r"$\theta$",
         'label' : r"SMAP soil moisture $\theta$",
         'unit' : r"$[m^3/m^3]$",
-        'lim': [0, 4],
+        'lim': [0, 0.50],
     },
     'dtheta' : {
         'column_name': '',
-        'symbol' : r"$d\theta/dt$",
-        'label' : r"Change in soil moisture $d\theta/dt$",
+        'symbol' : r"$-d\theta/dt$",
+        'label' : r"Change in soil moisture $-d\theta/dt$",
         'unit' : r"$[m^3/m^3/day]$",
-        'lim': [0, 4],
+        'lim': [-0.10, 0],
     },
     'q_q' : {
         'column_name': 'q_q',
@@ -170,6 +170,7 @@ df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
 
 # Denormalize k and calculate the estimated ETmax values from k parameter from q model
 df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
+df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 
 # Get the binned dataset
 
@@ -431,10 +432,52 @@ plot_violin_categorical(df_filt_q_and_exp_2, var_dict["veg_class"], var_dict["q_
 # Loss function plots  
 ###########################################################################
 
+def plot_loss_func(df, z_var, cmap):
+    
+    fig, ax = plt.subplots(figsize=(4, 4))
+
+    # Get unique bins
+    bins_in_range = df[z_var["column_name"]].unique()
+    bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
+    bin_sorted = sorted(bins_list, key=lambda x: x.left)
+
+    # For each row in the subset, calculate the loss for a range of theta values
+    for i, category in enumerate(bin_sorted):
+        subset = df[df[z_var["column_name"]] == category]
+        
+        # Get the median of all the related loss function parameters 
+        theta_min = subset['min_sm'].median()
+        theta_max = subset['max_sm'].median()
+        denormalized_k = subset['q_k_denormalized'].median()
+        q = subset['q_q'].median()
+        
+        theta = np.arange(theta_min, theta_max, 0.01)
+        dtheta = loss_model(theta, q, denormalized_k, theta_wp=theta_min, theta_star=theta_max)
+
+        # Plot median line
+        ax.plot(theta, dtheta, label=f'{category}', color=plt.get_cmap(cmap)(i / len(bins_list)))
+
+    ax.invert_yaxis()
+    ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
+    ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    # ax.set_xlim(var_dict['theta']['lim'][0],var_dict['theta']['lim'][1])
+    # ax.set_ylim(var_dict['dtheta']['lim'][1],var_dict['dtheta']['lim'][0])
+    ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
+
+    # Adjust the layout so the subplots fit into the figure area
+    plt.tight_layout()
+    # Add a legend
+    plt.legend(bbox_to_anchor=(1, 1))
+    # Show the plot
+    plt.show()
+
 # %% Sand 
+plot_loss_func(df_filt_q_and_exp_2, var_dict['sand_bins'], sand_cmap)
+df_filt_q_and_exp_2[['id_x','sand_bins']].groupby('sand_bins').count()
 
-
-
+# %% Aridity index
+plot_loss_func(df_filt_q_and_exp_2, var_dict['ai_bins'], ai_cmap)
+df_filt_q_and_exp_2[['id_x','ai_bins']].groupby('ai_bins').count()
 
 # %% Vegeation
 
