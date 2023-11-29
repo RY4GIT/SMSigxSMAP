@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from scipy.interpolate import interpn
+from scipy.stats import gaussian_kde
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -111,6 +112,13 @@ var_dict = {
         "label": r"IGBP Landcover Class",
         "unit": "",
         "lim": [0, 1],
+    },
+    "diff_R2": {
+        "column_name": "diff_R2",
+        "symbol": r"$R^2$",
+        "label": r"$R^2$ (Nonlinear - linear)",
+        "unit": "[-]",
+        "lim": [-0.04, 0.04],
     },
 }
 ############################################################################
@@ -765,63 +773,73 @@ plot_scatter_with_errorbar(
 )
 
 
-# %%
+# %% Density plot
 def plot_2d_density(
     df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale
 ):
     fig, ax = plt.subplots(figsize=(5, 5))
     kde_objects = []
 
-    # Calculate density and contour for each category
+    # Calculate and plot density for each category
     for i, category in enumerate(categories):
         subset = df[df[z_var["column_name"]] == category]
         x_data = subset[x_var["column_name"]]
         y_data = subset[y_var["column_name"]]
 
-        # Create KDE plot and store the KDE object
-        kde = sns.kdeplot(
-            x=x_data,
-            y=y_data,
-            levels=10,  # Number of contour levels
-            color=colors[i],
-            ax=ax,
-            fill=False,
+        # Calculate KDE
+        kde = gaussian_kde([x_data, y_data])
+        xmin, xmax = x_var["lim"]
+        ymin, ymax = y_var["lim"]
+        xi, yi = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+        zi = kde(np.vstack([xi.flatten(), yi.flatten()]))
+
+        # Find contour levels to fill between for middle 30%
+        levels = np.linspace(zi.min(), zi.max(), 100)
+        middle_levels = np.quantile(levels, [quantile / 100, 1.0])
+
+        # Plot KDE and fill relevant contours
+        # ax.contour(xi, yi, zi.reshape(xi.shape), levels=10, colors="white")
+        ax.contourf(
+            xi,
+            yi,
+            zi.reshape(xi.shape),
+            levels=middle_levels,
+            colors=colors[i],
+            alpha=0.5,
+            label=category,
         )
-        kde_objects.append(kde)
-
-    # Close the redundant plots
-    plt.close()
-
-    # Now process each KDE object to fill relevant contours
-    for i, kde in enumerate(kde_objects):
-        color = colors[i]
-
-        # Get KDE data
-        kde_data = kde.get_lines()[0].get_data()
-        cset = ax.contour(*kde_data, levels=10, colors=color)
-
-        # Calculate middle 30% range
-        min_level = np.quantile(cset.levels, quantile)
-        max_level = np.quantile(cset.levels, 1 - quantile)
-
-        # Fill the relevant contours
-        ax.contourf(*kde_data, levels=[min_level, max_level], colors=color, alpha=0.5)
 
     # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"2D Density plot with limited range")
+    plt.title(f"Density > {quantile} percentile")
 
     # Set axis scales and limits
     if plot_logscale:
         ax.set_xscale("log")
     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-
+    plt.legend(bbox_to_anchor=(1, 1))
+    legend = plt.legend(bbox_to_anchor=(1, 1))
+    for text in legend.get_texts():
+        label = text.get_text()
+        wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
+        text.set_text(wrapped_label)
     # Show the plot
     plt.show()
 
 
+# %%
+plot_2d_density(
+    df=df_filt_q_2,
+    x_var=var_dict["q_ETmax"],
+    y_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=90,
+    plot_logscale=False,
+)
 # %%
 plot_2d_density(
     df=df_filt_q_2,
@@ -830,7 +848,100 @@ plot_2d_density(
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    quantile=40,
+    quantile=90,
     plot_logscale=False,
+)
+# %%
+plot_2d_density(
+    df=df_filt_q_2,
+    x_var=var_dict["q_ETmax"],
+    y_var=var_dict["s_star"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=90,
+    plot_logscale=False,
+)
+
+
+# %%
+def plot_pdf(df, x_var, z_var, cmap):
+    fig, ax = plt.subplots(figsize=(4, 4))
+
+    # Get unique bins
+    bins_in_range = df[z_var["column_name"]].unique()
+    bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
+    bin_sorted = sorted(bins_list, key=lambda x: x.left)
+
+    # For each row in the subset, calculate the loss for a range of theta values
+    for i, category in enumerate(bin_sorted):
+        subset = df[df[z_var["column_name"]] == category]
+
+        sns.kdeplot(
+            subset[x_var["column_name"]],
+            label=category,
+            bw_adjust=0.5,
+            color=plt.get_cmap(cmap)(i / len(bins_list)),
+            cut=0,
+            ax=ax,
+        )
+
+    # Set titles and labels
+    plt.title(f"Kernel Density Estimation by {z_var['label']}")
+    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+    plt.ylabel("Density [-]")
+
+    ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+
+    # Show the legend
+    plt.legend()
+
+    # Show the plot
+    plt.show()
+
+
+# %% sand
+plot_pdf(
+    df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
+)
+
+# %% aridity index
+plot_pdf(df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap)
+
+
+# %%
+def plot_pdf_categorical(df, x_var, z_var, categories, colors):
+    fig, ax = plt.subplots(figsize=(5, 5))
+    for i, category in enumerate(categories):
+        subset = df[df[z_var["column_name"]] == category]
+        sns.kdeplot(
+            subset[x_var["column_name"]],
+            label=category,
+            bw_adjust=0.5,
+            color=colors[i],
+            cut=0,
+            ax=ax,
+        )
+    # Set titles and labels
+    plt.title(f"Kernel Density Estimation by {z_var['label']}")
+    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+    plt.ylabel("Density [-]")
+
+    ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+
+    # Show the legend
+    plt.legend()
+
+    # Show the plot
+    plt.show()
+
+
+# %%
+plot_pdf_categorical(
+    df=df_filt_q_2,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
 )
 # %%
