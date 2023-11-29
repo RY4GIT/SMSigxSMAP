@@ -8,8 +8,6 @@ dependencies:
   - numpy
   - matplotlib
   - dask
-  - bottleneck
-  - pytest-shutil
   - geopandas
   - rasterio
   - xarray
@@ -28,5 +26,7 @@ dependencies:
   - netcdf4
   - pygeogrids
   - tqdm
-  - sparse
   - seaborn
+  - pip
+  - pip:
+    - datashader
