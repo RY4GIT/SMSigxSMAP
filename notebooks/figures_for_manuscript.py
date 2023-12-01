@@ -87,13 +87,13 @@ var_dict = {
     },
     "theta_star": {
         "column_name": "max_sm",
-        "symbol": r"$\theta_{s*}$",
-        "label": r"Estimated $\theta_{s*}$",
+        "symbol": r"$\theta*$",
+        "label": r"Estimated $\theta*$",
         "unit": r"$[m^3/m^3]$",
         "lim": [0.1, 0.4],
     },
-    "s_star": {
-        "column_name": "q_s_star",
+    "theta_star": {
+        "column_name": "q_theta_star",
         "symbol": r"$s*$",
         "label": r"Relative soil moisture content $s*$",
         "unit": r"[-]",
@@ -758,7 +758,7 @@ plot_scatter_with_errorbar(
 # %% q vs. s* per vegetation
 plot_scatter_with_errorbar(
     df=df_filt_q_2,
-    x_var=var_dict["s_star"],
+    x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -771,7 +771,7 @@ plot_scatter_with_errorbar(
 plot_scatter_with_errorbar(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
-    y_var=var_dict["s_star"],
+    y_var=var_dict["theta_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -850,7 +850,7 @@ plot_2d_density(
 # %%
 plot_2d_density(
     df=df_filt_q_2,
-    x_var=var_dict["s_star"],
+    x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -862,7 +862,7 @@ plot_2d_density(
 plot_2d_density(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
-    y_var=var_dict["s_star"],
+    y_var=var_dict["theta_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
