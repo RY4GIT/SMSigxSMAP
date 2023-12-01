@@ -71,15 +71,22 @@ var_dict = {
         "unit": r"$[m^3/m^3/day]$",
         "lim": [-0.10, 0],
     },
-    "q_q": {
-        "column_name": "q_q",
-        "symbol": r"$q$",
-        "label": r"Nonlinear parameter $q$",
+    "sigmoid_k": {
+        "column_name": "sigmoid_k",
+        "symbol": r"$k$",
+        "label": r"Nonlinear parameter $k$",
         "unit": "[-]",
-        "lim": [0, 3],
+        "lim": [0, 100],
     },
-    "q_ETmax": {
-        "column_name": "q_ETmax",
+    "sigmoid_s50": {
+        "column_name": "sigmoid_s50",
+        "symbol": r"$\theta_{s50}$",
+        "label": r"Nonlinear parameter $\theta_{s50}$",
+        "unit": "[-]",
+        "lim": [0, 1],
+    },
+    "sigmoid_ETmax": {
+        "column_name": "sigmoid_ETmax",
         "symbol": r"$ET_{max}$",
         "label": r"Estimated $ET_{max}$ by non-linear model",
         "unit": "[mm/day]",
@@ -87,8 +94,8 @@ var_dict = {
     },
     "s_star": {
         "column_name": "max_sm",
-        "symbol": r"$s^{*}$",
-        "label": r"Estimated $s^{*}$",
+        "symbol": r"$\theta_{s*}$",
+        "label": r"Estimated $\theta_{s*}$",
         "unit": r"$[m^3/m^3]$",
         "lim": [0.1, 0.4],
     },
@@ -173,11 +180,10 @@ print(f"Total number of drydown event: {len(df)}")
 # %% Get some stats
 
 # Difference between R2 values of two models
-df = df.assign(diff_R2_q=df["q_r_squared"] - df["exp_r_squared"])
-df = df.assign(diff_R2_sigmoid=df["q_r_squared"] - df["exp_r_squared"])
+df = df.assign(diff_R2=df["sigmoid_r_squared"] - df["exp_r_squared"])
 
-# Denormalize k and calculate the estimated ETmax values from k parameter from q model
-df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
+# Denormalize k and calculate the estimated ETmax values from k parameter from sigmoid model
+df["sigmoid_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
 df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 
 # Get the binned dataset
@@ -227,12 +233,12 @@ df["sm_range"] = df.apply(calculate_sm_range, axis=1)
 
 # %% Exclude model fits failure
 
-# Runs where q model performed good
-df_filt_q = df[df["q_r_squared"] >= success_modelfit_thresh].copy()
-df_filt_q_2 = df_filt_q[df_filt_q["sm_range"] > sm_range_thresh].copy()
-print(f"q model fit was successful: {len(df_filt_q)}")
+# Runs where sigmoid model performed good
+df_filt_sgm = df[df["sigmoid_r_squared"] >= success_modelfit_thresh].copy()
+df_filt_sgm_2 = df_filt_sgm[df_filt_sgm["sm_range"] > sm_range_thresh].copy()
+print(f"sigmoid model fit was successful: {len(df_filt_sgm)}")
 print(
-    f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_2)}"
+    f"sigmoid model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_2)}"
 )
 
 # Runs where exponential model performed good
@@ -243,12 +249,17 @@ print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp_2)}"
 )
 
-# Runs where sigmoid model performed good
-df_filt_sgm = df[df["sigmoid_r_squared"] >= success_modelfit_thresh].copy()
-df_filt_sgm_2 = df_filt_sgm[df_filt_sgm["sm_range"] > sm_range_thresh].copy()
-print(f"sigmoid model fit was successful: {len(df_filt_sgm)}")
+# Runs where either of the model performed satisfactory
+df_filt_sgm_or_exp = df[
+    (df["sigmoid_r_squared"] >= success_modelfit_thresh)
+    | (df["exp_r_squared"] >= success_modelfit_thresh)
+].copy()
+df_filt_sgm_or_exp_2 = df_filt_sgm_or_exp[
+    df_filt_sgm_or_exp["sm_range"] > sm_range_thresh
+].copy()
+print(f"either q or exp model fit was successful: {len(df_filt_sgm_or_exp)}")
 print(
-    f"sigmoid model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_2)}"
+    f"either q or exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_or_exp_2)}"
 )
 
 # Runs where both of the model performed satisfactory
@@ -396,10 +407,10 @@ def plot_map(df, coord_info, cmap, norm, var_item):
 
 
 # %% Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
-var_key = ""
+var_key = "sigmoid_k"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 plot_map(
-    df=df_filt_q_2,
+    df=df_filt_sgm_2,
     coord_info=coord_info,
     cmap="YlGnBu",
     norm=norm,
@@ -411,7 +422,7 @@ plot_map(
 var_key = "diff_R2"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 plot_map(
-    df=df_filt_q_and_exp_2,
+    df=df_filt_sgm_and_exp_2,
     coord_info=coord_info,
     cmap="RdBu",
     norm=norm,
@@ -440,10 +451,10 @@ def plot_boxplots(df, x_var, y_var):
 
 
 # %% sand
-plot_boxplots(df_filt_q_2, var_dict["sand_bins"], var_dict["q_q"])
+plot_boxplots(df_filt_sgm_2, var_dict["sand_bins"], var_dict["sigmoid_k"])
 
 # %% Aridity index
-plot_boxplots(df_filt_q_2, var_dict["ai_bins"], var_dict["q_q"])
+plot_boxplots(df_filt_sgm_2, var_dict["ai_bins"], var_dict["sigmoid_k"])
 
 
 # %% Vegatation
@@ -493,9 +504,9 @@ def plot_boxplots_categorical(df, x_var, y_var, categories, colors):
 
 # %%
 plot_boxplots_categorical(
-    df_filt_q_2,
+    df_filt_sgm_2,
     var_dict["veg_class"],
-    var_dict["q_q"],
+    var_dict["sigmoid_k"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
@@ -518,7 +529,7 @@ def plot_violin_categorical(df, x_var, y_var, categories, colors):
             cut=0,
         )
 
-    # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
+    # ax = sns.violinplot(x='abbreviation', y='sigmoid_k', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
     ax.set_xlabel(f'{x_var["label"]}')
     max_label_width = 20
     ax.set_xticklabels(
@@ -536,9 +547,9 @@ def plot_violin_categorical(df, x_var, y_var, categories, colors):
 
 
 plot_violin_categorical(
-    df_filt_q_2,
+    df_filt_sgm_2,
     var_dict["veg_class"],
-    var_dict["q_q"],
+    var_dict["sigmoid_k"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
@@ -565,7 +576,7 @@ def plot_loss_func(df, z_var, cmap):
         theta_min = subset["min_sm"].median()
         theta_max = subset["max_sm"].median()
         denormalized_k = subset["q_k_denormalized"].median()
-        q = subset["q_q"].median()
+        q = subset["sigmoid_k"].median()
 
         # Calculate the loss function
         theta = np.arange(theta_min, theta_max, 0.01)
@@ -597,12 +608,12 @@ def plot_loss_func(df, z_var, cmap):
 
 
 # %% Sand
-plot_loss_func(df_filt_q_2, var_dict["sand_bins"], sand_cmap)
-df_filt_q_and_exp_2[["id_x", "sand_bins"]].groupby("sand_bins").count()
+plot_loss_func(df_filt_sgm_2, var_dict["sand_bins"], sand_cmap)
+df_filt_sgm_and_exp_2[["id_x", "sand_bins"]].groupby("sand_bins").count()
 
 # %% Aridity index
-plot_loss_func(df_filt_q_2, var_dict["ai_bins"], ai_cmap)
-df_filt_q_and_exp_2[["id_x", "ai_bins"]].groupby("ai_bins").count()
+plot_loss_func(df_filt_sgm_2, var_dict["ai_bins"], ai_cmap)
+df_filt_sgm_and_exp_2[["id_x", "ai_bins"]].groupby("ai_bins").count()
 
 
 # %% Vegeation
@@ -621,7 +632,7 @@ def plot_loss_func_categorical(df, z_var, categories, colors):
         theta_min = subset["min_sm"].median()
         theta_max = subset["max_sm"].median()
         denormalized_k = subset["q_k_denormalized"].median()
-        q = subset["q_q"].median()
+        q = subset["sigmoid_k"].median()
 
         # Calculate the loss function
         theta = np.arange(theta_min, theta_max, 0.01)
@@ -651,7 +662,7 @@ def plot_loss_func_categorical(df, z_var, categories, colors):
 
 
 plot_loss_func_categorical(
-    df_filt_q_2,
+    df_filt_sgm_2,
     var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -734,9 +745,9 @@ def plot_scatter_with_errorbar(
 
 # %% q vs. k per vegetation
 plot_scatter_with_errorbar(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_ETmax"],
+    y_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -746,9 +757,9 @@ plot_scatter_with_errorbar(
 
 # %% q vs. s* per vegetation
 plot_scatter_with_errorbar(
-    df=df_filt_q_2,
+    df=df_filt_sgm_2,
     x_var=var_dict["s_star"],
-    y_var=var_dict["q_q"],
+    y_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -758,8 +769,8 @@ plot_scatter_with_errorbar(
 
 # %% ETmax vs .s* per vegetation
 plot_scatter_with_errorbar(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_ETmax"],
     y_var=var_dict["s_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -827,9 +838,9 @@ def plot_2d_density(
 
 # %%
 plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_ETmax"],
+    y_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -838,9 +849,9 @@ plot_2d_density(
 )
 # %%
 plot_2d_density(
-    df=df_filt_q_2,
+    df=df_filt_sgm_2,
     x_var=var_dict["s_star"],
-    y_var=var_dict["q_q"],
+    y_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -849,8 +860,8 @@ plot_2d_density(
 )
 # %%
 plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_ETmax"],
     y_var=var_dict["s_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -898,11 +909,19 @@ def plot_pdf(df, x_var, z_var, cmap):
 
 # %% sand
 plot_pdf(
-    df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_k"],
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap,
 )
 
 # %% aridity index
-plot_pdf(df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap)
+plot_pdf(
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_k"],
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap,
+)
 
 
 # %%
@@ -934,8 +953,76 @@ def plot_pdf_categorical(df, x_var, z_var, categories, colors):
 
 # %%
 plot_pdf_categorical(
-    df=df_filt_q_2,
-    x_var=var_dict["q_q"],
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_k"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+)
+
+# %% Histogram with mean and median
+
+from scipy.signal import find_peaks
+
+
+def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
+    # Determine the number of rows needed for subplots based on the number of categories
+    n_rows = len(categories)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(6, 3 * n_rows))
+
+    if n_rows == 1:
+        axes = [axes]  # Make it iterable even for a single category
+
+    for i, (category, ax) in enumerate(zip(categories, axes)):
+        subset = df[df[z_var["column_name"]] == category]
+
+        # Determine bin edges based on bin interval
+        bin_interval = 0.2
+        min_edge = 0
+        max_edge = 10
+        bins = np.arange(min_edge, max_edge + bin_interval, bin_interval)
+
+        # Plot histogram
+        sns.histplot(
+            subset[x_var["column_name"]],
+            label=category,
+            color=colors[i],
+            bins=bins,  # You can adjust the number of bins
+            kde=False,
+            ax=ax,
+        )
+
+        # Calculate and plot mean and median lines
+        mean_value = subset[x_var["column_name"]].mean()
+        median_value = subset[x_var["column_name"]].median()
+        ax.axvline(mean_value, color=colors[i], linestyle="--", lw=2, label="mean")
+        ax.axvline(median_value, color=colors[i], linestyle="-", lw=2, label="median")
+
+        # Detect and plot modes
+        data = subset[x_var["column_name"]].dropna()
+        kde = sns.kdeplot(data, bw_adjust=0.5, cut=0).get_lines()[0].get_data()
+        # kde.clf()  # Clear the KDE plot
+        peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
+        modes = kde[0][peaks]
+        # for mode in modes[0]:
+        ax.axvline(modes[0], color=colors[i], linestyle=":", lw=2, label="mode")
+
+        # Set titles and labels for each subplot
+        ax.set_title(f"{z_var['label']}: {category}")
+        ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+        ax.set_ylabel("Frequency")
+
+        ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 3)
+        ax.legend()
+
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.show()
+
+
+# %%
+plot_histograms_with_mean_median(
+    df=df_filt_sgm_2,
+    x_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),

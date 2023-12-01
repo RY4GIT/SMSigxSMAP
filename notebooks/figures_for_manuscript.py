@@ -87,8 +87,8 @@ var_dict = {
     },
     "s_star": {
         "column_name": "max_sm",
-        "symbol": r"$s^{*}$",
-        "label": r"Estimated $s^{*}$",
+        "symbol": r"$\theta_{s*}$",
+        "label": r"Estimated $\theta_{s*}$",
         "unit": r"$[m^3/m^3]$",
         "lim": [0.1, 0.4],
     },
@@ -250,9 +250,9 @@ df_filt_q_or_exp = df[
 df_filt_q_or_exp_2 = df_filt_q_or_exp[
     df_filt_q_or_exp["sm_range"] > sm_range_thresh
 ].copy()
-print(f"both q and exp model fit was successful: {len(df_filt_q_or_exp)}")
+print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
 print(
-    f"both q and exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_or_exp_2)}"
+    f"either q or exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_or_exp_2)}"
 )
 
 # Runs where both of the model performed satisfactory
@@ -938,6 +938,74 @@ def plot_pdf_categorical(df, x_var, z_var, categories, colors):
 
 # %%
 plot_pdf_categorical(
+    df=df_filt_q_2,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+)
+
+# %% Histogram with mean and median
+
+from scipy.signal import find_peaks
+
+
+def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
+    # Determine the number of rows needed for subplots based on the number of categories
+    n_rows = len(categories)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(6, 3 * n_rows))
+
+    if n_rows == 1:
+        axes = [axes]  # Make it iterable even for a single category
+
+    for i, (category, ax) in enumerate(zip(categories, axes)):
+        subset = df[df[z_var["column_name"]] == category]
+
+        # Determine bin edges based on bin interval
+        bin_interval = 0.2
+        min_edge = 0
+        max_edge = 10
+        bins = np.arange(min_edge, max_edge + bin_interval, bin_interval)
+
+        # Plot histogram
+        sns.histplot(
+            subset[x_var["column_name"]],
+            label=category,
+            color=colors[i],
+            bins=bins,  # You can adjust the number of bins
+            kde=False,
+            ax=ax,
+        )
+
+        # Calculate and plot mean and median lines
+        mean_value = subset[x_var["column_name"]].mean()
+        median_value = subset[x_var["column_name"]].median()
+        ax.axvline(mean_value, color=colors[i], linestyle="--", lw=2, label="mean")
+        ax.axvline(median_value, color=colors[i], linestyle="-", lw=2, label="median")
+
+        # Detect and plot modes
+        data = subset[x_var["column_name"]].dropna()
+        kde = sns.kdeplot(data, bw_adjust=0.5, cut=0).get_lines()[0].get_data()
+        # kde.clf()  # Clear the KDE plot
+        peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
+        modes = kde[0][peaks]
+        # for mode in modes[0]:
+        ax.axvline(modes[0], color=colors[i], linestyle=":", lw=2, label="mode")
+
+        # Set titles and labels for each subplot
+        ax.set_title(f"{z_var['label']}: {category}")
+        ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+        ax.set_ylabel("Frequency")
+
+        ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 3)
+        ax.legend()
+
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.show()
+
+
+# %%
+plot_histograms_with_mean_median(
     df=df_filt_q_2,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
