@@ -170,11 +170,15 @@ print("Loaded ancillary information (land-cover)")
 
 print(f"Total number of drydown event: {len(df)}")
 
+# %%
+print(df.head)
+# %%
+print(df.columns)
 # %% Get some stats
 
 # Difference between R2 values of two models
-df = df.assign(diff_R2_q=df["q_r_squared"] - df["exp_r_squared"])
-df = df.assign(diff_R2_sigmoid=df["q_r_squared"] - df["exp_r_squared"])
+# df = df.assign(diff_R2_q=df["q_r_squared"] - df["exp_r_squared"])
+df = df.assign(diff_R2=df["sigmoid_r_squared"] - df["exp_r_squared"])
 
 # Denormalize k and calculate the estimated ETmax values from k parameter from q model
 df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
@@ -259,10 +263,24 @@ df_filt_sgm_and_exp = df[
 df_filt_sgm_and_exp_2 = df_filt_sgm_and_exp[
     df_filt_sgm_and_exp["sm_range"] > sm_range_thresh
 ].copy()
-print(f"both q and exp model fit was successful: {len(df_filt_sgm_and_exp)}")
+print(f"both sigmoid and exp model fit was successful: {len(df_filt_sgm_and_exp)}")
 print(
-    f"both q and exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_and_exp_2)}"
+    f"both sigmoid and exp model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_and_exp_2)}"
 )
+
+# Runs where both of the model performed satisfactory
+df_filt_sgm_and_q = df[
+    (df["sigmoid_r_squared"] >= success_modelfit_thresh)
+    & (df["q_r_squared"] >= success_modelfit_thresh)
+].copy()
+df_filt_sgm_and_q_2 = df_filt_sgm_and_q[
+    df_filt_sgm_and_q["sm_range"] > sm_range_thresh
+].copy()
+print(f"both sigmoid and q model fit was successful: {len(df_filt_sgm_and_q)}")
+print(
+    f"both sigmoid and q model were successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_and_q_2)}"
+)
+
 
 # %%
 ############################################################################
@@ -327,7 +345,7 @@ def plot_R2_models(df, R2_threshold, cmap):
 
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
 plot_R2_models(
-    df=df_filt_sgm_and_exp_2, R2_threshold=success_modelfit_thresh, cmap="viridis"
+    df=df_filt_sgm_and_q_2, R2_threshold=success_modelfit_thresh, cmap="viridis"
 )
 
 
@@ -411,7 +429,7 @@ plot_map(
 var_key = "diff_R2"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 plot_map(
-    df=df_filt_q_and_exp_2,
+    df=df_filt_sgm_and_exp_2,
     coord_info=coord_info,
     cmap="RdBu",
     norm=norm,
