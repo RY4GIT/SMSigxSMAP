@@ -85,12 +85,19 @@ var_dict = {
         "unit": "[mm/day]",
         "lim": [0, 10],
     },
-    "s_star": {
+    "theta_star": {
         "column_name": "max_sm",
         "symbol": r"$\theta_{s*}$",
         "label": r"Estimated $\theta_{s*}$",
         "unit": r"$[m^3/m^3]$",
         "lim": [0.1, 0.4],
+    },
+    "s_star": {
+        "column_name": "s_star",
+        "symbol": r"$s*$",
+        "label": r"Relative soil moisture content $s*$",
+        "unit": r"[-]",
+        "lim": [0.1, 1.0],
     },
     "sand_bins": {
         "column_name": "sand_bins",
