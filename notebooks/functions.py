@@ -17,11 +17,11 @@ def q_drydown(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
     float: Rate of change in soil moisture (dtheta/dt) for the given timestep, in m3/m3/day.
     """
 
-    s0 = (delta_theta - theta_w) ** (1 - q)
+    theta_0 = (delta_theta - theta_w) ** (1 - q)
 
     a = (1 - q) / ((theta_star - theta_w) ** q)
 
-    return (-k * a * t + s0) ** (1 / (1 - q)) + theta_w
+    return (-k * a * t + theta_0) ** (1 / (1 - q)) + theta_w
 
 
 def exponential_drydown(t, delta_theta, theta_w, tau):
@@ -64,7 +64,7 @@ def loss_model(theta, q, k, theta_wp=0.0, theta_star=1.0):
     return d_theta
 
 
-def loss_sigmoid(t, theta, theta50, k, Emax, theta_wp=0.0):
+def loss_sigmoid(t, theta, theta50, k, a):
     """
     Calculate the loss function (dtheta/dt vs theta relationship) using sigmoid model
 
@@ -72,14 +72,12 @@ def loss_sigmoid(t, theta, theta50, k, Emax, theta_wp=0.0):
     t (int): Timestep, in day.
     theta (float): Volumetric soil moisture content, in m3/m3.
     theta50 (float, optional): 50 percentile soil moisture content, equal to s50 * porosity, in m3/m3
-    k (float): Degree of non-linearity in the soil moisture response, in ???
-    ETmax
-    theta_wp (float, optional): Wilting point soil moisture content, equal to s_star * porosity, in m3/m3. Default is 0.0.
-
+    k (float): Degree of non-linearity in the soil moisture response. k = k0 (original coefficient of sigmoid) / n (porosity), in m3/m3
+    a (float): The spremum of dtheta/dt, a [-/day] = ETmax [mm/day] / z [mm]
     Returns:
     float: Rate of change in soil moisture (dtheta/dt) for the given soil mositure content, in m3/m3/day.
     """
-    d_theta = -1 * (Emax + theta_wp) / (1 + np.exp(-k * (theta - theta50)))
+    d_theta = -1 * a / (1 + np.exp(-k * (theta - theta50)))
     return d_theta
 
 

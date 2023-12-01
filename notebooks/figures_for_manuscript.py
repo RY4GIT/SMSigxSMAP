@@ -93,7 +93,7 @@ var_dict = {
         "lim": [0.1, 0.4],
     },
     "s_star": {
-        "column_name": "s_star",
+        "column_name": "q_s_star",
         "symbol": r"$s*$",
         "label": r"Relative soil moisture content $s*$",
         "unit": r"[-]",
