@@ -1,3 +1,8 @@
+# TODO: Need to check the original sigmoid function used for estimate of parameters to check
+# proper scaling of ETmax, possible range of k.
+# k looks like having a boudnary condition issue
+# ET max values are super high
+
 # %% Import packages
 import os
 import getpass
