@@ -955,6 +955,7 @@ plot_pdf_categorical(
 # %% Histogram with mean and median
 
 from scipy.signal import find_peaks
+import statistics
 
 
 def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
@@ -990,14 +991,13 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
         ax.axvline(mean_value, color=colors[i], linestyle="--", lw=2, label="mean")
         ax.axvline(median_value, color=colors[i], linestyle="-", lw=2, label="median")
 
-        # Detect and plot modes
-        data = subset[x_var["column_name"]].dropna()
-        kde = sns.kdeplot(data, bw_adjust=0.5, cut=0).get_lines()[0].get_data()
+        # # Detect and plot modes
+        # data = subset[x_var["column_name"]]
+        # kde = sns.kdeplot(data, bw_adjust=0.1, cut=0).get_lines()[0].get_data()
         # kde.clf()  # Clear the KDE plot
-        peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
-        modes = kde[0][peaks]
-        # for mode in modes[0]:
-        ax.axvline(modes[0], color=colors[i], linestyle=":", lw=2, label="mode")
+        # peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
+        # for mode in peaks[0]:
+        #     ax.axvline(mode, color=colors[i], linestyle=":", lw=2, label="mode")
 
         # Set titles and labels for each subplot
         ax.set_title(f"{z_var['label']}: {category}")
