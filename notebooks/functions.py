@@ -1,4 +1,6 @@
 import numpy as np
+
+
 def q_drydown(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
     s0 = (delta_theta - theta_w) ** (1 - q)
 
@@ -6,17 +8,21 @@ def q_drydown(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
 
     return (-k * a * t + s0) ** (1 / (1 - q)) + theta_w
 
+
 def exponential_drydown(t, delta_theta, theta_w, tau):
     return delta_theta * np.exp(-t / tau) + theta_w
 
-def loss_model(theta, q, k, theta_wp=0., theta_star=1.):
-    d_theta = -k * ( ( theta - theta_wp ) / ( theta_star - theta_wp ) ) ** (q)
+
+def loss_model(theta, q, k, theta_wp=0.0, theta_star=1.0):
+    d_theta = -k * ((theta - theta_wp) / (theta_star - theta_wp)) ** (q)
     return d_theta
 
-def loss_sigmoid(t, theta, s50, k, Emax, theta_wp=0.):
+
+def loss_sigmoid(t, theta, s50, k, Emax, theta_wp=0.0):
     d_theta = -1 * (Emax + theta_wp) / (1 + np.exp(-k * (theta - s50)))
     return d_theta
 
-def loss_sigmoid2(theta, s50, k, Emax, theta_wp=0.):
+
+def loss_sigmoid2(theta, s50, k, Emax, theta_wp=0.0):
     d_theta = -1 * (Emax + theta_wp) / (1 + np.exp(-k * (theta - s50)))
     return d_theta
