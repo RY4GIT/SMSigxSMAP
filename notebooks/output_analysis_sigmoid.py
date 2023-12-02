@@ -1,3 +1,8 @@
+# TODO: Need to check the original sigmoid function used for estimate of parameters to check
+# proper scaling of ETmax, possible range of k.
+# k looks like having a boudnary condition issue
+# ET max values are super high
+
 # %% Import packages
 import os
 import getpass
@@ -22,7 +27,7 @@ import datashader as ds
 from datashader.mpl_ext import dsshow
 from textwrap import wrap
 
-from functions import q_drydown, exponential_drydown, loss_model
+from functions import q_drydown, exponential_drydown, loss_model, loss_sigmoid2
 
 # %% Plot config
 
@@ -76,23 +81,23 @@ var_dict = {
         "symbol": r"$k$",
         "label": r"Nonlinear parameter $k$",
         "unit": "[-]",
-        "lim": [0, 100],
+        "lim": [0, 40],
     },
     "sigmoid_s50": {
         "column_name": "sigmoid_s50",
         "symbol": r"$\theta_{s50}$",
-        "label": r"Nonlinear parameter $\theta_{s50}$",
+        "label": r"Median soil moisture $\theta_{s50}$",
         "unit": "[-]",
-        "lim": [0, 1],
+        "lim": [0, 0.8],
     },
     "sigmoid_ETmax": {
-        "column_name": "sigmoid_ETmax",
+        "column_name": "sigmoid_ETmax_denormalized",
         "symbol": r"$ET_{max}$",
         "label": r"Estimated $ET_{max}$ by non-linear model",
         "unit": "[mm/day]",
-        "lim": [0, 10],
+        "lim": [0, 100],
     },
-    "s_star": {
+    "sigmoid_s_star": {
         "column_name": "max_sm",
         "symbol": r"$\theta_{s*}$",
         "label": r"Estimated $\theta_{s*}$",
@@ -183,8 +188,9 @@ print(f"Total number of drydown event: {len(df)}")
 df = df.assign(diff_R2=df["sigmoid_r_squared"] - df["exp_r_squared"])
 
 # Denormalize k and calculate the estimated ETmax values from k parameter from sigmoid model
-df["sigmoid_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
-df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
+df["sigmoid_ETmax_denormalized"] = (
+    df["sigmoid_ETmax"] * (df["max_sm"] - df["min_sm"]) * z_mm
+)
 
 # Get the binned dataset
 
@@ -247,6 +253,19 @@ df_filt_exp_2 = df_filt_exp[df_filt_exp["sm_range"] > sm_range_thresh].copy()
 print(f"exp model fit was successful: {len(df_filt_exp)}")
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp_2)}"
+)
+
+# Runs where both q and sigmoid model performed good
+df_filt_sgm_and_q = df[
+    (df["sigmoid_r_squared"] >= success_modelfit_thresh)
+    & (df["q_r_squared"] >= success_modelfit_thresh)
+].copy()
+df_filt_sgm_and_q_2 = df_filt_sgm_and_q[
+    df_filt_sgm_and_q["sm_range"] > sm_range_thresh
+].copy()
+print(f"both sigmoid and q model fit was successful: {len(df_filt_sgm_and_q)}")
+print(
+    f"both sigmoid and q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_sgm_and_q)}"
 )
 
 # Runs where either of the model performed satisfactory
@@ -342,6 +361,48 @@ plot_R2_models(
 )
 
 
+def plot_R2_models_both_nonlinear(df, R2_threshold, cmap):
+    # Read data
+    x = df["q_r_squared"].values
+    y = df["sigmoid_r_squared"].values
+
+    # Create a scatter plot
+    fig, ax = plt.subplots(figsize=(4.5, 4))
+    # Calculate the point density
+    sc = using_datashader(ax, x, y, cmap)
+
+    # plt.title(rf'')
+    plt.xlabel(r"$R^2$ of q loss model")
+    plt.ylabel(r"$R^2$ of sigmoid loss model")
+
+    # Add 1:1 line
+    ax.plot(
+        [R2_threshold, 1],
+        [R2_threshold, 1],
+        color="k",
+        linestyle="--",
+        label="1:1 line",
+    )
+
+    # Add a trendline
+    coefficients = np.polyfit(x, y, 1)
+    trendline_x = np.array([R2_threshold, 1])
+    trendline_y = coefficients[0] * trendline_x + coefficients[1]
+    ax.plot(trendline_x, trendline_y, color="k", label="Trendline")
+
+    ax.set_xlim([R2_threshold, 1])
+    ax.set_ylim([R2_threshold, 1])
+    plt.legend()
+
+
+# plot_R2_models(df=df, R2_threshold=0.0)
+
+# Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
+plot_R2_models_both_nonlinear(
+    df=df_filt_sgm_and_q_2, R2_threshold=success_modelfit_thresh, cmap="viridis"
+)
+
+
 # %%
 ############################################################################
 # Map plots
@@ -408,6 +469,16 @@ def plot_map(df, coord_info, cmap, norm, var_item):
 
 # %% Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
 var_key = "sigmoid_k"
+norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+plot_map(
+    df=df_filt_sgm_2,
+    coord_info=coord_info,
+    cmap="YlGnBu",
+    norm=norm,
+    var_item=var_dict[var_key],
+)
+
+var_key = "sigmoid_s50"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 plot_map(
     df=df_filt_sgm_2,
@@ -497,7 +568,7 @@ def plot_boxplots_categorical(df, x_var, y_var, categories, colors):
     plt.setp(ax.get_xticklabels(), rotation=45)
     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
     # Show the plot
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
     plt.tight_layout()
     plt.show()
 
@@ -507,6 +578,14 @@ plot_boxplots_categorical(
     df_filt_sgm_2,
     var_dict["veg_class"],
     var_dict["sigmoid_k"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+)
+
+plot_boxplots_categorical(
+    df_filt_sgm_2,
+    var_dict["veg_class"],
+    var_dict["sigmoid_s50"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
@@ -541,7 +620,7 @@ def plot_violin_categorical(df, x_var, y_var, categories, colors):
     plt.setp(ax.get_xticklabels(), rotation=45)
     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
     # Show the plot
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 1000)
     plt.tight_layout()
     plt.show()
 
@@ -575,14 +654,13 @@ def plot_loss_func(df, z_var, cmap):
         # Get the median of all the related loss function parameters
         theta_min = subset["min_sm"].median()
         theta_max = subset["max_sm"].median()
-        denormalized_k = subset["q_k_denormalized"].median()
-        q = subset["sigmoid_k"].median()
+        k = subset["sigmoid_k"].median()
+        s50 = subset["sigmoid_s50"].median()
+        ETmax = subset["sigmoid_ETmax"].median()
 
         # Calculate the loss function
         theta = np.arange(theta_min, theta_max, 0.01)
-        dtheta = loss_model(
-            theta, q, denormalized_k, theta_wp=theta_min, theta_star=theta_max
-        )
+        dtheta = loss_sigmoid2(theta, s50, k, ETmax)
 
         # Plot median line
         ax.plot(
@@ -628,17 +706,15 @@ def plot_loss_func_categorical(df, z_var, categories, colors):
     for i, category in enumerate(categories):
         subset = df[df[z_var["column_name"]] == category]
 
-        # Get the median of all the related loss function parameters
         theta_min = subset["min_sm"].median()
         theta_max = subset["max_sm"].median()
-        denormalized_k = subset["q_k_denormalized"].median()
-        q = subset["sigmoid_k"].median()
+        k = subset["sigmoid_k"].median()
+        s50 = subset["sigmoid_s50"].median()
+        ETmax = subset["sigmoid_ETmax"].median()
 
         # Calculate the loss function
         theta = np.arange(theta_min, theta_max, 0.01)
-        dtheta = loss_model(
-            theta, q, denormalized_k, theta_wp=theta_min, theta_star=theta_max
-        )
+        dtheta = loss_sigmoid2(theta, s50, k, ETmax)
 
         # Plot median line
         ax.plot(theta, dtheta, label=category, color=colors[i])
@@ -758,7 +834,7 @@ plot_scatter_with_errorbar(
 # %% q vs. s* per vegetation
 plot_scatter_with_errorbar(
     df=df_filt_sgm_2,
-    x_var=var_dict["s_star"],
+    x_var=var_dict["sigmoid_s50"],
     y_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -771,7 +847,7 @@ plot_scatter_with_errorbar(
 plot_scatter_with_errorbar(
     df=df_filt_sgm_2,
     x_var=var_dict["sigmoid_ETmax"],
-    y_var=var_dict["s_star"],
+    y_var=var_dict["sigmoid_s50"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -850,7 +926,7 @@ plot_2d_density(
 # %%
 plot_2d_density(
     df=df_filt_sgm_2,
-    x_var=var_dict["s_star"],
+    x_var=var_dict["sigmoid_s50"],
     y_var=var_dict["sigmoid_k"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -862,7 +938,7 @@ plot_2d_density(
 plot_2d_density(
     df=df_filt_sgm_2,
     x_var=var_dict["sigmoid_ETmax"],
-    y_var=var_dict["s_star"],
+    y_var=var_dict["sigmoid_s50"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),

@@ -85,12 +85,19 @@ var_dict = {
         "unit": "[mm/day]",
         "lim": [0, 10],
     },
-    "s_star": {
+    "theta_star": {
         "column_name": "max_sm",
-        "symbol": r"$\theta_{s*}$",
-        "label": r"Estimated $\theta_{s*}$",
+        "symbol": r"$\theta*$",
+        "label": r"Estimated $\theta*$",
         "unit": r"$[m^3/m^3]$",
         "lim": [0.1, 0.4],
+    },
+    "theta_star": {
+        "column_name": "q_theta_star",
+        "symbol": r"$s*$",
+        "label": r"Relative soil moisture content $s*$",
+        "unit": r"[-]",
+        "lim": [0.1, 1.0],
     },
     "sand_bins": {
         "column_name": "sand_bins",
@@ -751,7 +758,7 @@ plot_scatter_with_errorbar(
 # %% q vs. s* per vegetation
 plot_scatter_with_errorbar(
     df=df_filt_q_2,
-    x_var=var_dict["s_star"],
+    x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -764,7 +771,7 @@ plot_scatter_with_errorbar(
 plot_scatter_with_errorbar(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
-    y_var=var_dict["s_star"],
+    y_var=var_dict["theta_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -843,7 +850,7 @@ plot_2d_density(
 # %%
 plot_2d_density(
     df=df_filt_q_2,
-    x_var=var_dict["s_star"],
+    x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -855,7 +862,7 @@ plot_2d_density(
 plot_2d_density(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
-    y_var=var_dict["s_star"],
+    y_var=var_dict["theta_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
@@ -948,6 +955,7 @@ plot_pdf_categorical(
 # %% Histogram with mean and median
 
 from scipy.signal import find_peaks
+import statistics
 
 
 def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
@@ -983,14 +991,13 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
         ax.axvline(mean_value, color=colors[i], linestyle="--", lw=2, label="mean")
         ax.axvline(median_value, color=colors[i], linestyle="-", lw=2, label="median")
 
-        # Detect and plot modes
-        data = subset[x_var["column_name"]].dropna()
-        kde = sns.kdeplot(data, bw_adjust=0.5, cut=0).get_lines()[0].get_data()
+        # # Detect and plot modes
+        # data = subset[x_var["column_name"]]
+        # kde = sns.kdeplot(data, bw_adjust=0.1, cut=0).get_lines()[0].get_data()
         # kde.clf()  # Clear the KDE plot
-        peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
-        modes = kde[0][peaks]
-        # for mode in modes[0]:
-        ax.axvline(modes[0], color=colors[i], linestyle=":", lw=2, label="mode")
+        # peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
+        # for mode in peaks[0]:
+        #     ax.axvline(mode, color=colors[i], linestyle=":", lw=2, label="mode")
 
         # Set titles and labels for each subplot
         ax.set_title(f"{z_var['label']}: {category}")
