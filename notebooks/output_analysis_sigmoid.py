@@ -86,18 +86,18 @@ var_dict = {
     "sigmoid_s50": {
         "column_name": "sigmoid_s50",
         "symbol": r"$\theta_{s50}$",
-        "label": r"Nonlinear parameter $\theta_{s50}$",
+        "label": r"Median soil moisture $\theta_{s50}$",
         "unit": "[-]",
-        "lim": [0, 0.6],
+        "lim": [0, 0.8],
     },
     "sigmoid_ETmax": {
-        "column_name": "sigmoid_ETmax",
+        "column_name": "sigmoid_ETmax_denormalized",
         "symbol": r"$ET_{max}$",
         "label": r"Estimated $ET_{max}$ by non-linear model",
         "unit": "[mm/day]",
-        "lim": [0, 10],
+        "lim": [0, 100],
     },
-    "sigmoid_s50": {
+    "sigmoid_s_star": {
         "column_name": "max_sm",
         "symbol": r"$\theta_{s*}$",
         "label": r"Estimated $\theta_{s*}$",
@@ -188,8 +188,9 @@ print(f"Total number of drydown event: {len(df)}")
 df = df.assign(diff_R2=df["sigmoid_r_squared"] - df["exp_r_squared"])
 
 # Denormalize k and calculate the estimated ETmax values from k parameter from sigmoid model
-df["sigmoid_ETmax"] = df["sigmoid_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
-df["sigmoid_k_denormalized"] = df["sigmoid_k"] * (df["max_sm"] - df["min_sm"])
+df["sigmoid_ETmax_denormalized"] = (
+    df["sigmoid_ETmax"] * (df["max_sm"] - df["min_sm"]) * z_mm
+)
 
 # Get the binned dataset
 
