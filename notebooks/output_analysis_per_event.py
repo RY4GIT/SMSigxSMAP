@@ -54,15 +54,27 @@ def calculate_sm_range(row):
 
 # Applying the function to each row and creating a new column 'sm_range'
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
+# %%
+df["sm_abs_range"] = df["max_sm"] - df["min_sm"]
 
 # %%
 ################## FILTER TIMESERIES HERE TO CHECK WHICH EVENT YOU WANT TO PLOT ##################
 # print(df[df["q_r_squared"]>df["exp_r_squared"]].index)
 # print(df[(df["q_r_squared"]>0.7) & (df["q_k"]>10) & (df["sm_range"]>0.5)].index)
-print(df[(df["q_q"] < 0.1) & (df["sm_range"] > 0.3) & (df["q_r_squared"] > 0.7)].index)
+print(
+    df[
+        (df["q_q"] < 0.1)
+        & (df["sm_range"] > 0.3)
+        & (df["q_r_squared"] > 0.7)
+        & (df["sm_abs_range"] > 0.25)
+    ].index
+)
 filtered_indices = df[
-    (df["q_q"] < 0.1) & (df["sm_range"] > 0.3) & (df["q_r_squared"] > 0.7)
-]
+    (df["q_q"] < 0.1)
+    & (df["sm_range"] > 0.3)
+    & (df["q_r_squared"] > 0.7)
+    & (df["sm_abs_range"] > 0.25)
+].index
 file_path = "filtered_indices.txt"
 with open(file_path, "w") as file:
     for index in filtered_indices:
@@ -70,7 +82,7 @@ with open(file_path, "w") as file:
 ##################################################################################################
 # %%
 ################## SPECIFY THE EVENT ID OF INTEREST HERE ##################
-event_id = 82
+event_id = 124
 ###########################################################################
 
 # %% Get the event data
@@ -149,27 +161,28 @@ var_dict = {
     },
 }
 
+# %%
+# _________________________________________________________________________
+# Convert strings to NumPy arrays
+sm = string_to_float_array(preprocess_string(event.sm))
+t_d = string_to_int_array(preprocess_string(event.time))
+n_days = t_d[-1] - t_d[0] + 1
+
+# Prepare variables and parameters
+t = np.arange(0, n_days + 1, 0.1)
+min_sm, max_sm = event.min_sm, event.max_sm
+_exp_y_opt = np.array(ast.literal_eval(event.exp_y_opt))
+_q_y_opt = np.array(ast.literal_eval(event.q_y_opt))
+
 
 def plot_event(event, normalize=False):
-    # _________________________________________________________________________
-    # Convert strings to NumPy arrays
-    sm = string_to_float_array(preprocess_string(event.sm))
-    t_d = string_to_int_array(preprocess_string(event.time))
-    n_days = t_d[-1] - t_d[0] + 1
-
-    # Prepare variables and parameters
-    t = np.arange(0, n_days + 1, 0.1)
-    min_sm, max_sm = event.min_sm, event.max_sm
     if normalize:
         theta = np.arange(0, 1, 0.01)
     else:
         theta = np.arange(min_sm, max_sm, 0.01)
     plot_sm = (sm - min_sm) / (max_sm - min_sm) if normalize else sm
-    _exp_y_opt = np.array(ast.literal_eval(event.exp_y_opt))
-    _q_y_opt = np.array(ast.literal_eval(event.q_y_opt))
     exp_y_opt = (_exp_y_opt - min_sm) / (max_sm - min_sm) if normalize else _exp_y_opt
     q_y_opt = (_q_y_opt - min_sm) / (max_sm - min_sm) if normalize else _q_y_opt
-
     k = event.q_k if normalize else event.q_k * (max_sm - min_sm)
 
     # Plotting
@@ -282,49 +295,54 @@ large_q = df[
 small_q_diff = small_q["max_sm"] - small_q["min_sm"]
 large_q_diff = large_q["max_sm"] - large_q["min_sm"]
 
-# Plotting both histograms on the same plot without fill
-plt.hist(
-    small_q_diff,
-    bins=np.arange(0, 0.5, 0.01),
-    alpha=0.7,
-    edgecolor="blue",
-    linewidth=1.5,
-    fill=False,
-    label="Small Q",
-)
-plt.hist(
-    large_q_diff,
-    bins=np.arange(0, 0.5, 0.01),
-    alpha=0.7,
-    edgecolor="green",
-    linewidth=1.5,
-    fill=False,
-    label="Large Q",
-)
+# # Plotting both histograms on the same plot without fill
+# plt.hist(
+#     small_q_diff,
+#     bins=np.arange(0, 0.5, 0.01),
+#     alpha=0.7,
+#     edgecolor="blue",
+#     linewidth=1.5,
+#     fill=False,
+#     label="Small Q",
+# )
+# plt.hist(
+#     large_q_diff,
+#     bins=np.arange(0, 0.5, 0.01),
+#     alpha=0.7,
+#     edgecolor="green",
+#     linewidth=1.5,
+#     fill=False,
+#     label="Large Q",
+# )
 
-# Adding labels and legend
-plt.xlabel(f"Soil moisture range (max - min values) $[m3/m3]$")
-plt.ylabel("Frequency")
-plt.title("Histogram of Differences for Small q and Large q")
-plt.legend()
+# # Adding labels and legend
+# plt.xlabel(f"Soil moisture range (max - min values) $[m3/m3]$")
+# plt.ylabel("Frequency")
+# plt.title("Histogram of Differences for Small q and Large q")
+# plt.legend()
 # %%
 # %%
 # _________________________________________________________________________
 # Get the Timeseries of soil moisture data
 
-data_dir = r"/home/waves/projects/smap-drydown/data/datarods"
-datarods_dir r"datarods"
+data_dir = r"/home/waves/projects/smap-drydown/data"
+datarods_dir = r"datarods"
+
+
+def set_time_index(df, index_name="time"):
+    """Set the datetime index to the pandas dataframe"""
+    df[index_name] = pd.to_datetime(df[index_name])
+    return df.set_index("time")
 
 
 def get_sm(EASE_row_index, EASE_column_index, start_date, end_date):
-    
     varname = r"SPL3SMP"
     filename = f"{varname}_{EASE_row_index:03d}_{EASE_column_index:03d}.csv"
     _df = pd.read_csv(os.path.join(data_dir, datarods_dir, varname, filename))
 
     # Set time index and crop
     _df = set_time_index(_df, index_name="time")
-    _df = _df[start_date : end_date].copy()
+    _df = _df[start_date:end_date].copy()
 
     # Use retrieval flag to quality control the data
     condition_bad_data_am = (
@@ -356,8 +374,60 @@ def get_sm(EASE_row_index, EASE_column_index, start_date, end_date):
 
     return df["soil_moisture_daily"]
 
+
+# %%
 # _________________________________________________________________________
 # Plot within timeseries
-sm_ts = get_sm(event.EASE_row_index, event.EASE_column_index, sevent.start_date, event.end_date)
-sm_ts.plot()
+plot_start = pd.to_datetime(event["event_start"]) - pd.Timedelta(150, "d")
+plot_end = pd.to_datetime(event["event_end"]) + pd.Timedelta(150, "d")
+sm_ts = get_sm(
+    event.EASE_row_index,
+    event.EASE_column_index,
+    plot_start,
+    plot_end,
+)
+event_sm = string_to_float_array(preprocess_string(event.sm))
+fig, (ax11) = plt.subplots(1, 1, figsize=(20, 5))
+plt.scatter(sm_ts.index, sm_ts, color="grey", alpha=0.7)
+ax11.scatter(
+    pd.to_datetime(event["event_start"]),
+    event_sm[0],
+    color="orange",
+    alpha=0.5,
+)
+ax11.scatter(
+    pd.to_datetime(event["event_end"]),
+    event_sm[-1],
+    color="orange",
+    marker="x",
+    alpha=0.5,
+)
+ax11.set_ylabel("VSWC[m3/m3]")
+
+date_range = pd.date_range(
+    start=pd.to_datetime(event["event_start"]),
+    end=pd.to_datetime(event["event_end"]),
+    freq="D",
+)
+x = date_range[t_d]
+ax11.plot(
+    x,
+    _q_y_opt,
+    alpha=0.7,
+    linestyle="--",
+    color="green",
+    label=f"q model: R^2={event.q_r_squared:.2f}; q={event.q_q:.2f}",
+)
+ax11.plot(
+    x,
+    _exp_y_opt,
+    alpha=0.7,
+    linestyle="--",
+    color="orange",
+    label=f"expoential: R^2={event.exp_r_squared:.2f}; tau={event.exp_tau:.2f}",
+)
+# ax11.set_xlim(plot_start, plot_end)
+ax11.legend()
+fig.tight_layout()
+# %%
 # %%
