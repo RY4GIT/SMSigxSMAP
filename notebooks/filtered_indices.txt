@@ -1,0 +1,24 @@
+Unnamed: 0
+EASE_row_index
+EASE_column_index
+event_start
+event_end
+time
+sm
+min_sm
+max_sm
+pet
+exp_delta_theta
+exp_theta_w
+exp_tau
+exp_r_squared
+exp_y_opt
+q_k
+q_q
+q_delta_theta
+q_r_squared
+q_y_opt
+id
+latitude
+longitude
+sm_range
