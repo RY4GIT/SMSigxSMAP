@@ -224,15 +224,46 @@ def calculate_sm_range(row):
 # Applying the function to each row and creating a new column 'sm_range'
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
 
+
+# %%
+def calculate_n_days(row):
+    input_string = row.sm
+
+    # Processing the string
+    input_string = input_string.replace("\n", " np.nan")
+    input_string = input_string.replace(" nan", " np.nan")
+    input_string = input_string.strip("[]")
+
+    # Converting to numpy array and handling np.nan
+    sm = np.array(
+        [
+            float(value) if value != "np.nan" else np.nan
+            for value in input_string.split()
+        ]
+    )
+
+    # Calculating sm_range
+    n_days = len(sm)
+    return n_days
+
+
+# Applying the function to each row and creating a new column 'sm_range'
+df["n_days"] = df.apply(calculate_n_days, axis=1)
+df.columns
 # %% Exclude model fits failure
 
 # Runs where q model performed good
 df_filt_q = df[df["q_r_squared"] >= success_modelfit_thresh].copy()
-df_filt_q_2 = df_filt_q[df_filt_q["sm_range"] > sm_range_thresh].copy()
+df_filt_q_2 = df_filt_q[(df_filt_q["sm_range"] > sm_range_thresh)].copy()
+df_filt_q_3 = df_filt_q_2[
+    (df_filt_q_2["q_q"] > 0.1)
+    | ((df_filt_q_2["q_q"] < 0.1) & (df_filt_q["n_days"] > 10))
+].copy()
 print(f"q model fit was successful: {len(df_filt_q)}")
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_2)}"
 )
+print(f"q model fit without short drydown:  {len(df_filt_q_3)}")
 
 # Runs where exponential model performed good
 df_filt_exp = df[df["exp_r_squared"] >= success_modelfit_thresh].copy()
@@ -290,7 +321,7 @@ def using_datashader(ax, x, y, cmap):
         ax=ax,
         cmap=cmap,
     )
-    plt.colorbar(dsartist, label=f"Gaussian density [-]")
+    plt.colorbar(dsartist, label=f"Counts [a number of event]")
 
 
 def plot_R2_models(df, R2_threshold, cmap):
@@ -750,7 +781,7 @@ plot_scatter_with_errorbar(
 
 # %% q vs. s* per vegetation
 plot_scatter_with_errorbar(
-    df=df_filt_q_2,
+    df=df_filt_q_2[df_filt_q_2["q_q"] > 0.1],
     x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
@@ -770,108 +801,6 @@ plot_scatter_with_errorbar(
     colors=list(vegetation_color_dict.values()),
     quantile=33,
     plot_logscale=True,
-)
-
-
-# %% Density plot
-def plot_2d_density(
-    df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale
-):
-    fig, ax = plt.subplots(figsize=(5, 5))
-    kde_objects = []
-
-    # Calculate and plot density for each category
-    for i, category in enumerate(categories):
-        subset = df[df[z_var["column_name"]] == category]
-        x_data = subset[x_var["column_name"]]
-        y_data = subset[y_var["column_name"]]
-
-        # Calculate KDE
-        kde = gaussian_kde([x_data, y_data])
-        xmin, xmax = x_var["lim"]
-        ymin, ymax = y_var["lim"]
-        xi, yi = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-        zi = kde(np.vstack([xi.flatten(), yi.flatten()]))
-
-        # Find contour levels to fill between for middle 30%
-        levels = np.linspace(zi.min(), zi.max(), 100)
-        middle_levels = np.quantile(levels, [quantile / 100, 1.0])
-
-        # Plot KDE and fill relevant contours
-        # ax.contour(xi, yi, zi.reshape(xi.shape), levels=10, colors="white")
-        ax.contourf(
-            xi,
-            yi,
-            zi.reshape(xi.shape),
-            levels=middle_levels,
-            colors=colors[i],
-            alpha=0.5,
-            label=category,
-        )
-
-    # Add labels and title
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Density > {quantile} percentile")
-
-    # Set axis scales and limits
-    if plot_logscale:
-        ax.set_xscale("log")
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-    plt.legend(bbox_to_anchor=(1, 1))
-    legend = plt.legend(bbox_to_anchor=(1, 1))
-    for text in legend.get_texts():
-        label = text.get_text()
-        wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
-        text.set_text(wrapped_label)
-    # Show the plot
-    plt.show()
-
-
-# %%
-plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-# %%
-plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-
-plot_2d_density(
-    df=df_filt_q_2[df_filt_q_2["q_q"] > 0.1],
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-# %%
-plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
 )
 
 
@@ -958,9 +887,6 @@ plot_pdf_categorical(
 
 # %% Histogram with mean and median
 
-from scipy.signal import find_peaks
-import statistics
-
 
 def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
     # Determine the number of rows needed for subplots based on the number of categories
@@ -1043,12 +969,13 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
 
 # %%
 plot_histograms_with_mean_median(
-    df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
+    df=df_filt_q_3,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
+
 # %%
 
 
@@ -1175,3 +1102,147 @@ plot_scatter_with_errorbar_mode(
 )
 
 # %%
+small_q = df_filt_q_2[(df_filt_q_2["q_q"] < 0.1)].copy()
+large_q = df_filt_q_2[(df_filt_q_2["q_q"] > 0.1)].copy()
+# %%
+
+# Plotting both histograms on the same plot without fill
+plt.hist(
+    small_q["n_days"],
+    bins=np.arange(4, 30, 1),
+    alpha=0.7,
+    edgecolor="blue",
+    linewidth=1.5,
+    fill=False,
+    label="Small Q",
+)
+plt.hist(
+    large_q["n_days"],
+    bins=np.arange(4, 30, 1),
+    alpha=0.7,
+    edgecolor="green",
+    linewidth=1.5,
+    fill=False,
+    label="Large Q",
+)
+
+# Adding labels and legend
+plt.ylabel("Frequency")
+plt.title("Histogram of number of observation days")
+plt.legend()
+
+
+# %%
+# %% Density plot
+def plot_2d_density(
+    df,
+    x_var,
+    y_var,
+    z_var,
+    categories,
+    colors,
+    quantile,
+    plot_logscale_x=False,
+    plot_logscale_y=False,
+):
+    fig, ax = plt.subplots(figsize=(5, 5))
+    kde_objects = []
+
+    # Calculate and plot density for each category
+    for i, category in enumerate(categories):
+        subset = df[df[z_var["column_name"]] == category]
+        x_data = subset[x_var["column_name"]]
+        y_data = subset[y_var["column_name"]]
+
+        # Calculate KDE
+        kde = gaussian_kde([x_data, y_data])
+        kde.set_bandwidth(bw_method=kde.factor / 5)
+        xmin, xmax = x_var["lim"]
+        ymin, ymax = y_var["lim"]
+        xi, yi = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+        zi = kde(np.vstack([xi.flatten(), yi.flatten()]))
+
+        # Find contour levels to fill between for middle 30%
+        levels = np.linspace(zi.min(), zi.max(), 100)
+        middle_levels = np.quantile(levels, [quantile / 100, 1.0])
+
+        # Plot KDE and fill relevant contours
+        # ax.contour(xi, yi, zi.reshape(xi.shape), levels=10, colors="white")
+        ax.contourf(
+            xi,
+            yi,
+            zi.reshape(xi.shape),
+            levels=middle_levels,
+            colors=colors[i],
+            alpha=0.5,
+            label=category,
+        )
+
+    # Add labels and title
+    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+    plt.title(f"Density > {quantile} percentile")
+
+    # Set axis scales and limits
+    if plot_logscale_x:
+        ax.set_xscale("log")
+    if plot_logscale_y:
+        ax.set_yscale("log")
+    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+    ax.set_ylim(5e-2, 2)  # (y_var["lim"][0], y_var["lim"][1])
+    plt.legend(bbox_to_anchor=(1, 1))
+    legend = plt.legend(bbox_to_anchor=(1, 1))
+    for text in legend.get_texts():
+        label = text.get_text()
+        wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
+        text.set_text(wrapped_label)
+    # Show the plot
+    plt.show()
+
+
+# %%
+plot_2d_density(
+    df=df_filt_q_2,
+    x_var=var_dict["theta_star"],
+    y_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=70,
+    plot_logscale_y=True,
+)
+# %%
+plot_2d_density(
+    df=df_filt_q_2[df_filt_q_2["q_q"] > 0.1],
+    x_var=var_dict["theta_star"],
+    y_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=90,
+    plot_logscale=False,
+)
+
+# %%
+plot_2d_density(
+    df=df_filt_q_2,
+    x_var=var_dict["q_ETmax"],
+    y_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=90,
+    plot_logscale=False,
+)
+
+# %%
+plot_2d_density(
+    df=df_filt_q_2,
+    x_var=var_dict["q_ETmax"],
+    y_var=var_dict["theta_star"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=90,
+    plot_logscale=False,
+)
