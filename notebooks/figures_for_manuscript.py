@@ -60,14 +60,14 @@ var_dict = {
     "theta": {
         "column_name": "sm",
         "symbol": r"$\theta$",
-        "label": r"SMAP soil moisture $\theta$",
+        "label": r"SMAP soil moisture",
         "unit": r"$[m^3/m^3]$",
         "lim": [0, 0.50],
     },
     "dtheta": {
         "column_name": "",
         "symbol": r"$-d\theta/dt$",
-        "label": r"Change in soil moisture $-d\theta/dt$",
+        "label": r"Change in soil moisture",
         "unit": r"$[m^3/m^3/day]$",
         "lim": [-0.10, 0],
     },
@@ -224,15 +224,57 @@ def calculate_sm_range(row):
 # Applying the function to each row and creating a new column 'sm_range'
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
 
+
+# %%
+def calculate_n_days(row):
+    input_string = row.sm
+
+    # Processing the string
+    input_string = input_string.replace("\n", " np.nan")
+    input_string = input_string.replace(" nan", " np.nan")
+    input_string = input_string.strip("[]")
+
+    # Converting to numpy array and handling np.nan
+    sm = np.array(
+        [
+            float(value) if value != "np.nan" else np.nan
+            for value in input_string.split()
+        ]
+    )
+
+    # Calculating sm_range
+    n_days = len(sm)
+    return n_days
+
+
+# Applying the function to each row and creating a new column 'sm_range'
+df["n_days"] = df.apply(calculate_n_days, axis=1)
+df.columns
 # %% Exclude model fits failure
 
-# Runs where q model performed good
-df_filt_q = df[df["q_r_squared"] >= success_modelfit_thresh].copy()
-df_filt_q_2 = df_filt_q[df_filt_q["sm_range"] > sm_range_thresh].copy()
+# Runs where q model performed reasonablly well
+df_filt_q = df[
+    (df["q_r_squared"] >= success_modelfit_thresh) & (df["q_q"] > 0.1)
+].copy()
+
+# df_filt_q = df[
+#     (df["q_r_squared"] >= success_modelfit_thresh)
+# ].copy()
+
+# df_filt_q = df[
+#     (df["q_r_squared"] >= success_modelfit_thresh) & ((df["q_q"] > 0.1) | ((df["q_q"] < 0.1) & (df["n_days"] > 10)))
+# ].copy()
+
+
+df_filt_q_2 = df_filt_q[(df_filt_q["sm_range"] > sm_range_thresh)].copy()
+
+
+
 print(f"q model fit was successful: {len(df_filt_q)}")
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_2)}"
 )
+# print(f"q model fit without short drydown:  {len(df_filt_q_3)}")
 
 # Runs where exponential model performed good
 df_filt_exp = df[df["exp_r_squared"] >= success_modelfit_thresh].copy()
@@ -290,28 +332,32 @@ def using_datashader(ax, x, y, cmap):
         ax=ax,
         cmap=cmap,
     )
-    plt.colorbar(dsartist, label=f"Gaussian density [-]")
+    plt.colorbar(dsartist, label=f"Point density")
+
+
+# %%
 
 
 def plot_R2_models(df, R2_threshold, cmap):
+    plt.rcParams.update({"font.size": 30})
     # Read data
     x = df["exp_r_squared"].values
     y = df["q_r_squared"].values
 
     # Create a scatter plot
-    fig, ax = plt.subplots(figsize=(4.5, 4))
+    fig, ax = plt.subplots(figsize=(4.5 * 1.2, 4 * 1.2))
     # Calculate the point density
     sc = using_datashader(ax, x, y, cmap)
 
     # plt.title(rf'')
-    plt.xlabel(r"$R^2$ of Linear loss model")
-    plt.ylabel(r"$R^2$ of Non-linear loss model")
+    plt.xlabel(r"Linear model")
+    plt.ylabel(r"Non-linear model")
 
     # Add 1:1 line
     ax.plot(
         [R2_threshold, 1],
         [R2_threshold, 1],
-        color="k",
+        color="white",
         linestyle="--",
         label="1:1 line",
     )
@@ -320,11 +366,11 @@ def plot_R2_models(df, R2_threshold, cmap):
     coefficients = np.polyfit(x, y, 1)
     trendline_x = np.array([R2_threshold, 1])
     trendline_y = coefficients[0] * trendline_x + coefficients[1]
-    ax.plot(trendline_x, trendline_y, color="k", label="Trendline")
+    ax.plot(trendline_x, trendline_y, color="white", label="Trendline")
 
     ax.set_xlim([R2_threshold, 1])
     ax.set_ylim([R2_threshold, 1])
-    plt.legend()
+    ax.set_title(r"$R^2$ comparison")
 
 
 # plot_R2_models(df=df, R2_threshold=0.0)
@@ -340,6 +386,7 @@ plot_R2_models(
 # Map plots
 ###########################################################################
 def plot_map(df, coord_info, cmap, norm, var_item):
+    plt.rcParams.update({"font.size": 12})
     # Get the mean values of the variable
     stat = df.groupby(["EASE_row_index", "EASE_column_index"])[
         var_item["column_name"]
@@ -422,6 +469,29 @@ plot_map(
     var_item=var_dict[var_key],
 )
 
+
+# %%
+def plot_hist(df, var_key):
+    plt.rcParams.update({"font.size": 30})
+    plt.figure(figsize=(5.5, 5))
+
+    # Create the histogram with a bin width of 1
+    sns.histplot(df[var_key], binwidth=1, color="#2c7fb8", fill=False, linewidth=3)
+
+    # Setting the x limit
+    plt.xlim(0, 10)
+
+    # Adding title and labels
+    plt.title("Histogram of $q$ values")
+    plt.xlabel(r"$q$ [-]")
+    plt.ylabel("Frequency")
+
+    # Display the plot
+    plt.show()
+
+
+plot_hist(df=df_filt_q_2, var_key="q_q")
+
 # %%
 ############################################################################
 # Box plots (might go supplemental)
@@ -429,6 +499,7 @@ plot_map(
 
 
 def plot_boxplots(df, x_var, y_var):
+    plt.rcParams.update({"font.size": 12})
     plt.figure(figsize=(6, 4))
     ax = sns.boxplot(
         x=x_var["column_name"],
@@ -504,48 +575,6 @@ plot_boxplots_categorical(
     colors=list(vegetation_color_dict.values()),
 )
 
-# %%
-
-
-def plot_violin_categorical(df, x_var, y_var, categories, colors):
-    fig, ax = plt.subplots(figsize=(8, 4))
-    for i, category in enumerate(categories):
-        subset = df[df[x_var["column_name"]] == category]
-        sns.violinplot(
-            x=x_var["column_name"],
-            y=y_var["column_name"],
-            data=subset,
-            order=[category],
-            color=colors[i],
-            ax=ax,
-            alpha=0.75,
-            cut=0,
-        )
-
-    # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
-    ax.set_xlabel(f'{x_var["label"]}')
-    max_label_width = 20
-    ax.set_xticklabels(
-        [
-            wrap_at_space(label.get_text(), max_label_width)
-            for label in ax.get_xticklabels()
-        ]
-    )
-    plt.setp(ax.get_xticklabels(), rotation=45)
-    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
-    # Show the plot
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
-    plt.tight_layout()
-    plt.show()
-
-
-plot_violin_categorical(
-    df_filt_q_2,
-    var_dict["veg_class"],
-    var_dict["q_q"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-)
 
 # %%
 ############################################################################
@@ -586,8 +615,12 @@ def plot_loss_func(df, z_var, cmap):
         )
 
     ax.invert_yaxis()
-    ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
-    ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    ax.set_xlabel(
+        f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
+    )
+    ax.set_ylabel(
+        f"{var_dict['dtheta']['label']}\n{var_dict['theta']['symbol']} {var_dict['dtheta']['unit']}"
+    )
     ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
     # ax.set_xlim(var_dict['theta']['lim'][0],var_dict['theta']['lim'][1])
     # ax.set_ylim(var_dict['dtheta']['lim'][1],var_dict['dtheta']['lim'][0])
@@ -637,8 +670,12 @@ def plot_loss_func_categorical(df, z_var, categories, colors):
         ax.plot(theta, dtheta, label=category, color=colors[i])
 
     ax.invert_yaxis()
-    ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
-    ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    ax.set_xlabel(
+        f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
+    )
+    ax.set_ylabel(
+        f"{var_dict['dtheta']['label']}\n{var_dict['theta']['symbol']} {var_dict['dtheta']['unit']}"
+    )
     ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
 
     # Adjust the layout so the subplots fit into the figure area
@@ -671,7 +708,7 @@ count_veg_samples[["id_x", "name"]].groupby("name").count()
 ###########################################################################
 
 
-def plot_scatter_with_errorbar(
+def plot_scatter_with_errorbar_categorical(
     df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale
 ):
     fig, ax = plt.subplots(figsize=(5, 5))
@@ -723,7 +760,7 @@ def plot_scatter_with_errorbar(
     # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Median scatter plot with {quantile}% confidence interval")
+    plt.title(f"Median with {quantile}% confidence interval")
 
     # Add a legend
     plt.legend(bbox_to_anchor=(1, 1))
@@ -737,7 +774,7 @@ def plot_scatter_with_errorbar(
 
 
 # %% q vs. k per vegetation
-plot_scatter_with_errorbar(
+plot_scatter_with_errorbar_categorical(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
     y_var=var_dict["q_q"],
@@ -749,7 +786,7 @@ plot_scatter_with_errorbar(
 )
 
 # %% q vs. s* per vegetation
-plot_scatter_with_errorbar(
+plot_scatter_with_errorbar_categorical(
     df=df_filt_q_2,
     x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
@@ -761,7 +798,7 @@ plot_scatter_with_errorbar(
 )
 
 # %% ETmax vs .s* per vegetation
-plot_scatter_with_errorbar(
+plot_scatter_with_errorbar_categorical(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
     y_var=var_dict["theta_star"],
@@ -773,193 +810,90 @@ plot_scatter_with_errorbar(
 )
 
 
-# %% Density plot
-def plot_2d_density(
-    df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale
-):
+# %%
+def plot_scatter_with_errorbar(df, x_var, y_var, z_var, cmap, quantile, plot_logscale):
     fig, ax = plt.subplots(figsize=(5, 5))
-    kde_objects = []
-
-    # Calculate and plot density for each category
-    for i, category in enumerate(categories):
-        subset = df[df[z_var["column_name"]] == category]
-        x_data = subset[x_var["column_name"]]
-        y_data = subset[y_var["column_name"]]
-
-        # Calculate KDE
-        kde = gaussian_kde([x_data, y_data])
-        xmin, xmax = x_var["lim"]
-        ymin, ymax = y_var["lim"]
-        xi, yi = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-        zi = kde(np.vstack([xi.flatten(), yi.flatten()]))
-
-        # Find contour levels to fill between for middle 30%
-        levels = np.linspace(zi.min(), zi.max(), 100)
-        middle_levels = np.quantile(levels, [quantile / 100, 1.0])
-
-        # Plot KDE and fill relevant contours
-        # ax.contour(xi, yi, zi.reshape(xi.shape), levels=10, colors="white")
-        ax.contourf(
-            xi,
-            yi,
-            zi.reshape(xi.shape),
-            levels=middle_levels,
-            colors=colors[i],
-            alpha=0.5,
-            label=category,
-        )
-
-    # Add labels and title
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Density > {quantile} percentile")
-
-    # Set axis scales and limits
-    if plot_logscale:
-        ax.set_xscale("log")
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-    plt.legend(bbox_to_anchor=(1, 1))
-    legend = plt.legend(bbox_to_anchor=(1, 1))
-    for text in legend.get_texts():
-        label = text.get_text()
-        wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
-        text.set_text(wrapped_label)
-    # Show the plot
-    plt.show()
-
-
-# %%
-plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-# %%
-plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-
-plot_2d_density(
-    df=df_filt_q_2[df_filt_q_2["q_q"] > 0.1],
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-# %%
-plot_2d_density(
-    df=df_filt_q_2,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=90,
-    plot_logscale=False,
-)
-
-
-# %%
-def plot_pdf(df, x_var, z_var, cmap):
-    fig, ax = plt.subplots(figsize=(4, 4))
+    stats_dict = {}
 
     # Get unique bins
     bins_in_range = df[z_var["column_name"]].unique()
     bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
     bin_sorted = sorted(bins_list, key=lambda x: x.left)
-
-    # For each row in the subset, calculate the loss for a range of theta values
+    colors = plt.cm.get_cmap(cmap, len(bin_sorted))
+    # Calculate median and 90% confidence intervals for each vegetation class
     for i, category in enumerate(bin_sorted):
         subset = df[df[z_var["column_name"]] == category]
 
-        sns.kdeplot(
-            subset[x_var["column_name"]],
-            label=category,
-            bw_adjust=0.5,
-            color=plt.get_cmap(cmap)(i / len(bins_list)),
-            cut=0,
-            ax=ax,
+        # Median calculation
+        x_median = subset[x_var["column_name"]].median()
+        y_median = subset[y_var["column_name"]].median()
+
+        # 90% CI calculation, using the 5th and 95th percentiles
+        x_ci_low, x_ci_high = np.percentile(
+            subset[x_var["column_name"]], [quantile, 100 - quantile]
+        )
+        y_ci_low, y_ci_high = np.percentile(
+            subset[y_var["column_name"]], [quantile, 100 - quantile]
         )
 
-    # Set titles and labels
-    plt.title(f"Kernel Density Estimation by {z_var['label']}")
+        color_val = colors(i / (len(bin_sorted) - 1))
+        # Store in dict
+        stats_dict[category] = {
+            "x_median": x_median,
+            "y_median": y_median,
+            "x_ci": (x_median - x_ci_low, x_ci_high - x_median),
+            "y_ci": (y_median - y_ci_low, y_ci_high - y_median),
+            "color": color_val,
+        }
+
+    # Now plot medians with CIs
+    for category, stats in stats_dict.items():
+        plt.errorbar(
+            stats["x_median"],
+            stats["y_median"],
+            xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
+            yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
+            fmt="o",
+            label=str(category),
+            capsize=5,
+            capthick=2,
+            color=stats["color"],
+            alpha=0.7,
+            markersize=10,
+            mec="darkgray",
+            mew=1,
+        )
+
+    # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    plt.ylabel("Density [-]")
+    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+    plt.title(f"Median with {quantile}% confidence interval")
 
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
-
-    # Show the legend
-    plt.legend()
+    # Add a legend
+    plt.legend(bbox_to_anchor=(1, 1.5))
+    if plot_logscale:
+        plt.xscale("log")
+    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
 
     # Show the plot
     plt.show()
-
-
-# %% sand
-plot_pdf(
-    df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
-)
-
-# %% aridity index
-plot_pdf(df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap)
+    plt.tight_layout()
 
 
 # %%
-def plot_pdf_categorical(df, x_var, z_var, categories, colors):
-    fig, ax = plt.subplots(figsize=(5, 5))
-    for i, category in enumerate(categories):
-        subset = df[df[z_var["column_name"]] == category]
-        sns.kdeplot(
-            subset[x_var["column_name"]],
-            label=category,
-            bw_adjust=0.5,
-            color=colors[i],
-            cut=0,
-            ax=ax,
-        )
-    # Set titles and labels
-    plt.title(f"Kernel Density Estimation by {z_var['label']}")
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    plt.ylabel("Density [-]")
-
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
-
-    # Show the legend
-    plt.legend()
-
-    # Show the plot
-    plt.show()
-
-
-# %%
-plot_pdf_categorical(
+plot_scatter_with_errorbar(
     df=df_filt_q_2,
-    x_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
+    x_var=var_dict["q_ETmax"],
+    y_var=var_dict["theta_star"],
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap,
+    quantile=33,
+    plot_logscale=True,
 )
+
 
 # %% Histogram with mean and median
-
-from scipy.signal import find_peaks
-import statistics
 
 
 def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
@@ -1021,14 +955,6 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
             label="mode",
         )
 
-        # # Detect and plot modes
-        # data = subset[x_var["column_name"]]
-        # kde = sns.kdeplot(data, bw_adjust=0.1, cut=0).get_lines()[0].get_data()
-        # kde.clf()  # Clear the KDE plot
-        # peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
-        # for mode in peaks[0]:
-        #     ax.axvline(mode, color=colors[i], linestyle=":", lw=2, label="mode")
-
         # Set titles and labels for each subplot
         ax.set_title(f"{z_var['label']}: {category}")
         ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
@@ -1043,135 +969,420 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
 
 # %%
 plot_histograms_with_mean_median(
-    df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
+    df=df_filt_q_2,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
-# %%
-
-
-def calc_peak_kde_value(data):
-    kde = gaussian_kde(data)
-
-    # Creating a range of values to evaluate the KDE
-    kde_values = np.linspace(0, max(data), 1000)
-
-    kde.set_bandwidth(bw_method=kde.factor / 3.0)
-
-    # Evaluating the KDE
-    kde_evaluated = kde(kde_values)
-
-    # Finding the peak of the KDE
-    peak_kde_value = kde_values[np.argmax(kde_evaluated)]
-
-    return peak_kde_value
-
-
-def plot_scatter_with_errorbar_mode(
-    df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale
-):
-    fig, ax = plt.subplots(figsize=(5, 5))
-    stats_dict = {}
-
-    # Calculate median and 90% confidence intervals for each vegetation class
-    for i, category in enumerate(categories):
-        subset = df[df[z_var["column_name"]] == category]
-
-        # Median calculation
-        # Creating a KDE (Kernel Density Estimation) of the data
-        x_mode = calc_peak_kde_value(subset[x_var["column_name"]])
-        y_mode = calc_peak_kde_value(subset[y_var["column_name"]])
-
-        # 90% CI calculation, using the 5th and 95th percentiles
-        x_ci_low, x_ci_high = np.percentile(
-            subset[x_var["column_name"]], [quantile, 100 - quantile]
-        )
-        y_ci_low, y_ci_high = np.percentile(
-            subset[y_var["column_name"]], [quantile, 100 - quantile]
-        )
-
-        x_ci_error = (max(x_mode - x_ci_low, 0), max(x_ci_high - x_mode, 0))
-        y_ci_error = (max(y_mode - y_ci_low, 0), max(y_ci_high - y_mode, 0))
-
-        # Store in dict
-        stats_dict[category] = {
-            "x_mode": x_mode,
-            "y_mode": y_mode,
-            "x_ci": x_ci_error,
-            "y_ci": y_ci_error,
-            "color": colors[i],
-        }
-
-    # Now plot medians with CIs
-    for category, stats in stats_dict.items():
-        plt.errorbar(
-            stats["x_mode"],
-            stats["y_mode"],
-            xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
-            yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
-            fmt="o",
-            label=category,
-            capsize=5,
-            capthick=2,
-            color=stats["color"],
-            alpha=0.7,
-            markersize=10,
-            mec="darkgray",
-            mew=1,
-        )
-
-    # Add labels and title
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Scatter plot of modes with top {100-quantile*2}% confidence interval")
-
-    # Add a legend
-    plt.legend(bbox_to_anchor=(1, 1))
-    if plot_logscale:
-        plt.xscale("log")
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-
-    # Show the plot
-    plt.show()
-
 
 # %%
-plot_scatter_with_errorbar_mode(
-    df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=40,
-    plot_logscale=True,
-)
 
-# %% q vs. s* per vegetation
-plot_scatter_with_errorbar_mode(
-    df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=40,
-    plot_logscale=False,
-)
 
-# %% ETmax vs .s* per vegetation
-plot_scatter_with_errorbar_mode(
-    df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=40,
-    plot_logscale=True,
-)
+# def calc_peak_kde_value(data):
+#     kde = gaussian_kde(data)
+
+#     # Creating a range of values to evaluate the KDE
+#     kde_values = np.linspace(0, max(data), 1000)
+
+#     kde.set_bandwidth(bw_method=kde.factor / 3.0)
+
+#     # Evaluating the KDE
+#     kde_evaluated = kde(kde_values)
+
+#     # Finding the peak of the KDE
+#     peak_kde_value = kde_values[np.argmax(kde_evaluated)]
+
+#     return peak_kde_value
+
+
+# def plot_scatter_with_errorbar_categorical_mode(
+#     df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale
+# ):
+#     fig, ax = plt.subplots(figsize=(5, 5))
+#     stats_dict = {}
+
+#     # Calculate median and 90% confidence intervals for each vegetation class
+#     for i, category in enumerate(categories):
+#         subset = df[df[z_var["column_name"]] == category]
+
+#         # Median calculation
+#         # Creating a KDE (Kernel Density Estimation) of the data
+#         x_mode = calc_peak_kde_value(subset[x_var["column_name"]])
+#         y_mode = calc_peak_kde_value(subset[y_var["column_name"]])
+
+#         # 90% CI calculation, using the 5th and 95th percentiles
+#         x_ci_low, x_ci_high = np.percentile(
+#             subset[x_var["column_name"]], [quantile, 100 - quantile]
+#         )
+#         y_ci_low, y_ci_high = np.percentile(
+#             subset[y_var["column_name"]], [quantile, 100 - quantile]
+#         )
+
+#         x_ci_error = (max(x_mode - x_ci_low, 0), max(x_ci_high - x_mode, 0))
+#         y_ci_error = (max(y_mode - y_ci_low, 0), max(y_ci_high - y_mode, 0))
+
+#         # Store in dict
+#         stats_dict[category] = {
+#             "x_mode": x_mode,
+#             "y_mode": y_mode,
+#             "x_ci": x_ci_error,
+#             "y_ci": y_ci_error,
+#             "color": colors[i],
+#         }
+
+#     # Now plot medians with CIs
+#     for category, stats in stats_dict.items():
+#         plt.errorbar(
+#             stats["x_mode"],
+#             stats["y_mode"],
+#             xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
+#             yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
+#             fmt="o",
+#             label=category,
+#             capsize=5,
+#             capthick=2,
+#             color=stats["color"],
+#             alpha=0.7,
+#             markersize=10,
+#             mec="darkgray",
+#             mew=1,
+#         )
+
+#     # Add labels and title
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+#     plt.title(f"Scatter plot of modes with top {100-quantile*2}% confidence interval")
+
+#     # Add a legend
+#     plt.legend(bbox_to_anchor=(1, 1))
+#     if plot_logscale:
+#         plt.xscale("log")
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+#     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+
+#     # Show the plot
+#     plt.show()
+
+
+# # %%
+# plot_scatter_with_errorbar_categorical_mode(
+#     df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
+#     x_var=var_dict["q_ETmax"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=40,
+#     plot_logscale=True,
+# )
+
+# # %% q vs. s* per vegetation
+# plot_scatter_with_errorbar_categorical_mode(
+#     df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
+#     x_var=var_dict["theta_star"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=40,
+#     plot_logscale=False,
+# )
+
+# # %% ETmax vs .s* per vegetation
+# plot_scatter_with_errorbar_categorical_mode(
+#     df=df_filt_q_2[df_filt_q_2["q_q"] >= 0.1],
+#     x_var=var_dict["q_ETmax"],
+#     y_var=var_dict["theta_star"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=40,
+#     plot_logscale=True,
+# )
+
+# # %%
+# small_q = df_filt_q_2[(df_filt_q_2["q_q"] < 0.1)].copy()
+# large_q = df_filt_q_2[(df_filt_q_2["q_q"] > 0.1)].copy()
+# # %%
+
+# # Plotting both histograms on the same plot without fill
+# plt.hist(
+#     small_q["n_days"],
+#     bins=np.arange(4, 30, 1),
+#     alpha=0.7,
+#     edgecolor="blue",
+#     linewidth=1.5,
+#     fill=False,
+#     label="Small Q",
+# )
+# plt.hist(
+#     large_q["n_days"],
+#     bins=np.arange(4, 30, 1),
+#     alpha=0.7,
+#     edgecolor="green",
+#     linewidth=1.5,
+#     fill=False,
+#     label="Large Q",
+# )
+
+# # Adding labels and legend
+# plt.ylabel("Frequency")
+# plt.title("Histogram of number of observation days")
+# plt.legend()
+
+
+# %%
+# # %% Density plot
+# def plot_2d_density(
+#     df,
+#     x_var,
+#     y_var,
+#     z_var,
+#     categories,
+#     colors,
+#     quantile,
+#     plot_logscale_x=False,
+#     plot_logscale_y=False,
+# ):
+#     fig, ax = plt.subplots(figsize=(5, 5))
+#     kde_objects = []
+
+#     # Calculate and plot density for each category
+#     for i, category in enumerate(categories):
+#         subset = df[df[z_var["column_name"]] == category]
+#         x_data = subset[x_var["column_name"]]
+#         y_data = subset[y_var["column_name"]]
+
+#         # Calculate KDE
+#         kde = gaussian_kde([x_data, y_data])
+#         kde.set_bandwidth(bw_method=kde.factor / 5)
+#         xmin, xmax = x_var["lim"]
+#         ymin, ymax = y_var["lim"]
+#         xi, yi = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+#         zi = kde(np.vstack([xi.flatten(), yi.flatten()]))
+
+#         # Find contour levels to fill between for middle 30%
+#         levels = np.linspace(zi.min(), zi.max(), 100)
+#         middle_levels = np.quantile(levels, [quantile / 100, 1.0])
+
+#         # Plot KDE and fill relevant contours
+#         # ax.contour(xi, yi, zi.reshape(xi.shape), levels=10, colors="white")
+#         ax.contourf(
+#             xi,
+#             yi,
+#             zi.reshape(xi.shape),
+#             levels=middle_levels,
+#             colors=colors[i],
+#             alpha=0.5,
+#             label=category,
+#         )
+
+#     # Add labels and title
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+#     plt.title(f"Density > {quantile} percentile")
+
+#     # Set axis scales and limits
+#     if plot_logscale_x:
+#         ax.set_xscale("log")
+#     if plot_logscale_y:
+#         ax.set_yscale("log")
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+#     ax.set_ylim(5e-2, 2)  # (y_var["lim"][0], y_var["lim"][1])
+#     plt.legend(bbox_to_anchor=(1, 1))
+#     legend = plt.legend(bbox_to_anchor=(1, 1))
+#     for text in legend.get_texts():
+#         label = text.get_text()
+#         wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
+#         text.set_text(wrapped_label)
+#     # Show the plot
+#     plt.show()
+
+
+# # %%
+# plot_2d_density(
+#     df=df_filt_q_2,
+#     x_var=var_dict["theta_star"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=70,
+#     plot_logscale_y=True,
+# )
+# # %%
+# plot_2d_density(
+#     df=df_filt_q_2[df_filt_q_2["q_q"] > 0.1],
+#     x_var=var_dict["theta_star"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=90,
+#     plot_logscale=False,
+# )
+
+# # %%
+# plot_2d_density(
+#     df=df_filt_q_2,
+#     x_var=var_dict["q_ETmax"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=90,
+#     plot_logscale=False,
+# )
+
+# # %%
+# plot_2d_density(
+#     df=df_filt_q_2,
+#     x_var=var_dict["q_ETmax"],
+#     y_var=var_dict["theta_star"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     quantile=90,
+#     plot_logscale=False,
+# # )
+
+# # %%
+# x = df_filt_q_2["n_days"].values
+# y = df_filt_q_2["q_q"].values
+
+# fig, ax = plt.subplots()
+# img = using_datashader(ax, x, y, "viridis")
+# ax.set_xlim(0, 25)
+# # Colorbar
+
+
+# plt.xlabel("Number of drydown days")
+# plt.ylabel("q")
+# plt.show()
+# # ax.set_xlim(0,25)
+# # %%
+
+# %%
+# def plot_violin_categorical(df, x_var, y_var, categories, colors):
+#     fig, ax = plt.subplots(figsize=(8, 4))
+#     for i, category in enumerate(categories):
+#         subset = df[df[x_var["column_name"]] == category]
+#         sns.violinplot(
+#             x=x_var["column_name"],
+#             y=y_var["column_name"],
+#             data=subset,
+#             order=[category],
+#             color=colors[i],
+#             ax=ax,
+#             alpha=0.75,
+#             cut=0,
+#         )
+
+#     # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
+#     ax.set_xlabel(f'{x_var["label"]}')
+#     max_label_width = 20
+#     ax.set_xticklabels(
+#         [
+#             wrap_at_space(label.get_text(), max_label_width)
+#             for label in ax.get_xticklabels()
+#         ]
+#     )
+#     plt.setp(ax.get_xticklabels(), rotation=45)
+#     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+#     # Show the plot
+#     ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
+#     plt.tight_layout()
+#     plt.show()
+
+
+# plot_violin_categorical(
+#     df_filt_q_2,
+#     var_dict["veg_class"],
+#     var_dict["q_q"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+# )
+
+# # %%
+# def plot_pdf(df, x_var, z_var, cmap):
+#     fig, ax = plt.subplots(figsize=(4, 4))
+
+#     # Get unique bins
+#     bins_in_range = df[z_var["column_name"]].unique()
+#     bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
+#     bin_sorted = sorted(bins_list, key=lambda x: x.left)
+
+#     # For each row in the subset, calculate the loss for a range of theta values
+#     for i, category in enumerate(bin_sorted):
+#         subset = df[df[z_var["column_name"]] == category]
+
+#         sns.kdeplot(
+#             subset[x_var["column_name"]],
+#             label=category,
+#             bw_adjust=0.5,
+#             color=plt.get_cmap(cmap)(i / len(bins_list)),
+#             cut=0,
+#             ax=ax,
+#         )
+
+#     # Set titles and labels
+#     plt.title(f"Kernel Density Estimation by {z_var['label']}")
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     plt.ylabel("Density [-]")
+
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+
+#     # Show the legend
+#     plt.legend()
+
+#     # Show the plot
+#     plt.show()
+
+
+# # %% sand
+# plot_pdf(
+#     df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
+# )
+
+# # %% aridity index
+# plot_pdf(df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap)
+
+
+# # %%
+# def plot_pdf_categorical(df, x_var, z_var, categories, colors):
+#     fig, ax = plt.subplots(figsize=(5, 5))
+#     for i, category in enumerate(categories):
+#         subset = df[df[z_var["column_name"]] == category]
+#         sns.kdeplot(
+#             subset[x_var["column_name"]],
+#             label=category,
+#             bw_adjust=0.5,
+#             color=colors[i],
+#             cut=0,
+#             ax=ax,
+#         )
+#     # Set titles and labels
+#     plt.title(f"Kernel Density Estimation by {z_var['label']}")
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     plt.ylabel("Density [-]")
+
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+
+#     # Show the legend
+#     plt.legend()
+
+#     # Show the plot
+#     plt.show()
+
+
+# # %%
+# plot_pdf_categorical(
+#     df=df_filt_q_2,
+#     x_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+# )
 
 # %%
