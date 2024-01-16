@@ -156,4 +156,18 @@ ax2.set_yticks([])
 fig.tight_layout()
 
 
+# %% Output
+
+out_path = (
+    r"/home/raraki/waves/projects/smap-drydown/output/raraki_2023-11-25_global_95asmax"
+)
+out_dir = os.path.join(out_path, "figs")
+
+if not os.path.exists(out_dir):
+    os.mkdir(out_dir)
+    print(f"Created dir: {out_dir}")
+
+
+# %%
+fig.savefig(os.path.join(out_dir, f"theory.pdf"), dpi=600, bbox_inches="tight")
 # %%

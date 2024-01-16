@@ -170,6 +170,13 @@ print("Loaded ancillary information (land-cover)")
 
 print(f"Total number of drydown event: {len(df)}")
 
+# %% Create output directory
+fig_dir = os.path.join(output_dir, dir_name, "figs")
+if not os.path.exists(fig_dir):
+    os.mkdir(fig_dir)
+    print(f"Created dir: {fig_dir}")
+else:
+    print(f"Already exists: {fig_dir}")
 # %% Get some stats
 
 # Difference between R2 values of two models
@@ -267,7 +274,6 @@ df_filt_q = df[
 
 
 df_filt_q_2 = df_filt_q[(df_filt_q["sm_range"] > sm_range_thresh)].copy()
-
 
 
 print(f"q model fit was successful: {len(df_filt_q)}")
@@ -372,6 +378,9 @@ def plot_R2_models(df, R2_threshold, cmap):
     ax.set_ylim([R2_threshold, 1])
     ax.set_title(r"$R^2$ comparison")
 
+    fig.savefig(os.path.join(fig_dir, f"R2_scatter.png"), dpi=600, bbox_inches="tight")
+    # return fig, ax
+
 
 # plot_R2_models(df=df, R2_threshold=0.0)
 
@@ -379,6 +388,7 @@ def plot_R2_models(df, R2_threshold, cmap):
 plot_R2_models(
     df=df_filt_q_and_exp_2, R2_threshold=success_modelfit_thresh, cmap="viridis"
 )
+# fig_R2.savefig(os.path.join(fig_dir, f"R2_scatter.pdf"), dpi=600, bbox_inches='tight')
 
 
 # %%
@@ -445,52 +455,59 @@ def plot_map(df, coord_info, cmap, norm, var_item):
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
 
+    return fig
+
 
 # %% Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
 var_key = "q_q"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-plot_map(
+fig_map_q = plot_map(
     df=df_filt_q_2,
     coord_info=coord_info,
     cmap="YlGnBu",
     norm=norm,
     var_item=var_dict[var_key],
 )
+fig_map_q.savefig(os.path.join(fig_dir, f"q_map.png"), dpi=600, bbox_inches="tight")
+# fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
 
 # %% Map of R2 values
 # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
 var_key = "diff_R2"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-plot_map(
+fig_map_R2 = plot_map(
     df=df_filt_q_and_exp_2,
     coord_info=coord_info,
     cmap="RdBu",
     norm=norm,
     var_item=var_dict[var_key],
 )
+fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map.png"), dpi=600, bbox_inches="tight")
 
 
 # %%
 def plot_hist(df, var_key):
     plt.rcParams.update({"font.size": 30})
-    plt.figure(figsize=(5.5, 5))
+    fig, ax = plt.subplots(figsize=(5.5, 5))
 
     # Create the histogram with a bin width of 1
-    sns.histplot(df[var_key], binwidth=1, color="#2c7fb8", fill=False, linewidth=3)
+    sns.histplot(
+        df[var_key], binwidth=1, color="#2c7fb8", fill=False, linewidth=3, ax=ax
+    )
 
     # Setting the x limit
-    plt.xlim(0, 10)
+    ax.set_xlim(0, 10)
 
     # Adding title and labels
-    plt.title("Histogram of $q$ values")
-    plt.xlabel(r"$q$ [-]")
-    plt.ylabel("Frequency")
+    ax.set_title("Histogram of $q$ values")
+    ax.set_xlabel(r"$q$ [-]")
+    ax.set_ylabel("Frequency")
 
-    # Display the plot
-    plt.show()
+    return fig, ax
 
 
-plot_hist(df=df_filt_q_2, var_key="q_q")
+fig_q_hist, _ = plot_hist(df=df_filt_q_2, var_key="q_q")
+fig_q_hist.savefig(os.path.join(fig_dir, f"q_hist.png"), dpi=600, bbox_inches="tight")
 
 # %%
 ############################################################################
@@ -500,25 +517,33 @@ plot_hist(df=df_filt_q_2, var_key="q_q")
 
 def plot_boxplots(df, x_var, y_var):
     plt.rcParams.update({"font.size": 12})
-    plt.figure(figsize=(6, 4))
-    ax = sns.boxplot(
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    sns.boxplot(
         x=x_var["column_name"],
         y=y_var["column_name"],
         data=df,
         boxprops=dict(facecolor="lightgray"),
+        ax=ax,
     )
-    plt.setp(ax.get_xticklabels(), rotation=45)
+
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
     ax.set_xlabel(f'{x_var["label"]} {x_var["unit"]}')
     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
     ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 5)
-    plt.tight_layout()
+    fig.tight_layout()
+
+    return fig, ax
 
 
 # %% sand
-plot_boxplots(df_filt_q_2, var_dict["sand_bins"], var_dict["q_q"])
-
+fig_box_sand, _ = plot_boxplots(df_filt_q_2, var_dict["sand_bins"], var_dict["q_q"])
+fig_box_sand.savefig(
+    os.path.join(fig_dir, f"box_sand.png"), dpi=600, bbox_inches="tight"
+)
 # %% Aridity index
-plot_boxplots(df_filt_q_2, var_dict["ai_bins"], var_dict["q_q"])
+fig_box_ai, _ = plot_boxplots(df_filt_q_2, var_dict["ai_bins"], var_dict["q_q"])
+fig_box_ai.savefig(os.path.join(fig_dir, f"box_ai.png"), dpi=600, bbox_inches="tight")
 
 
 # %% Vegatation
@@ -561,20 +586,22 @@ def plot_boxplots_categorical(df, x_var, y_var, categories, colors):
     plt.setp(ax.get_xticklabels(), rotation=45)
     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
     # Show the plot
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 3)
     plt.tight_layout()
     plt.show()
 
+    return fig, ax
+
 
 # %%
-plot_boxplots_categorical(
+fig_box_veg, _ = plot_boxplots_categorical(
     df_filt_q_2,
     var_dict["veg_class"],
     var_dict["q_q"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
-
+fig_box_veg.savefig(os.path.join(fig_dir, f"box_veg.png"), dpi=600, bbox_inches="tight")
 
 # %%
 ############################################################################
@@ -583,7 +610,8 @@ plot_boxplots_categorical(
 
 
 def plot_loss_func(df, z_var, cmap):
-    fig, ax = plt.subplots(figsize=(4, 4))
+    plt.rcParams.update({"font.size": 12})
+    fig, ax = plt.subplots(figsize=(5.8, 4))
 
     # Get unique bins
     bins_in_range = df[z_var["column_name"]].unique()
@@ -625,20 +653,36 @@ def plot_loss_func(df, z_var, cmap):
     # ax.set_xlim(var_dict['theta']['lim'][0],var_dict['theta']['lim'][1])
     # ax.set_ylim(var_dict['dtheta']['lim'][1],var_dict['dtheta']['lim'][0])
 
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.05, 1),
+        title=f'{z_var["label"]}\n{z_var["unit"]}',
+    )
+
     # Adjust the layout so the subplots fit into the figure area
-    plt.tight_layout()
+    fig.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust
+
+    # Adjust the layout so the subplots fit into the figure area
+    fig.tight_layout()
     # Add a legend
-    plt.legend(bbox_to_anchor=(1, 1))
-    # Show the plot
-    plt.show()
+    # fig.legend(bbox_to_anchor=(1, 1))
+
+    return fig, ax
 
 
 # %% Sand
-plot_loss_func(df_filt_q_2, var_dict["sand_bins"], sand_cmap)
+fig_lossfnc_sand, _ = plot_loss_func(df_filt_q_2, var_dict["sand_bins"], sand_cmap)
+fig_lossfnc_sand.savefig(
+    os.path.join(fig_dir, f"lossfunc_sand.png"), dpi=600, bbox_inches="tight"
+)
+
 df_filt_q_and_exp_2[["id_x", "sand_bins"]].groupby("sand_bins").count()
 
 # %% Aridity index
-plot_loss_func(df_filt_q_2, var_dict["ai_bins"], ai_cmap)
+fig_lossfnc_ai, _ = plot_loss_func(df_filt_q_2, var_dict["ai_bins"], ai_cmap)
+fig_lossfnc_ai.savefig(
+    os.path.join(fig_dir, f"lossfunc_ai.png"), dpi=600, bbox_inches="tight"
+)
 df_filt_q_and_exp_2[["id_x", "ai_bins"]].groupby("ai_bins").count()
 
 
@@ -648,7 +692,7 @@ def wrap_text(text, width):
 
 
 def plot_loss_func_categorical(df, z_var, categories, colors):
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(4.2, 4))
 
     # For each row in the subset, calculate the loss for a range of theta values
     for i, category in enumerate(categories):
@@ -687,15 +731,18 @@ def plot_loss_func_categorical(df, z_var, categories, colors):
         label = text.get_text()
         wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
         text.set_text(wrapped_label)
-    # Show the plot
-    plt.show()
+
+    return fig, ax
 
 
-plot_loss_func_categorical(
+fig_lossfnc_veg, _ = plot_loss_func_categorical(
     df_filt_q_2,
     var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
+)
+fig_lossfnc_veg.savefig(
+    os.path.join(fig_dir, f"lossfunc_veg.png"), dpi=600, bbox_inches="tight"
 )
 # %%
 count_veg_samples = df[df.name.isin(vegetation_color_dict.keys())]
@@ -770,11 +817,11 @@ def plot_scatter_with_errorbar_categorical(
     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
 
     # Show the plot
-    plt.show()
+    return fig, ax
 
 
 # %% q vs. k per vegetation
-plot_scatter_with_errorbar_categorical(
+fig_et_vs_q, _ = plot_scatter_with_errorbar_categorical(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
     y_var=var_dict["q_q"],
@@ -784,9 +831,12 @@ plot_scatter_with_errorbar_categorical(
     quantile=33,
     plot_logscale=True,
 )
+fig_et_vs_q.savefig(
+    os.path.join(fig_dir, f"et_vs_q_veg.png"), dpi=600, bbox_inches="tight"
+)
 
 # %% q vs. s* per vegetation
-plot_scatter_with_errorbar_categorical(
+fig_thetastar_vs_q, _ = plot_scatter_with_errorbar_categorical(
     df=df_filt_q_2,
     x_var=var_dict["theta_star"],
     y_var=var_dict["q_q"],
@@ -797,8 +847,13 @@ plot_scatter_with_errorbar_categorical(
     plot_logscale=False,
 )
 
+fig_thetastar_vs_q.savefig(
+    os.path.join(fig_dir, f"thetastar_vs_q_veg.png"), dpi=600, bbox_inches="tight"
+)
+
+
 # %% ETmax vs .s* per vegetation
-plot_scatter_with_errorbar_categorical(
+fig_thetastar_vs_et, _ = plot_scatter_with_errorbar_categorical(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
     y_var=var_dict["theta_star"],
@@ -807,6 +862,9 @@ plot_scatter_with_errorbar_categorical(
     colors=list(vegetation_color_dict.values()),
     quantile=33,
     plot_logscale=True,
+)
+fig_thetastar_vs_et.savefig(
+    os.path.join(fig_dir, f"thetastar_vs_et_veg.png"), dpi=600, bbox_inches="tight"
 )
 
 
@@ -880,9 +938,11 @@ def plot_scatter_with_errorbar(df, x_var, y_var, z_var, cmap, quantile, plot_log
     plt.show()
     plt.tight_layout()
 
+    return fig, ax
+
 
 # %%
-plot_scatter_with_errorbar(
+fig_thetastar_vs_et_ai, _ = plot_scatter_with_errorbar(
     df=df_filt_q_2,
     x_var=var_dict["q_ETmax"],
     y_var=var_dict["theta_star"],
@@ -890,6 +950,10 @@ plot_scatter_with_errorbar(
     cmap=ai_cmap,
     quantile=33,
     plot_logscale=True,
+)
+
+fig_thetastar_vs_et_ai.savefig(
+    os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
 )
 
 
@@ -966,15 +1030,23 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
     plt.tight_layout()  # Adjust layout to prevent overlap
     plt.show()
 
+    return fig, ax
+
 
 # %%
-plot_histograms_with_mean_median(
+
+fig_hist_q_veg, _ = plot_histograms_with_mean_median(
     df=df_filt_q_2,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
+
+fig_hist_q_veg.savefig(
+    os.path.join(fig_dir, f"hist_q_veg.png"), dpi=600, bbox_inches="tight"
+)
+
 
 # %%
 
