@@ -60,14 +60,14 @@ var_dict = {
     "theta": {
         "column_name": "sm",
         "symbol": r"$\theta$",
-        "label": r"SMAP soil moisture $\theta$",
+        "label": r"SMAP soil moisture",
         "unit": r"$[m^3/m^3]$",
         "lim": [0, 0.50],
     },
     "dtheta": {
         "column_name": "",
         "symbol": r"$-d\theta/dt$",
-        "label": r"Change in soil moisture $-d\theta/dt$",
+        "label": r"Change in soil moisture",
         "unit": r"$[m^3/m^3/day]$",
         "lim": [-0.10, 0],
     },
@@ -377,6 +377,7 @@ plot_R2_models(
 # Map plots
 ###########################################################################
 def plot_map(df, coord_info, cmap, norm, var_item):
+    plt.rcParams.update({"font.size": 12})
     # Get the mean values of the variable
     stat = df.groupby(["EASE_row_index", "EASE_column_index"])[
         var_item["column_name"]
@@ -462,6 +463,7 @@ plot_map(
 
 # %%
 def plot_hist(df, var_key):
+    plt.rcParams.update({"font.size": 30})
     plt.figure(figsize=(5.5, 5))
 
     # Create the histogram with a bin width of 1
@@ -488,6 +490,7 @@ plot_hist(df=df_filt_q_2, var_key="q_q")
 
 
 def plot_boxplots(df, x_var, y_var):
+    plt.rcParams.update({"font.size": 12})
     plt.figure(figsize=(6, 4))
     ax = sns.boxplot(
         x=x_var["column_name"],
@@ -563,48 +566,6 @@ plot_boxplots_categorical(
     colors=list(vegetation_color_dict.values()),
 )
 
-# %%
-
-
-def plot_violin_categorical(df, x_var, y_var, categories, colors):
-    fig, ax = plt.subplots(figsize=(8, 4))
-    for i, category in enumerate(categories):
-        subset = df[df[x_var["column_name"]] == category]
-        sns.violinplot(
-            x=x_var["column_name"],
-            y=y_var["column_name"],
-            data=subset,
-            order=[category],
-            color=colors[i],
-            ax=ax,
-            alpha=0.75,
-            cut=0,
-        )
-
-    # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
-    ax.set_xlabel(f'{x_var["label"]}')
-    max_label_width = 20
-    ax.set_xticklabels(
-        [
-            wrap_at_space(label.get_text(), max_label_width)
-            for label in ax.get_xticklabels()
-        ]
-    )
-    plt.setp(ax.get_xticklabels(), rotation=45)
-    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
-    # Show the plot
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
-    plt.tight_layout()
-    plt.show()
-
-
-plot_violin_categorical(
-    df_filt_q_2,
-    var_dict["veg_class"],
-    var_dict["q_q"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-)
 
 # %%
 ############################################################################
@@ -645,8 +606,12 @@ def plot_loss_func(df, z_var, cmap):
         )
 
     ax.invert_yaxis()
-    ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
-    ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    ax.set_xlabel(
+        f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
+    )
+    ax.set_ylabel(
+        f"{var_dict['dtheta']['label']}\n{var_dict['theta']['symbol']} {var_dict['dtheta']['unit']}"
+    )
     ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
     # ax.set_xlim(var_dict['theta']['lim'][0],var_dict['theta']['lim'][1])
     # ax.set_ylim(var_dict['dtheta']['lim'][1],var_dict['dtheta']['lim'][0])
@@ -696,8 +661,12 @@ def plot_loss_func_categorical(df, z_var, categories, colors):
         ax.plot(theta, dtheta, label=category, color=colors[i])
 
     ax.invert_yaxis()
-    ax.set_xlabel(f"{var_dict['theta']['label']} {var_dict['theta']['unit']}")
-    ax.set_ylabel(f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}")
+    ax.set_xlabel(
+        f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
+    )
+    ax.set_ylabel(
+        f"{var_dict['dtheta']['label']}\n{var_dict['theta']['symbol']} {var_dict['dtheta']['unit']}"
+    )
     ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
 
     # Adjust the layout so the subplots fit into the figure area
@@ -782,7 +751,7 @@ def plot_scatter_with_errorbar_categorical(
     # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Median scatter plot with {quantile}% confidence interval")
+    plt.title(f"Median with {quantile}% confidence interval")
 
     # Add a legend
     plt.legend(bbox_to_anchor=(1, 1))
@@ -889,7 +858,7 @@ def plot_scatter_with_errorbar(df, x_var, y_var, z_var, cmap, quantile, plot_log
     # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Median scatter plot with {quantile}% confidence interval")
+    plt.title(f"Median with {quantile}% confidence interval")
 
     # Add a legend
     plt.legend(bbox_to_anchor=(1, 1.5))
@@ -914,87 +883,6 @@ plot_scatter_with_errorbar(
     plot_logscale=True,
 )
 
-
-# %%
-def plot_pdf(df, x_var, z_var, cmap):
-    fig, ax = plt.subplots(figsize=(4, 4))
-
-    # Get unique bins
-    bins_in_range = df[z_var["column_name"]].unique()
-    bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
-    bin_sorted = sorted(bins_list, key=lambda x: x.left)
-
-    # For each row in the subset, calculate the loss for a range of theta values
-    for i, category in enumerate(bin_sorted):
-        subset = df[df[z_var["column_name"]] == category]
-
-        sns.kdeplot(
-            subset[x_var["column_name"]],
-            label=category,
-            bw_adjust=0.5,
-            color=plt.get_cmap(cmap)(i / len(bins_list)),
-            cut=0,
-            ax=ax,
-        )
-
-    # Set titles and labels
-    plt.title(f"Kernel Density Estimation by {z_var['label']}")
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    plt.ylabel("Density [-]")
-
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
-
-    # Show the legend
-    plt.legend()
-
-    # Show the plot
-    plt.show()
-
-
-# %% sand
-plot_pdf(
-    df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
-)
-
-# %% aridity index
-plot_pdf(df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap)
-
-
-# %%
-def plot_pdf_categorical(df, x_var, z_var, categories, colors):
-    fig, ax = plt.subplots(figsize=(5, 5))
-    for i, category in enumerate(categories):
-        subset = df[df[z_var["column_name"]] == category]
-        sns.kdeplot(
-            subset[x_var["column_name"]],
-            label=category,
-            bw_adjust=0.5,
-            color=colors[i],
-            cut=0,
-            ax=ax,
-        )
-    # Set titles and labels
-    plt.title(f"Kernel Density Estimation by {z_var['label']}")
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    plt.ylabel("Density [-]")
-
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
-
-    # Show the legend
-    plt.legend()
-
-    # Show the plot
-    plt.show()
-
-
-# %%
-plot_pdf_categorical(
-    df=df_filt_q_2,
-    x_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-)
 
 # %% Histogram with mean and median
 
@@ -1058,14 +946,6 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
             label="mode",
         )
 
-        # # Detect and plot modes
-        # data = subset[x_var["column_name"]]
-        # kde = sns.kdeplot(data, bw_adjust=0.1, cut=0).get_lines()[0].get_data()
-        # kde.clf()  # Clear the KDE plot
-        # peaks, _ = find_peaks(kde[1], distance=1)  # Adjust 'distance' as needed
-        # for mode in peaks[0]:
-        #     ax.axvline(mode, color=colors[i], linestyle=":", lw=2, label="mode")
-
         # Set titles and labels for each subplot
         ax.set_title(f"{z_var['label']}: {category}")
         ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
@@ -1080,7 +960,7 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
 
 # %%
 plot_histograms_with_mean_median(
-    df=df_filt_q_3,
+    df=df_filt_q_2,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
@@ -1373,3 +1253,125 @@ plot_histograms_with_mean_median(
 # plt.show()
 # # ax.set_xlim(0,25)
 # # %%
+
+# %%
+# def plot_violin_categorical(df, x_var, y_var, categories, colors):
+#     fig, ax = plt.subplots(figsize=(8, 4))
+#     for i, category in enumerate(categories):
+#         subset = df[df[x_var["column_name"]] == category]
+#         sns.violinplot(
+#             x=x_var["column_name"],
+#             y=y_var["column_name"],
+#             data=subset,
+#             order=[category],
+#             color=colors[i],
+#             ax=ax,
+#             alpha=0.75,
+#             cut=0,
+#         )
+
+#     # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
+#     ax.set_xlabel(f'{x_var["label"]}')
+#     max_label_width = 20
+#     ax.set_xticklabels(
+#         [
+#             wrap_at_space(label.get_text(), max_label_width)
+#             for label in ax.get_xticklabels()
+#         ]
+#     )
+#     plt.setp(ax.get_xticklabels(), rotation=45)
+#     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+#     # Show the plot
+#     ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 2)
+#     plt.tight_layout()
+#     plt.show()
+
+
+# plot_violin_categorical(
+#     df_filt_q_2,
+#     var_dict["veg_class"],
+#     var_dict["q_q"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+# )
+
+# # %%
+# def plot_pdf(df, x_var, z_var, cmap):
+#     fig, ax = plt.subplots(figsize=(4, 4))
+
+#     # Get unique bins
+#     bins_in_range = df[z_var["column_name"]].unique()
+#     bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
+#     bin_sorted = sorted(bins_list, key=lambda x: x.left)
+
+#     # For each row in the subset, calculate the loss for a range of theta values
+#     for i, category in enumerate(bin_sorted):
+#         subset = df[df[z_var["column_name"]] == category]
+
+#         sns.kdeplot(
+#             subset[x_var["column_name"]],
+#             label=category,
+#             bw_adjust=0.5,
+#             color=plt.get_cmap(cmap)(i / len(bins_list)),
+#             cut=0,
+#             ax=ax,
+#         )
+
+#     # Set titles and labels
+#     plt.title(f"Kernel Density Estimation by {z_var['label']}")
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     plt.ylabel("Density [-]")
+
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+
+#     # Show the legend
+#     plt.legend()
+
+#     # Show the plot
+#     plt.show()
+
+
+# # %% sand
+# plot_pdf(
+#     df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
+# )
+
+# # %% aridity index
+# plot_pdf(df=df_filt_q_2, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap)
+
+
+# # %%
+# def plot_pdf_categorical(df, x_var, z_var, categories, colors):
+#     fig, ax = plt.subplots(figsize=(5, 5))
+#     for i, category in enumerate(categories):
+#         subset = df[df[z_var["column_name"]] == category]
+#         sns.kdeplot(
+#             subset[x_var["column_name"]],
+#             label=category,
+#             bw_adjust=0.5,
+#             color=colors[i],
+#             cut=0,
+#             ax=ax,
+#         )
+#     # Set titles and labels
+#     plt.title(f"Kernel Density Estimation by {z_var['label']}")
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     plt.ylabel("Density [-]")
+
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+
+#     # Show the legend
+#     plt.legend()
+
+#     # Show the plot
+#     plt.show()
+
+
+# # %%
+# plot_pdf_categorical(
+#     df=df_filt_q_2,
+#     x_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+# )
