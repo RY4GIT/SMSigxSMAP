@@ -252,15 +252,24 @@ df["n_days"] = df.apply(calculate_n_days, axis=1)
 df.columns
 # %% Exclude model fits failure
 
-# Runs where q model performed good
+# Runs where q model performed reasonablly well
 df_filt_q = df[
     (df["q_r_squared"] >= success_modelfit_thresh) & (df["q_q"] > 0.1)
 ].copy()
-df_filt_q_2 = df_filt_q[(df_filt_q["sm_range"] > sm_range_thresh)].copy()
-# df_filt_q_3 = df_filt_q_2[
-#     (df_filt_q_2["q_q"] > 0.1)
-#     | ((df_filt_q_2["q_q"] < 0.1) & (df_filt_q["n_days"] > 10))
+
+# df_filt_q = df[
+#     (df["q_r_squared"] >= success_modelfit_thresh)
 # ].copy()
+
+# df_filt_q = df[
+#     (df["q_r_squared"] >= success_modelfit_thresh) & ((df["q_q"] > 0.1) | ((df["q_q"] < 0.1) & (df["n_days"] > 10)))
+# ].copy()
+
+
+df_filt_q_2 = df_filt_q[(df_filt_q["sm_range"] > sm_range_thresh)].copy()
+
+
+
 print(f"q model fit was successful: {len(df_filt_q)}")
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q_2)}"
@@ -1375,3 +1384,5 @@ plot_histograms_with_mean_median(
 #     categories=vegetation_color_dict.keys(),
 #     colors=list(vegetation_color_dict.values()),
 # )
+
+# %%
