@@ -45,6 +45,14 @@ def exponential_drydown(t, delta_theta, theta_w, tau):
     return delta_theta * np.exp(-t / tau) + theta_w
 
 
+def exponential_drydown2(t, delta_theta, theta_w, theta_star, k):
+    """
+    Same as exponential_drydown but tau parameter is calculated using the same parameter set as non-linear model
+    """
+    tau = (theta_star - theta_w) / k
+    return delta_theta * np.exp(-t / tau) + theta_w
+
+
 def loss_model(theta, q, k, theta_wp=0.0, theta_star=1.0):
     """
     Calculate the loss function (dtheta/dt vs theta relationship) using non-linear plant stress model

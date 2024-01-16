@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 import ast
 
-from functions import q_drydown, exponential_drydown, loss_model
+from functions import q_drydown, exponential_drydown, loss_model, exponential_drydown2
 
 # %%
 var_dict = {
@@ -50,23 +50,25 @@ dtheta_vardict = var_dict["dtheta"]
 
 
 # %%
-# Define variables
-theta = np.arange(theta_w, 1, 1e-03)
-t = np.arange(0, 10, 1e-03)
 
 # Define parameters
 k = 0.3
 q0 = 1
-q1 = 3.0
-q2 = 0.8
+q1 = 1.5
+q2 = 0.7
 t0 = 0.1
 
-delta_theta = 0.6
+delta_theta = 0.5
 tau = 3
 
 theta_w = 0.02
-theta_star = 0.6
+theta_star = 0.5
 
+# Define variables
+theta = np.arange(theta_w, 1, 1e-03)
+t = np.arange(0, 10, 1e-03)
+
+# %% Plot
 fig = plt.figure(figsize=(8, 4))
 plt.rcParams.update({"font.size": 14})
 
@@ -123,7 +125,9 @@ ax2.plot(
 )
 ax2.plot(
     t,
-    exponential_drydown(t=t, delta_theta=delta_theta, theta_w=theta_w, tau=tau),
+    exponential_drydown2(
+        t=t, delta_theta=delta_theta, theta_w=theta_w, theta_star=theta_star, k=k
+    ),
     label=f"q={q0}",
     linewidth=linewidth,
     color=c2,
@@ -137,13 +141,18 @@ ax2.plot(
     linewidth=linewidth,
     color=c3,
 )
+ax2.set_ylim([0.0, theta_star])
+ax2.set_xlim([0.0, 5])
 ax2.set(
     xlabel=f'{var_dict["t"]["label"]} {var_dict["t"]["unit"]}',
     ylabel=f'{theta_vardict["label"]} {theta_vardict["unit"]}',
     title="Soil moisture drydown",
 )
 
-
+ax1.set_xticks([])
+ax1.set_yticks([])
+ax2.set_xticks([])
+ax2.set_yticks([])
 fig.tight_layout()
 
 
