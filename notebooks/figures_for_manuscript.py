@@ -47,7 +47,7 @@ ai_cmap = "RdBu"
 
 # Define the specific order for vegetation categories.
 vegetation_color_dict = {
-    "Barren": "#7A422A",
+    "Barren": "#808080",  # "#7A422A",
     "Open shrublands": "#C99728",
     "Grasslands": "#13BFB2",
     "Savannas": "#92BA31",
@@ -76,7 +76,7 @@ var_dict = {
         "symbol": r"$q$",
         "label": r"Nonlinear parameter $q$",
         "unit": "[-]",
-        "lim": [0, 3],
+        "lim": [0.5, 4],
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
@@ -113,12 +113,19 @@ var_dict = {
         "unit": "",
         "lim": [0, 1],
     },
+    "ai": {
+        "column_name": "AI",
+        "symbol": r"AI",
+        "label": r"Aridity Index",
+        "unit": "[MAP/MAE]",
+        "lim": [0.0, 1.1],
+    },
     "diff_R2": {
         "column_name": "diff_R2",
         "symbol": r"$R^2$",
         "label": r"$R^2$ (Nonlinear - linear)",
         "unit": "[-]",
-        "lim": [-0.04, 0.04],
+        "lim": [-0.02, 0.02],
     },
 }
 ############################################################################
@@ -397,10 +404,11 @@ plot_R2_models(
 ###########################################################################
 def plot_map(df, coord_info, cmap, norm, var_item):
     plt.rcParams.update({"font.size": 12})
+
     # Get the mean values of the variable
     stat = df.groupby(["EASE_row_index", "EASE_column_index"])[
         var_item["column_name"]
-    ].mean()
+    ].median()
 
     # Reindex to the full EASE row/index extent
     new_index = pd.MultiIndex.from_tuples(
@@ -1048,9 +1056,88 @@ fig_hist_q_veg.savefig(
 )
 
 
+# %% Vegetation vs AI
+fig_ai_vs_q, _ = plot_scatter_with_errorbar_categorical(
+    df=df_filt_q_2,
+    x_var=var_dict["ai"],
+    y_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=25,
+    plot_logscale=False,
+)
+
+# %%
+df_filt_q_2.columns
 # %%
 
 
+def plot_scatter_per_pixel_categorical(
+    df, x_var, y_var, z_var, categories, colors, plot_logscale
+):
+    # Get the median values of the variable
+    x_stat = (
+        df.groupby(["EASE_row_index", "EASE_column_index"])[x_var["column_name"]]
+        .median()
+        .reset_index()
+    )
+
+    y_stat = (
+        df.groupby(["EASE_row_index", "EASE_column_index"])[y_var["column_name"]]
+        .median()
+        .reset_index()
+    )
+
+    _merged_data = x_stat.merge(
+        df[[z_var["column_name"], "EASE_row_index", "EASE_column_index"]],
+        on=["EASE_row_index", "EASE_column_index"],
+        how="left",
+    )
+    merged_data = y_stat.merge(
+        _merged_data, on=["EASE_row_index", "EASE_column_index"], how="left"
+    )
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    # Calculate median and 90% confidence intervals for each vegetation class
+    for i, category in enumerate(categories):
+        subset = merged_data[merged_data[z_var["column_name"]] == category]
+
+        plt.scatter(
+            subset[x_var["column_name"]],
+            subset[y_var["column_name"]],
+            color=colors[i],
+            alpha=0.05,
+            s=1,
+        )
+
+    # Add labels and title
+    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+
+    # Add a legend
+    plt.legend(bbox_to_anchor=(1, 1))
+    if plot_logscale:
+        plt.xscale("log")
+    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+
+    # Show the plot
+    return fig, ax
+
+
+fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
+    df=df_filt_q_2,
+    x_var=var_dict["ai"],
+    y_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    plot_logscale=False,
+)
+
+# %%
 # def calc_peak_kde_value(data):
 #     kde = gaussian_kde(data)
 
