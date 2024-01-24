@@ -52,15 +52,15 @@ dtheta_vardict = var_dict["dtheta"]
 # %%
 
 # Define parameters
-k = 0.3
+
+# Non-linearity parameters
 q0 = 1
 q1 = 1.5
 q2 = 0.7
-t0 = 0.1
 
+# Common parameters
+k = 0.3
 delta_theta = 0.5
-tau = 3
-
 theta_w = 0.02
 theta_star = 0.5
 
@@ -71,39 +71,26 @@ t = np.arange(0, 10, 1e-03)
 # %% Plot
 fig = plt.figure(figsize=(8, 4))
 plt.rcParams.update({"font.size": 14})
-
-# Calculate & plot d_theta
-d_theta = loss_model(theta, q=1.5, k=-1)
-
 c1 = f"#2c7fb8"
 c2 = f"#41b6c4"
 c3 = f"#a1dab4"
 linewidth = 3
 
 ax1 = fig.add_subplot(1, 2, 1)
-ax1.plot(
-    theta,
-    -1 * loss_model(theta=theta, q=q1, k=k, theta_wp=theta_w, theta_star=theta_star),
-    label=f"q={q1}",
-    linewidth=linewidth,
-    color=c1,
-)
-ax1.plot(
-    theta,
-    -1 * loss_model(theta, q=q0, k=k, theta_wp=theta_w, theta_star=theta_star),
-    label=f"q={q0}",
-    linewidth=linewidth,
-    color=c2,
-)
-ax1.plot(
-    theta,
-    -1 * loss_model(theta=theta, q=q2, k=k, theta_wp=theta_w, theta_star=theta_star),
-    label=f"q={q2}",
-    linewidth=linewidth,
-    color=c3,
-)
-ax1.set_xlabel("theta")
-ax1.set_ylabel("- d_theta (loss)")
+
+# List of (q, color) pairs
+q_colors = [(q1, c1), (q0, c2), (q2, c3)]
+
+# Loop through each pair and plot
+for q, color in q_colors:
+    ax1.plot(
+        theta,
+        -1 * loss_model(theta=theta, q=q, k=k, theta_wp=theta_w, theta_star=theta_star),
+        label=f"q={q}",
+        linewidth=linewidth,
+        color=color,
+    )
+
 ax1.set_ylim([0.0, k])
 ax1.set_xlim([0.0, theta_star])
 ax1.set(
@@ -114,6 +101,9 @@ ax1.set(
 
 # Calculate & plot the drawdown
 ax2 = fig.add_subplot(1, 2, 2)
+
+# Calculate & plot d_theta
+
 ax2.plot(
     t,
     q_drydown(
