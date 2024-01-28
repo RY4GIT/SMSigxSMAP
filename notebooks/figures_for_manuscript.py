@@ -42,14 +42,6 @@ success_modelfit_thresh = 0.7
 sm_range_thresh = 0.3
 z_mm = 50  # Soil thickness
 
-# cmap for sand
-sand_bin_list = [i * 0.1 for i in range(11)]
-sand_cmap = "Oranges"
-
-# cmap for ai
-ai_bin_list = [i * 0.25 for i in range(8)]
-ai_cmap = "RdBu"
-
 # Define the specific order for vegetation categories.
 vegetation_color_dict = {
     "Barren": "#808080",  # "#7A422A",
@@ -86,16 +78,16 @@ var_dict = {
     "q_ETmax": {
         "column_name": "q_ETmax",
         "symbol": r"$ET_{max}$",
-        "label": r"Estimated $ET_{max}$ by non-linear model",
+        "label": r"Estimated $ET_{max}$",
         "unit": "[mm/day]",
-        "lim": [0, 10],
+        "lim": [0, 17.5],
     },
     "theta_star": {
         "column_name": "max_sm",
         "symbol": r"$\theta*$",
         "label": r"Estimated $\theta*$",
         "unit": r"$[m^3/m^3]$",
-        "lim": [0.1, 0.4],
+        "lim": [0.1, 0.45],
     },
     "sand_bins": {
         "column_name": "sand_bins",
@@ -200,6 +192,14 @@ df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 
 # Get the binned dataset
 
+# cmap for sand
+sand_bin_list = [i * 0.1 for i in range(11)]
+sand_cmap = "Oranges"
+
+# cmap for ai
+ai_bin_list = [i * 0.25 for i in range(8)]
+ai_cmap = "RdBu"
+
 # sand bins
 df["sand_bins"] = pd.cut(df["sand_fraction"], bins=sand_bin_list, include_lowest=True)
 first_I = df["sand_bins"].cat.categories[0]
@@ -272,15 +272,28 @@ df.columns
 # %% Exclude model fits failure
 print(f"Total number of events: {len(df)}")
 
+# Defining threshold for q value
+q_thresh = 1e-03
+
 # Runs where q model performed reasonablly well
 df_filt_q = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
-    & (df["q_q"] > 0.1)
+    & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
 ].copy()
 
 print(
-    f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_q)}"
+    f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range, plus extremely small q removed: {len(df_filt_q)}"
+)
+
+# Runs where q model performed reasonablly well
+df_filt_allq = df[
+    (df["q_r_squared"] >= success_modelfit_thresh)
+    & (df["sm_range"] > sm_range_thresh)
+].copy()
+
+print(
+    f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_allq)}"
 )
 
 # Runs where exponential model performed good
@@ -740,10 +753,8 @@ fig_box_veg.savefig(os.path.join(fig_dir, f"box_veg.png"), dpi=600, bbox_inches=
 ###########################################################################
 
 
-def plot_loss_func(df, z_var, cmap):
-    plt.rcParams.update({"font.size": 12})
-    fig, ax = plt.subplots(figsize=(5.8, 4))
-
+def plot_loss_func(ax, df, z_var, cmap, title="", plot_legend=False):
+    
     # Get unique bins
     bins_in_range = df[z_var["column_name"]].unique()
     bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
@@ -771,7 +782,8 @@ def plot_loss_func(df, z_var, cmap):
             dtheta,
             label=f"{category}",
             color=plt.get_cmap(cmap)(i / len(bins_list)),
-        )
+            linewidth=3
+            )
 
     ax.invert_yaxis()
     ax.set_xlabel(
@@ -780,41 +792,42 @@ def plot_loss_func(df, z_var, cmap):
     ax.set_ylabel(
         f"{var_dict['dtheta']['label']}\n{var_dict['theta']['symbol']} {var_dict['dtheta']['unit']}"
     )
-    ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
+    if title=="":
+        title=f'Median loss function by {z_var["label"]} {z_var["unit"]}'
+    ax.set_title(title, loc="left")
+
     # ax.set_xlim(var_dict['theta']['lim'][0],var_dict['theta']['lim'][1])
     # ax.set_ylim(var_dict['dtheta']['lim'][1],var_dict['dtheta']['lim'][0])
+    if plot_legend: 
+        ax.legend(
+            loc="upper left",
+            bbox_to_anchor=(1.05, 1),
+            title=f'{z_var["label"]}\n{z_var["unit"]}',
+        )
 
-    ax.legend(
-        loc="upper left",
-        bbox_to_anchor=(1.05, 1),
-        title=f'{z_var["label"]}\n{z_var["unit"]}',
-    )
+    # # Adjust the layout so the subplots fit into the figure area
+    # fig.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust
 
-    # Adjust the layout so the subplots fit into the figure area
-    fig.tight_layout(rect=[0, 0, 0.85, 1])  # Adjust
+    # # Adjust the layout so the subplots fit into the figure area
+    # fig.tight_layout()
+    # # Add a legend
+    # # fig.legend(bbox_to_anchor=(1, 1))
 
-    # Adjust the layout so the subplots fit into the figure area
-    fig.tight_layout()
-    # Add a legend
-    # fig.legend(bbox_to_anchor=(1, 1))
-
-    return fig, ax
+    # return fig, ax
 
 
-# %% Sand
-fig_lossfnc_sand, _ = plot_loss_func(df_filt_q, var_dict["sand_bins"], sand_cmap)
-fig_lossfnc_sand.savefig(
-    os.path.join(fig_dir, f"lossfunc_sand.png"), dpi=600, bbox_inches="tight"
-)
+# # %% Sand
+# fig_lossfnc_sand, _ = plot_loss_func(df_filt_q, var_dict["sand_bins"], sand_cmap)
+# fig_lossfnc_sand.savefig(
+#     os.path.join(fig_dir, f"lossfunc_sand.png"), dpi=600, bbox_inches="tight"
+# )
 
-df_filt_q_and_exp[["id_x", "sand_bins"]].groupby("sand_bins").count()
 
-# %% Aridity index
-fig_lossfnc_ai, _ = plot_loss_func(df_filt_q, var_dict["ai_bins"], ai_cmap)
-fig_lossfnc_ai.savefig(
-    os.path.join(fig_dir, f"lossfunc_ai.png"), dpi=600, bbox_inches="tight"
-)
-df_filt_q_and_exp[["id_x", "ai_bins"]].groupby("ai_bins").count()
+# # %% Aridity index
+# fig_lossfnc_ai, _ = plot_loss_func(df_filt_q, var_dict["ai_bins"], ai_cmap)
+# fig_lossfnc_ai.savefig(
+#     os.path.join(fig_dir, f"lossfunc_ai.png"), dpi=600, bbox_inches="tight"
+# )
 
 
 # %% Vegeation
@@ -822,7 +835,7 @@ def wrap_text(text, width):
     return "\n".join(wrap(text, width))
 
 
-def plot_loss_func_categorical(ax, df, z_var, categories, colors, plot_legend=True):
+def plot_loss_func_categorical(ax, df, z_var, categories, colors, title="", plot_legend=True):
     # fig, ax = plt.subplots(figsize=(4.2, 4))
 
     # For each row in the subset, calculate the loss for a range of theta values
@@ -851,7 +864,10 @@ def plot_loss_func_categorical(ax, df, z_var, categories, colors, plot_legend=Tr
     ax.set_ylabel(
         f"{var_dict['dtheta']['label']}\n{var_dict['dtheta']['symbol']} {var_dict['dtheta']['unit']}"
     )
-    ax.set_title(f'Median loss function by {z_var["label"]} {z_var["unit"]}')
+    if title=="": 
+        title = f'Median loss function by {z_var["label"]} {z_var["unit"]}'
+
+    ax.set_title(title, loc="left")
 
     # Adjust the layout so the subplots fit into the figure area
     # ax.tight_layout()
@@ -865,6 +881,7 @@ def plot_loss_func_categorical(ax, df, z_var, categories, colors, plot_legend=Tr
 
     # return fig, ax
 
+
 fig_lossfnc_veg, ax = plt.subplots(figsize=(4.2, 4))
 plot_loss_func_categorical(
     ax,
@@ -874,15 +891,32 @@ plot_loss_func_categorical(
     colors=list(vegetation_color_dict.values()),
 )
 
-fig_lossfnc_veg.savefig(
-    os.path.join(fig_dir, f"lossfunc_veg.png"), dpi=1200, bbox_inches="tight"
-)
-fig_lossfnc_veg.savefig(
-    os.path.join(fig_dir, f"lossfunc_veg.pdf"), dpi=1200, bbox_inches="tight"
-)
+
+# fig_lossfnc_veg.savefig(
+#     os.path.join(fig_dir, f"lossfunc_veg.png"), dpi=1200, bbox_inches="tight"
+# )
+# fig_lossfnc_veg.savefig(
+#     os.path.join(fig_dir, f"lossfunc_veg.pdf"), dpi=1200, bbox_inches="tight"
+# )
+
+
 # %%
 count_veg_samples = df[df.name.isin(vegetation_color_dict.keys())]
 count_veg_samples[["id_x", "name"]].groupby("name").count()
+
+
+# %%
+sample_sand_stat = df_filt_q_and_exp[["id_x", "sand_bins"]].groupby("sand_bins").count()
+print(sample_sand_stat)
+sample_sand_stat.to_csv(os.path.join(fig_dir, f"sample_sand_stat.csv"))
+
+sample_ai_stat = df_filt_q_and_exp[["id_x", "ai_bins"]].groupby("ai_bins").count()
+print(sample_ai_stat)
+sample_ai_stat.to_csv(os.path.join(fig_dir, f"sample_ai_stat.csv"))
+
+sample_veg_stat = df_filt_q[["id_x", "name"]].groupby("name").count()
+print(sample_veg_stat)
+sample_veg_stat.to_csv(os.path.join(fig_dir, f"sample_ai_stat.csv"))
 
 
 # %%
@@ -892,7 +926,7 @@ count_veg_samples[["id_x", "name"]].groupby("name").count()
 
 
 def plot_scatter_with_errorbar_categorical(
-    ax, df, x_var, y_var, z_var, categories, colors, quantile, plot_logscale, plot_legend=True
+    ax, df, x_var, y_var, z_var, categories, colors, quantile, title="", plot_logscale=False, plot_legend=True
 ):
     # fig, ax = plt.subplots(figsize=(5, 5))
     stats_dict = {}
@@ -944,7 +978,10 @@ def plot_scatter_with_errorbar_categorical(
     # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    ax.set_title(f"Median with {quantile}% confidence interval")
+
+    if title=="":
+        title = f"Median with {quantile}% confidence interval"
+    ax.set_title(title, loc='left')
 
     # Add a legend
     if plot_legend: 
@@ -1007,8 +1044,8 @@ fig_thetastar_vs_et.savefig(
 
 
 # %%
-def plot_scatter_with_errorbar(df, x_var, y_var, z_var, cmap, quantile, plot_logscale):
-    fig, ax = plt.subplots(figsize=(5, 5))
+def plot_scatter_with_errorbar(ax, df, x_var, y_var, z_var, cmap, quantile, title="", plot_logscale=False, plot_legend=False):
+    # fig, ax = plt.subplots(figsize=(5, 5))
     stats_dict = {}
 
     # Get unique bins
@@ -1044,7 +1081,7 @@ def plot_scatter_with_errorbar(df, x_var, y_var, z_var, cmap, quantile, plot_log
 
     # Now plot medians with CIs
     for category, stats in stats_dict.items():
-        plt.errorbar(
+        ax.errorbar(
             stats["x_median"],
             stats["y_median"],
             xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
@@ -1055,28 +1092,33 @@ def plot_scatter_with_errorbar(df, x_var, y_var, z_var, cmap, quantile, plot_log
             capthick=2,
             color=stats["color"],
             alpha=0.7,
-            markersize=10,
+            markersize=15,
             mec="darkgray",
             mew=1,
+            linewidth=3
         )
 
     # Add labels and title
     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    plt.title(f"Median with {quantile}% confidence interval")
+    if title=="":
+        title=f"Median with {quantile}% confidence interval"
+
+    ax.set_title(title, loc="left")
 
     # Add a legend
-    plt.legend(bbox_to_anchor=(1, 1.5))
+    if plot_legend:
+        plt.legend(bbox_to_anchor=(1, 1.5))
     if plot_logscale:
         plt.xscale("log")
     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
 
-    # Show the plot
-    plt.show()
-    plt.tight_layout()
+    # # Show the plot
+    # plt.show()
+    # plt.tight_layout()
 
-    return fig, ax
+    # return fig, ax
 
 
 # %%
@@ -1130,10 +1172,16 @@ plt.show()
 fig.savefig(os.path.join(fig_dir, "q_veg_ai.png"), dpi=1200, bbox_inches="tight")
 fig.savefig(os.path.join(fig_dir, "q_veg_ai.pdf"), dpi=1200, bbox_inches="tight")
 
+
+# %%
+##########################################################################################
+# SUPPLEMENTAL FIGURES
+###########################################################################################
+
 # %% Histogram with mean and median
 
 
-def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
+def plot_histograms_with_mean_median_categorical(df, x_var, z_var, categories, colors):
     # Determine the number of rows needed for subplots based on the number of categories
     n_rows = len(categories)
     fig, axes = plt.subplots(n_rows, 1, figsize=(4, 3 * n_rows))
@@ -1195,9 +1243,9 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
         # Set titles and labels for each subplot
         ax.set_title(f"{z_var['label']}: {category}")
         ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-        ax.set_ylabel("Frequency")
+        ax.set_ylabel("Frequency\n[Number of drydown events]")
 
-        ax.set_xlim(x_var["lim"][0], x_var["lim"][1] * 2)
+        ax.set_xlim(0, x_var["lim"][1] * 2)
         ax.legend()
 
     plt.tight_layout()  # Adjust layout to prevent overlap
@@ -1208,7 +1256,7 @@ def plot_histograms_with_mean_median(df, x_var, z_var, categories, colors):
 
 # %%
 
-fig_hist_q_veg, _ = plot_histograms_with_mean_median(
+fig_hist_q_veg, _ = plot_histograms_with_mean_median_categorical(
     df=df_filt_q,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
@@ -1221,34 +1269,191 @@ fig_hist_q_veg.savefig(
 )
 
 
-# %% Vegetation vs AI
-fig_ai_vs_q, _ = plot_scatter_with_errorbar_categorical(
+
+# %%
+
+def plot_histograms_with_mean_median(df, x_var, z_var, cmap):
+    
+    # Get unique bins
+    bins_in_range = df[z_var["column_name"]].unique()
+    bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
+    bin_sorted = sorted(bins_list, key=lambda x: x.left)
+
+    # Determine the number of rows needed for subplots based on the number of categories
+    n_rows = len(bin_sorted)
+    fig, axes = plt.subplots(n_rows, 1, figsize=(4, 3 * n_rows))
+
+    if n_rows == 1:
+        axes = [axes]  # Make it iterable even for a single category
+
+    # For each row in the subset, calculate the loss for a range of theta values
+    for i, (category, ax) in enumerate(zip(bin_sorted, axes)):
+        subset = df[df[z_var["column_name"]] == category]
+        color = plt.get_cmap(cmap)(i / len(bins_list))
+
+        # Determine bin edges based on bin interval
+        bin_interval = 0.1
+        min_edge = 0
+        max_edge = 10
+        bins = np.arange(min_edge, max_edge + bin_interval, bin_interval)
+        
+        
+        # Plot histogram
+        sns.histplot(
+            subset[x_var["column_name"]],
+            label="histogram",
+            color=color,
+            bins=bins,  # You can adjust the number of bins
+            kde=False,
+            ax=ax,
+        )
+
+        # Calculate and plot mean and median lines
+        mean_value = subset[x_var["column_name"]].mean()
+        median_value = subset[x_var["column_name"]].median()
+        ax.axvline(mean_value, color=color, linestyle=":", lw=2, label="mean")
+        ax.axvline(median_value, color=color, linestyle="-", lw=2, label="median")
+
+        # Creating a KDE (Kernel Density Estimation) of the data
+        kde = gaussian_kde(subset[x_var["column_name"]])
+
+        # Creating a range of values to evaluate the KDE
+        kde_values = np.linspace(0, max(subset[x_var["column_name"]]), 1000)
+
+        kde.set_bandwidth(bw_method=kde.factor / 3.0)
+
+        # Evaluating the KDE
+        kde_evaluated = kde(kde_values)
+
+        # Finding the peak of the KDE
+        peak_kde_value = kde_values[np.argmax(kde_evaluated)]
+
+        # Plotting the KDE
+        ax.plot(kde_values, kde_evaluated, color=color)
+
+        # Highlighting the peak of the KDE
+        ax.axvline(
+            x=peak_kde_value,
+            color=plt.get_cmap(cmap)(i / len(bins_list)),
+            linestyle="--",
+            linewidth=2.5,
+            label="mode",
+        )
+
+        # Set titles and labels for each subplot
+        ax.set_title(f"{z_var['label']}: {category}")
+        ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+        ax.set_ylabel("Frequency\n[Number of drydown events]")
+
+        ax.set_xlim(0, x_var["lim"][1] * 2)
+        ax.legend()
+
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.show()
+
+    return fig, ax
+
+# %%
+fig_hist_q_ai, _ = plot_histograms_with_mean_median(
     df=df_filt_q,
-    x_var=var_dict["ai"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=25,
-    plot_logscale=False,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap
 )
 
-fig_ai_vs_q, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["ai"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=25,
-    plot_logscale=False,
+fig_hist_q_ai.savefig(
+    os.path.join(fig_dir, f"hist_q_ai.png"), dpi=600, bbox_inches="tight"
 )
 
 # %%
-df_filt_q.columns
+fig_hist_q_sand, _ = plot_histograms_with_mean_median(
+    df=df_filt_q,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap
+)
+
+fig_hist_q_sand.savefig(
+    os.path.join(fig_dir, f"hist_q_sand.png"), dpi=600, bbox_inches="tight"
+)
+
+
+# %% Including extremely small  q values as well 
+fig_hist_q_veg2, _ = plot_histograms_with_mean_median_categorical(
+    df=df_filt_allq,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+)
+
+fig_hist_q_veg2.savefig(
+    os.path.join(fig_dir, f"hist_q_veg_allq.png"), dpi=600, bbox_inches="tight"
+)
+
+fig_hist_q_ai2, _ = plot_histograms_with_mean_median(
+    df=df_filt_allq,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap
+)
+
+fig_hist_q_ai2.savefig(
+    os.path.join(fig_dir, f"hist_q_ai_allq.png"), dpi=600, bbox_inches="tight"
+)
+
+fig_hist_q_sand2, _ = plot_histograms_with_mean_median(
+    df=df_filt_allq,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap
+)
+
+fig_hist_q_sand2.savefig(
+    os.path.join(fig_dir, f"hist_q_sand_allq.png"), dpi=600, bbox_inches="tight"
+)
+
+
+# %% Map of other parameters 
+
+# Map of theta_star
+var_key = "theta_star"
+norm = Normalize(vmin=0.0, vmax=0.6)
+fig_map_theta_star = plot_map(
+    df=df_filt_q,
+    coord_info=coord_info,
+    cmap="YlGnBu",
+    norm=norm,
+    var_item=var_dict[var_key],
+    stat_type="median",
+)
+fig_map_theta_star.savefig(os.path.join(fig_dir, f"thetastar_map_median.png"), dpi=900, bbox_inches="tight")
+# fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
+
+print(f"Global median theta_star: {df_filt_q['max_sm'].median()}")
+print(f"Global mean theta_star: {df_filt_q['max_sm'].mean()}")
+
 # %%
 
+# Map of ETmax
+var_key = "q_ETmax"
+norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+fig_map_ETmax = plot_map(
+    df=df_filt_q,
+    coord_info=coord_info,
+    cmap="YlGnBu",
+    norm=norm,
+    var_item=var_dict[var_key],
+    stat_type="median",
+)
+fig_map_ETmax.savefig(os.path.join(fig_dir, f"ETmax_map_median.png"), dpi=900, bbox_inches="tight")
+# fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
 
+print(f"Global median ETmax: {df_filt_q['q_ETmax'].median()}")
+print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
+
+
+# %%
 def plot_scatter_per_pixel_categorical(
     df, x_var, y_var, z_var, categories, colors, plot_logscale
 ):
@@ -1314,6 +1519,246 @@ fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
     colors=list(vegetation_color_dict.values()),
     plot_logscale=False,
 )
+
+# %% Loss function parameter by vegetaiton and AI, supplemental (support Figure 4)
+
+def wrap_at_space(text, max_width):
+    parts = text.split(" ")
+    wrapped_parts = [wrap(part, max_width) for part in parts]
+    return "\n".join([" ".join(wrapped_part) for wrapped_part in wrapped_parts])
+
+def plot_box_ai_veg(df):
+    plt.rcParams.update({'font.size': 24})  # Adjust the font size as needed
+
+    fig, ax =  plt.subplots(figsize=(20, 8))
+    for i, category in enumerate(vegetation_color_dict.keys()):
+        subset = df[df['name'] == category]
+        sns.boxplot(x='name', y='AI', data=subset, color=vegetation_color_dict[category], ax=ax, linewidth=2)
+
+    # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'), 
+    max_label_width = 20
+    ax.set_xticklabels([wrap_at_space(label.get_text(), max_label_width) for label in ax.get_xticklabels()])
+    plt.setp(ax.get_xticklabels(), rotation=45)
+
+    # ax.set_xticklabels([textwrap.fill(t.get_text(), 10) for t in ax.get_xticklabels()])
+    ax.set_ylabel("Aridity index [MAP/MAE]")
+    ax.set_xlabel("IGBP Landcover Class")
+    ax.set_ylim(0, 1.75)
+    plt.tight_layout()
+
+    return fig, ax
+
+fig_box_ai_veg, _ = plot_box_ai_veg(df_filt_q)
+fig_box_ai_veg.savefig(
+    os.path.join(fig_dir, f"box_ai_veg.png"), dpi=1200, bbox_inches="tight"
+)
+
+# %%
+# # %% Vegetation vs AI Boxplot
+fig_ai_vs_q_veg, ax = plt.subplots(figsize=(6, 6))
+plot_scatter_with_errorbar_categorical(
+    ax=ax,
+    df=df_filt_q,
+    x_var=var_dict["ai"],
+    y_var=var_dict["theta_star"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    quantile=25,
+    plot_logscale=False,
+)
+
+fig_ai_vs_q_veg.savefig(
+    os.path.join(fig_dir, f"ai_vs_q_veg.png"), dpi=1200, bbox_inches="tight"
+)
+
+# %% Loss function plots + parameter scatter plots 
+
+# Vegetation
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+plt.rcParams.update({"font.size": 18})
+# Plotting
+
+plot_loss_func_categorical(
+    axs[0, 0],
+    df_filt_q,
+    var_dict["veg_class"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+    plot_legend=False,
+    title="(a)"
+    )
+
+plot_scatter_with_errorbar_categorical(
+    axs[0, 1], 
+    df_filt_q, 
+    var_dict["theta_star"], 
+    var_dict["q_q"], 
+    var_dict["veg_class"], 
+    list(vegetation_color_dict.keys()), 
+    list(vegetation_color_dict.values()), 
+    25, 
+    "(b)",
+    False,
+    False
+    )
+
+plot_scatter_with_errorbar_categorical(
+    axs[1, 0], 
+    df_filt_q, 
+    var_dict["q_ETmax"], 
+    var_dict["q_q"], 
+    var_dict["veg_class"], 
+    list(vegetation_color_dict.keys()), 
+    list(vegetation_color_dict.values()), 
+    25, 
+    "(c)",
+    False,
+    False
+    )
+plot_scatter_with_errorbar_categorical(
+    axs[1, 1], 
+    df_filt_q, 
+    var_dict["theta_star"], 
+    var_dict["q_ETmax"], 
+    var_dict["veg_class"], 
+    list(vegetation_color_dict.keys()), 
+    list(vegetation_color_dict.values()), 
+    25,
+    "(d)",
+    False,
+    False
+    )
+
+plt.tight_layout()
+plt.show()
+
+# Save the combined figure
+fig.savefig(os.path.join(fig_dir, "lossfnc_veg.png"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "lossfnc_veg.pdf"), dpi=1200, bbox_inches="tight")
+
+
+# %%
+# ai
+
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+plt.rcParams.update({"font.size": 18})
+
+plot_loss_func(
+    ax=axs[0, 0],
+    df=df_filt_q,
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap, 
+    plot_legend=False,
+    title="(a)"
+    )
+
+plot_scatter_with_errorbar(
+    ax=axs[0, 1], 
+    df=df_filt_q, 
+    x_var=var_dict["theta_star"], 
+    y_var=var_dict["q_q"], 
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap, 
+    quantile=25, 
+    title="(b)",
+    plot_logscale=False,
+    plot_legend=False
+    )
+
+plot_scatter_with_errorbar(
+    ax=axs[1, 0], 
+    df=df_filt_q, 
+    x_var=var_dict["q_ETmax"], 
+    y_var=var_dict["q_q"], 
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap, 
+    quantile=25, 
+    title="(c)",
+    plot_logscale=False,
+    plot_legend=False
+    )
+plot_scatter_with_errorbar(
+    ax=axs[1, 1], 
+    df=df_filt_q, 
+    x_var=var_dict["q_ETmax"], 
+    y_var=var_dict["theta_star"], 
+    z_var=var_dict["ai_bins"],
+    cmap=ai_cmap, 
+    quantile=25, 
+    title="(d)",
+    plot_logscale=False,
+    plot_legend=False
+    )
+
+plt.tight_layout()
+plt.show()
+
+# Save the combined figure
+fig.savefig(os.path.join(fig_dir, "lossfnc_ai.png"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "lossfnc_ai.pdf"), dpi=1200, bbox_inches="tight")
+
+
+
+# %%
+# sand
+
+fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+plt.rcParams.update({"font.size": 18})
+
+plot_loss_func(
+    ax=axs[0, 0],
+    df=df_filt_q,
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap, 
+    plot_legend=False,
+    title="(a)"
+    )
+
+plot_scatter_with_errorbar(
+    ax=axs[0, 1], 
+    df=df_filt_q, 
+    x_var=var_dict["theta_star"], 
+    y_var=var_dict["q_q"], 
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap, 
+    quantile=25, 
+    title="(b)",
+    plot_logscale=False,
+    plot_legend=False
+    )
+
+plot_scatter_with_errorbar(
+    ax=axs[1, 0], 
+    df=df_filt_q, 
+    x_var=var_dict["q_ETmax"], 
+    y_var=var_dict["q_q"], 
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap, 
+    quantile=25, 
+    title="(c)",
+    plot_logscale=False,
+    plot_legend=False
+    )
+plot_scatter_with_errorbar(
+    ax=axs[1, 1], 
+    df=df_filt_q, 
+    x_var=var_dict["q_ETmax"], 
+    y_var=var_dict["theta_star"], 
+    z_var=var_dict["sand_bins"],
+    cmap=sand_cmap, 
+    quantile=25, 
+    title="(d)",
+    plot_logscale=False,
+    plot_legend=False
+    )
+
+plt.tight_layout()
+plt.show()
+
+# Save the combined figure
+fig.savefig(os.path.join(fig_dir, "lossfnc_sand.png"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "lossfnc_sand.pdf"), dpi=1200, bbox_inches="tight")
 
 # %%
 # def calc_peak_kde_value(data):
@@ -1723,3 +2168,4 @@ fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
 # )
 
 # %%
+
