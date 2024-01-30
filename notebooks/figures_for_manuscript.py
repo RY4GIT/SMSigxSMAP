@@ -26,7 +26,7 @@ from functions import q_drydown, exponential_drydown, loss_model
 # %%
 
 !pip install mpl-scatter-density
-import mpl_scatter_density # adds projection='scatter_density'
+import mpl_scatter_density
 from matplotlib.colors import LinearSegmentedColormap
 
 # %% Plot config
@@ -813,7 +813,8 @@ def plot_scatter_with_errorbar_categorical(
     if plot_legend: 
         ax.legend(bbox_to_anchor=(1, 1))
     if plot_logscale:
-        ax.set_xscale("log")
+        ax.set_yscale("log")
+        # ax.set_xscale("log")
     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
 
@@ -1209,7 +1210,7 @@ fig_hist_q_veg, _ = plot_histograms_with_mean_median_categorical(
 )
 
 fig_hist_q_veg.savefig(
-    os.path.join(fig_dir, f"hist_q_veg.png"), dpi=1200, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %%
@@ -1362,7 +1363,7 @@ def wrap_at_space(text, max_width):
     return "\n".join([" ".join(wrapped_part) for wrapped_part in wrapped_parts])
 
 def plot_box_ai_veg(df):
-    plt.rcParams.update({'font.size': 24})  # Adjust the font size as needed
+    plt.rcParams.update({'font.size': 26})  # Adjust the font size as needed
 
     fig, ax =  plt.subplots(figsize=(20, 8))
     for i, category in enumerate(vegetation_color_dict.keys()):
@@ -1377,107 +1378,62 @@ def plot_box_ai_veg(df):
     # ax.set_xticklabels([textwrap.fill(t.get_text(), 10) for t in ax.get_xticklabels()])
     ax.set_ylabel("Aridity index [MAP/MAE]")
     ax.set_xlabel("IGBP Landcover Class")
-    ax.set_ylim(0, 1.75)
+    ax.set_ylim(0, 2.0)
+    ax.set_title("(A)", loc="left")
     plt.tight_layout()
 
     return fig, ax
 
 fig_box_ai_veg, _ = plot_box_ai_veg(df_filt_q)
 fig_box_ai_veg.savefig(
-    os.path.join(fig_dir, f"box_ai_veg.png"), dpi=1200, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_box_ai_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %%
 # # %% Vegetation vs AI Boxplot
-fig_ai_vs_q_veg, ax = plt.subplots(figsize=(6, 6))
+fig_ai_vs_veg, axs = plt.subplots(1,2, figsize=(12, 6))
 plot_scatter_with_errorbar_categorical(
-    ax=ax,
+    ax=axs[0],
     df=df_filt_q,
     x_var=var_dict["ai"],
     y_var=var_dict["theta_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
+    title="(B)",
     quantile=25,
     plot_logscale=False,
+    plot_legend=False
 )
 
-fig_ai_vs_q_veg.savefig(
-    os.path.join(fig_dir, f"ai_vs_q_veg.png"), dpi=1200, bbox_inches="tight"
-)
-
-
-############################################################################
-# Other plots (sandbox)
-###########################################################################
-
-# %%
-def plot_scatter_per_pixel_categorical(
-    df, x_var, y_var, z_var, categories, colors, plot_logscale
-):
-    # Get the median values of the variable
-    x_stat = (
-        df.groupby(["EASE_row_index", "EASE_column_index"])[x_var["column_name"]]
-        .median()
-        .reset_index()
-    )
-
-    y_stat = (
-        df.groupby(["EASE_row_index", "EASE_column_index"])[y_var["column_name"]]
-        .median()
-        .reset_index()
-    )
-
-    _merged_data = x_stat.merge(
-        df[[z_var["column_name"], "EASE_row_index", "EASE_column_index"]],
-        on=["EASE_row_index", "EASE_column_index"],
-        how="left",
-    )
-    merged_data = y_stat.merge(
-        _merged_data, on=["EASE_row_index", "EASE_column_index"], how="left"
-    )
-
-    fig, ax = plt.subplots(figsize=(5, 5))
-
-    # Calculate median and 90% confidence intervals for each vegetation class
-    for i, category in enumerate(categories):
-        # i = 4
-        # category = "Woody savannas"
-        subset = merged_data[merged_data[z_var["column_name"]] == category]
-
-        plt.scatter(
-            subset[x_var["column_name"]],
-            subset[y_var["column_name"]],
-            color=colors[i],
-            alpha=0.05,
-            s=0.1,
-        )
-
-    # Add labels and title
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-
-    # Add a legend
-    plt.legend(bbox_to_anchor=(1, 1))
-    if plot_logscale:
-        plt.xscale("log")
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-
-    # Show the plot
-    return fig, ax
-
-
-fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
+plot_scatter_with_errorbar_categorical(
+    ax=axs[1],
     df=df_filt_q,
     x_var=var_dict["ai"],
-    y_var=var_dict["q_q"],
+    y_var=var_dict["q_ETmax"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    plot_logscale=False,
+    title="(C)",
+    quantile=25,
+    plot_logscale=True,
+    plot_legend=False
 )
 
+fig_ai_vs_veg.tight_layout()
+fig_ai_vs_veg.savefig(
+    os.path.join(fig_dir, f"sup_ai_vs_veg.png"), dpi=1200, bbox_inches="tight"
+)
+
+
+# %%
+###########################################################################
+###########################################################################
+############################################################################
+# Other plots (sandbox)
+###########################################################################
+###########################################################################
+###########################################################################
 
 # %%
 ############################################################################
@@ -1595,6 +1551,11 @@ def plot_hist_diffR2(df, var_key):
 
 plot_hist_diffR2(df=df_filt_q_and_exp, var_key="diff_R2")
 
+fig_thetastar_vs_et_ai.savefig(
+    os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
+)
+
+
 # %%
 pixel_counts = (
     df_filt_q_and_exp.groupby(["EASE_row_index", "EASE_column_index"])
@@ -1607,65 +1568,69 @@ plt.hist(
 )
 pixel_counts["count"].median()
 
-# %% q vs. k per vegetation
-fig_et_vs_q, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=33,
-    plot_logscale=True,
-)
-fig_et_vs_q.savefig(
-    os.path.join(fig_dir, f"et_vs_q_veg.png"), dpi=600, bbox_inches="tight"
-)
+# # %%
+# def plot_scatter_per_pixel_categorical(
+#     df, x_var, y_var, z_var, categories, colors, plot_logscale
+# ):
+#     # Get the median values of the variable
+#     x_stat = (
+#         df.groupby(["EASE_row_index", "EASE_column_index"])[x_var["column_name"]]
+#         .median()
+#         .reset_index()
+#     )
 
-# %% q vs. s* per vegetation
-fig_thetastar_vs_q, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=25,
-    plot_logscale=False,
-)
+#     y_stat = (
+#         df.groupby(["EASE_row_index", "EASE_column_index"])[y_var["column_name"]]
+#         .median()
+#         .reset_index()
+#     )
 
-fig_thetastar_vs_q.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_q_veg.png"), dpi=600, bbox_inches="tight"
-)
+#     _merged_data = x_stat.merge(
+#         df[[z_var["column_name"], "EASE_row_index", "EASE_column_index"]],
+#         on=["EASE_row_index", "EASE_column_index"],
+#         how="left",
+#     )
+#     merged_data = y_stat.merge(
+#         _merged_data, on=["EASE_row_index", "EASE_column_index"], how="left"
+#     )
+
+#     fig, ax = plt.subplots(figsize=(5, 5))
+
+#     # Calculate median and 90% confidence intervals for each vegetation class
+#     for i, category in enumerate(categories):
+#         # i = 4
+#         # category = "Woody savannas"
+#         subset = merged_data[merged_data[z_var["column_name"]] == category]
+
+#         plt.scatter(
+#             subset[x_var["column_name"]],
+#             subset[y_var["column_name"]],
+#             color=colors[i],
+#             alpha=0.05,
+#             s=0.1,
+#         )
+
+#     # Add labels and title
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+
+#     # Add a legend
+#     plt.legend(bbox_to_anchor=(1, 1))
+#     if plot_logscale:
+#         plt.xscale("log")
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+#     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+
+#     # Show the plot
+#     return fig, ax
 
 
-# %% ETmax vs .s* per vegetation
-fig_thetastar_vs_et, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=33,
-    plot_logscale=True,
-)
-fig_thetastar_vs_et.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_et_veg.png"), dpi=600, bbox_inches="tight"
-)
-
-
-# %%
-fig_thetastar_vs_et_ai, _ = plot_scatter_with_errorbar(
-    df=df_filt_q,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["ai_bins"],
-    cmap=ai_cmap,
-    quantile=33,
-    plot_logscale=True,
-)
-
-fig_thetastar_vs_et_ai.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
-)
+# fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
+#     df=df_filt_q,
+#     x_var=var_dict["ai"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     plot_logscale=False,
+# )
