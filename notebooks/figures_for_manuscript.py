@@ -73,7 +73,7 @@ var_dict = {
         "symbol": r"$q$",
         "label": r"Nonlinear parameter $q$",
         "unit": "[-]",
-        "lim": [0.5, 4],
+        "lim": [0.5, 4.0],
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
@@ -195,16 +195,17 @@ df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 
 # cmap for sand
 sand_bin_list = [i * 0.1 for i in range(11)]
+sand_bin_list = sand_bin_list[1:]
 sand_cmap = "Oranges"
 
 # cmap for ai
-ai_bin_list = [i * 0.25 for i in range(8)]
+ai_bin_list = [i * 0.25 for i in range(7)]
 ai_cmap = "RdBu"
 
 # sand bins
 df["sand_bins"] = pd.cut(df["sand_fraction"], bins=sand_bin_list, include_lowest=True)
 first_I = df["sand_bins"].cat.categories[0]
-new_I = pd.Interval(0, first_I.right)
+new_I = pd.Interval(0.1, first_I.right)
 df["sand_bins"] = df["sand_bins"].cat.rename_categories({first_I: new_I})
 
 # ai_bins
@@ -212,7 +213,6 @@ df["ai_bins"] = pd.cut(df["AI"], bins=ai_bin_list, include_lowest=True)
 first_I = df["ai_bins"].cat.categories[0]
 new_I = pd.Interval(0, first_I.right)
 df["ai_bins"] = df["ai_bins"].cat.rename_categories({first_I: new_I})
-
 
 # %%
 # Soil mositure range covered by the observation
@@ -329,11 +329,11 @@ print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
 
 # %%
 ###################### Statistics
-sample_sand_stat = df_filt_q_and_exp[["id_x", "sand_bins"]].groupby("sand_bins").count()
+sample_sand_stat = df_filt_q[["id_x", "sand_bins"]].groupby("sand_bins").count()
 print(sample_sand_stat)
 sample_sand_stat.to_csv(os.path.join(fig_dir, f"sample_sand_stat.csv"))
 
-sample_ai_stat = df_filt_q_and_exp[["id_x", "ai_bins"]].groupby("ai_bins").count()
+sample_ai_stat = df_filt_q[["id_x", "ai_bins"]].groupby("ai_bins").count()
 print(sample_ai_stat)
 sample_ai_stat.to_csv(os.path.join(fig_dir, f"sample_ai_stat.csv"))
 
@@ -341,6 +341,8 @@ sample_veg_stat = df_filt_q[["id_x", "name"]].groupby("name").count()
 print(sample_veg_stat)
 sample_veg_stat.to_csv(os.path.join(fig_dir, f"sample_veg_stat.csv"))
 
+# Check no data in sand 
+print(sum(pd.isna(df_filt_q["sand_fraction"])==True))
 
 # %%
 ############################################################################
@@ -494,6 +496,7 @@ def plot_map(ax, df, coord_info, cmap, norm, var_item, stat_type, title=""):
 ################################
 
 # Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
+# Also exclude the extremely small value of q that deviates the analysis
 var_key = "q_q"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
@@ -932,6 +935,7 @@ fig.savefig(os.path.join(fig_dir, "q_veg_ai.pdf"), dpi=1200, bbox_inches="tight"
 #######################################
 # Vegetation
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
+plt.rcParams.update({"font.size": 18})
 plot_loss_func_categorical(
     axs[0, 0],
     df_filt_q,
@@ -984,14 +988,13 @@ plot_scatter_with_errorbar_categorical(
     )
 
 plt.tight_layout()
-plt.rcParams.update({"font.size": 18})
 plt.show()
 
 # Save the combined figure
-fig.savefig(os.path.join(fig_dir, "lossfnc_veg.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "lossfnc_veg.pdf"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg.png"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg.pdf"), dpi=1200, bbox_inches="tight")
 
-
+# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg_legend.pdf"), dpi=1200, bbox_inches="tight")
 # %%
 # Aridity Index
 
@@ -1049,9 +1052,11 @@ plt.tight_layout()
 plt.show()
 
 # Save the combined figure
-fig.savefig(os.path.join(fig_dir, "lossfnc_ai.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "lossfnc_ai.pdf"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai.png"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai.pdf"), dpi=1200, bbox_inches="tight")
 
+# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_legend.png"), dpi=1200, bbox_inches="tight")
+# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_legend.pdf"), dpi=1200, bbox_inches="tight")
 
 # %%
 # sand
@@ -1110,9 +1115,11 @@ plt.tight_layout()
 plt.show()
 
 # Save the combined figure
-fig.savefig(os.path.join(fig_dir, "lossfnc_sand.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "lossfnc_sand.pdf"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "sup_lossfnc_sand.png"), dpi=1200, bbox_inches="tight")
+fig.savefig(os.path.join(fig_dir, "sup_lossfnc_sand.pdf"), dpi=1200, bbox_inches="tight")
 
+# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_sand_legend.png"), dpi=1200, bbox_inches="tight")
+# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_sand_legend.pdf"), dpi=1200, bbox_inches="tight")
 
 # %%
 ##########################################################################################
@@ -1202,7 +1209,7 @@ fig_hist_q_veg, _ = plot_histograms_with_mean_median_categorical(
 )
 
 fig_hist_q_veg.savefig(
-    os.path.join(fig_dir, f"hist_q_veg.png"), dpi=600, bbox_inches="tight"
+    os.path.join(fig_dir, f"hist_q_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %%
@@ -1297,7 +1304,7 @@ fig_hist_q_ai, _ = plot_histograms_with_mean_median(
 )
 
 fig_hist_q_ai.savefig(
-    os.path.join(fig_dir, f"hist_q_ai.png"), dpi=600, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_ai.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %%
@@ -1309,7 +1316,7 @@ fig_hist_q_sand, _ = plot_histograms_with_mean_median(
 )
 
 fig_hist_q_sand.savefig(
-    os.path.join(fig_dir, f"hist_q_sand.png"), dpi=600, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_sand.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %% Including extremely small  q values as well 
@@ -1322,7 +1329,7 @@ fig_hist_q_veg2, _ = plot_histograms_with_mean_median_categorical(
 )
 
 fig_hist_q_veg2.savefig(
-    os.path.join(fig_dir, f"hist_q_veg_allq.png"), dpi=600, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_veg_allq.png"), dpi=1200, bbox_inches="tight"
 )
 
 fig_hist_q_ai2, _ = plot_histograms_with_mean_median(
@@ -1333,7 +1340,7 @@ fig_hist_q_ai2, _ = plot_histograms_with_mean_median(
 )
 
 fig_hist_q_ai2.savefig(
-    os.path.join(fig_dir, f"hist_q_ai_allq.png"), dpi=600, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_ai_allq.png"), dpi=1200, bbox_inches="tight"
 )
 
 fig_hist_q_sand2, _ = plot_histograms_with_mean_median(
@@ -1344,7 +1351,7 @@ fig_hist_q_sand2, _ = plot_histograms_with_mean_median(
 )
 
 fig_hist_q_sand2.savefig(
-    os.path.join(fig_dir, f"hist_q_sand_allq.png"), dpi=600, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_sand_allq.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %% Loss function parameter by vegetaiton and AI, supplemental (support Figure 4)
