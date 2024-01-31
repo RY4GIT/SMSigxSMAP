@@ -38,8 +38,6 @@ dir_name = f"raraki_2023-11-25_global_95asmax"
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
 
 ## Define model acceptabiltiy criteria
-success_modelfit_thresh = 0.7
-sm_range_thresh = 0.3
 z_mm = 50  # Soil thickness
 
 # Define the specific order for vegetation categories.
@@ -275,6 +273,8 @@ print(f"Total number of events: {len(df)}")
 
 # Defining threshold for q value
 q_thresh = 1e-03
+success_modelfit_thresh = 0.7
+sm_range_thresh = 0.1
 
 # Runs where q model performed reasonablly well
 df_filt_q = df[
@@ -518,7 +518,9 @@ print(f"Global mean q: {df_filt_q['q_q'].mean()}")
 # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
 var_key = "diff_R2"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-fig_map_R2 = plot_map(
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map(
+    ax=ax, 
     df=df_filt_q_and_exp,
     coord_info=coord_info,
     cmap="RdBu",
