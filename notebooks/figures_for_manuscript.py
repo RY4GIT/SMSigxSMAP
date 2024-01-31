@@ -194,7 +194,7 @@ df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 # cmap for sand
 sand_bin_list = [i * 0.1 for i in range(11)]
 sand_bin_list = sand_bin_list[1:]
-sand_cmap = "Oranges"
+sand_cmap = "r_Oranges"
 
 # cmap for ai
 ai_bin_list = [i * 0.25 for i in range(7)]
@@ -269,12 +269,22 @@ def calculate_n_days(row):
 df["n_days"] = df.apply(calculate_n_days, axis=1)
 df.columns
 # %% Exclude model fits failure
-print(f"Total number of events: {len(df)}")
+def count_median_number_of_events_perGrid(df):
+    grouped = df.groupby(['EASE_row_index', 'EASE_column_index']).agg(
+    median_diff_R2=('diff_R2', 'median'),
+    count=('diff_R2', 'count')
+    )
+    print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
 
+
+
+print(f"Total number of events: {len(df)}")
+count_median_number_of_events_perGrid(df)
 # Defining threshold for q value
 q_thresh = 1e-03
 success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
+
 
 # Runs where q model performed reasonablly well
 df_filt_q = df[
@@ -286,6 +296,7 @@ df_filt_q = df[
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range, plus extremely small q removed: {len(df_filt_q)}"
 )
+count_median_number_of_events_perGrid(df_filt_q)
 
 # Runs where q model performed reasonablly well
 df_filt_allq = df[
@@ -296,6 +307,7 @@ df_filt_allq = df[
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_allq)}"
 )
+count_median_number_of_events_perGrid(df_filt_allq)
 
 # Runs where exponential model performed good
 df_filt_exp = df[
@@ -305,6 +317,7 @@ df_filt_exp = df[
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
 )
+count_median_number_of_events_perGrid(df_filt_exp)
 
 # Runs where either of the model performed satisfactory
 df_filt_q_or_exp = df[
@@ -316,6 +329,7 @@ df_filt_q_or_exp = df[
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
+count_median_number_of_events_perGrid(df_filt_q_or_exp)
 
 # Runs where both of the model performed satisfactory
 df_filt_q_and_exp = df[
@@ -325,10 +339,40 @@ df_filt_q_and_exp = df[
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
+count_median_number_of_events_perGrid(df_filt_q_and_exp)
 
+# How many events showed better R2? 
+n_nonlinear_better_events = sum(df_filt_q_and_exp['q_r_squared'] > df_filt_q_and_exp['exp_r_squared'])
+print(f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}")
 
 # %%
-###################### Statistics
+##################################################################
+##### Statistics
+#################################################################
+
+# %%
+###################################################################
+# Number of samples 
+################################################################
+
+# How much percent area (based on SMAP pixels) had better R2
+grouped = df_filt_q_and_exp.groupby(['EASE_row_index', 'EASE_column_index']).agg(
+    median_diff_R2=('diff_R2', 'median'),
+    count=('diff_R2', 'count')
+)
+print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
+print(f"Number of SMAP grids with data: {len(grouped)}")
+num_positive_median_diff_R2 = (grouped['median_diff_R2'] > 0).sum()
+print(f"Number of SMAP grids with bettter nonlinear model fits: {num_positive_median_diff_R2} ({(num_positive_median_diff_R2/len(grouped))*100:.1f} percent)")
+
+sns.histplot(
+        grouped['count'], binwidth=0.5, color="#2c7fb8", fill=False, linewidth=3
+    )
+
+
+###################################################################
+# Number of samples 
+###################################################################
 sample_sand_stat = df_filt_q[["id_x", "sand_bins"]].groupby("sand_bins").count()
 print(sample_sand_stat)
 sample_sand_stat.to_csv(os.path.join(fig_dir, f"sample_sand_stat.csv"))
@@ -343,6 +387,7 @@ sample_veg_stat.to_csv(os.path.join(fig_dir, f"sample_veg_stat.csv"))
 
 # Check no data in sand 
 print(sum(pd.isna(df_filt_q["sand_fraction"])==True))
+
 
 # %%
 ############################################################################
@@ -400,6 +445,10 @@ def plot_R2_models_v2(df, R2_threshold):
     coefficients = np.polyfit(x, y, 1)
     trendline_x = np.array([R2_threshold, 1])
     trendline_y = coefficients[0] * trendline_x + coefficients[1]
+    
+    # Display the R2 values where nonlinear model got better  
+    x_intersect = coefficients[1]/(1-coefficients[0])
+    print(f"The trendline intersects with 1:1 line at {x_intersect:.2f}")
     ax.plot(trendline_x, trendline_y, color="white", label="Trendline", linewidth=3)
 
     ax.set_xlim([R2_threshold, 1])
