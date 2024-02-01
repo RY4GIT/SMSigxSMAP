@@ -23,7 +23,6 @@ from datashader.mpl_ext import dsshow
 from textwrap import wrap
 
 from functions import q_drydown, exponential_drydown, loss_model
-# %%
 
 !pip install mpl-scatter-density
 import mpl_scatter_density
@@ -267,7 +266,8 @@ def calculate_n_days(row):
 
 # Applying the function to each row and creating a new column 'sm_range'
 df["n_days"] = df.apply(calculate_n_days, axis=1)
-df.columns
+df["event_length"] = (pd.to_datetime(df['event_end']) - pd.to_datetime(df['event_start'])).dt.days
+
 # %% Exclude model fits failure
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(['EASE_row_index', 'EASE_column_index']).agg(
@@ -276,21 +276,23 @@ def count_median_number_of_events_perGrid(df):
     )
     print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
 
-
-
 print(f"Total number of events: {len(df)}")
 count_median_number_of_events_perGrid(df)
-# Defining threshold for q value
+
+###################################################
+# Defining thresholds
 q_thresh = 1e-03
 success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
-
+event_length_thresh = 30
+###################################################
 
 # Runs where q model performed reasonablly well
 df_filt_q = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(
@@ -302,6 +304,7 @@ count_median_number_of_events_perGrid(df_filt_q)
 df_filt_allq = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(
@@ -313,6 +316,7 @@ count_median_number_of_events_perGrid(df_filt_allq)
 df_filt_exp = df[
     (df["exp_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
@@ -326,6 +330,7 @@ df_filt_q_or_exp = df[
         | (df["exp_r_squared"] >= success_modelfit_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
@@ -336,6 +341,7 @@ df_filt_q_and_exp = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["exp_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
@@ -613,7 +619,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
-    title="(A)"
+    title="A"
 )
 fig_map_theta_star.savefig(os.path.join(fig_dir, f"sup_map_thetastar.png"), dpi=900, bbox_inches="tight")
 # fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
@@ -634,7 +640,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
-    title="(B)"
+    title="B"
 )
 fig_map_ETmax.savefig(os.path.join(fig_dir, f"sup_map_ETmax.png"), dpi=900, bbox_inches="tight")
 # fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
@@ -955,7 +961,7 @@ plot_loss_func_categorical(
     var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    title="(A)",
+    title="A",
     plot_legend=False
     )
 
@@ -968,7 +974,7 @@ plot_scatter_with_errorbar_categorical(
     categories=list(vegetation_color_dict.keys()), 
     colors=list(vegetation_color_dict.values()), 
     quantile=25,
-    title="(B)",
+    title="B",
     plot_logscale=False,
     plot_legend=False
     )
@@ -995,7 +1001,7 @@ plot_loss_func_categorical(
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
     plot_legend=False,
-    title="(A)"
+    title="A"
     )
 
 plot_scatter_with_errorbar_categorical(
@@ -1007,7 +1013,7 @@ plot_scatter_with_errorbar_categorical(
     list(vegetation_color_dict.keys()), 
     list(vegetation_color_dict.values()), 
     25, 
-    "(B)",
+    "B",
     False,
     False
     )
@@ -1021,7 +1027,7 @@ plot_scatter_with_errorbar_categorical(
     list(vegetation_color_dict.keys()), 
     list(vegetation_color_dict.values()), 
     25, 
-    "(C)",
+    "C",
     False,
     False
     )
@@ -1034,7 +1040,7 @@ plot_scatter_with_errorbar_categorical(
     list(vegetation_color_dict.keys()), 
     list(vegetation_color_dict.values()), 
     25,
-    "(D)",
+    "D",
     False,
     False
     )
@@ -1059,7 +1065,7 @@ plot_loss_func(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     plot_legend=False,
-    title="(A)"
+    title="A"
     )
 
 plot_scatter_with_errorbar(
@@ -1070,7 +1076,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     quantile=25, 
-    title="(B)",
+    title="B",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1083,7 +1089,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     quantile=25, 
-    title="(C)",
+    title="C",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1095,7 +1101,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     quantile=25, 
-    title="(D)",
+    title="D",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1122,7 +1128,7 @@ plot_loss_func(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     plot_legend=False,
-    title="(A)"
+    title="A"
     )
 
 plot_scatter_with_errorbar(
@@ -1133,7 +1139,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     quantile=25, 
-    title="(B)",
+    title="B",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1146,7 +1152,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     quantile=25, 
-    title="(C)",
+    title="C",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1158,7 +1164,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     quantile=25, 
-    title="(D)",
+    title="D",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1430,7 +1436,7 @@ def plot_box_ai_veg(df):
     ax.set_ylabel("Aridity index [MAP/MAE]")
     ax.set_xlabel("IGBP Landcover Class")
     ax.set_ylim(0, 2.0)
-    ax.set_title("(A)", loc="left")
+    ax.set_title("A", loc="left")
     plt.tight_layout()
 
     return fig, ax
@@ -1451,7 +1457,7 @@ plot_scatter_with_errorbar_categorical(
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    title="(B)",
+    title="B",
     quantile=25,
     plot_logscale=False,
     plot_legend=False
@@ -1465,7 +1471,7 @@ plot_scatter_with_errorbar_categorical(
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    title="(C)",
+    title="C",
     quantile=25,
     plot_logscale=True,
     plot_legend=False
