@@ -31,12 +31,12 @@ from matplotlib.colors import LinearSegmentedColormap
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2023-11-25_global_95asmax"
+dir_name = "raraki_2024-02-01" # f"raraki_2023-11-25_global_95asmax"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
 
-## Define model acceptabiltiy criteria
+## Define parameters
 z_mm = 50  # Soil thickness
 
 # Define the specific order for vegetation categories.
@@ -143,6 +143,9 @@ results_file = rf"all_results.csv"
 _df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 print("Loaded results file")
 
+# %%
+_df.head()
+# %%
 # Read coordinate information
 coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
 df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
@@ -280,7 +283,7 @@ print(f"Total number of events: {len(df)}")
 count_median_number_of_events_perGrid(df)
 
 ###################################################
-# Defining thresholds
+# Defining model acceptabiltiy criteria
 q_thresh = 1e-03
 success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
