@@ -23,23 +23,20 @@ from datashader.mpl_ext import dsshow
 from textwrap import wrap
 
 from functions import q_drydown, exponential_drydown, loss_model
-# %%
 
 !pip install mpl-scatter-density
-import mpl_scatter_density # adds projection='scatter_density'
+import mpl_scatter_density
 from matplotlib.colors import LinearSegmentedColormap
 
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2023-11-25_global_95asmax"
+dir_name = "raraki_2024-02-01" # f"raraki_2023-11-25_global_95asmax"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
 
-## Define model acceptabiltiy criteria
-success_modelfit_thresh = 0.7
-sm_range_thresh = 0.3
+## Define parameters
 z_mm = 50  # Soil thickness
 
 # Define the specific order for vegetation categories.
@@ -146,6 +143,9 @@ results_file = rf"all_results.csv"
 _df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 print("Loaded results file")
 
+# %%
+_df.head()
+# %%
 # Read coordinate information
 coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
 df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
@@ -196,7 +196,7 @@ df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 # cmap for sand
 sand_bin_list = [i * 0.1 for i in range(11)]
 sand_bin_list = sand_bin_list[1:]
-sand_cmap = "Oranges"
+sand_cmap = "r_Oranges"
 
 # cmap for ai
 ai_bin_list = [i * 0.25 for i in range(7)]
@@ -269,42 +269,62 @@ def calculate_n_days(row):
 
 # Applying the function to each row and creating a new column 'sm_range'
 df["n_days"] = df.apply(calculate_n_days, axis=1)
-df.columns
-# %% Exclude model fits failure
-print(f"Total number of events: {len(df)}")
+df["event_length"] = (pd.to_datetime(df['event_end']) - pd.to_datetime(df['event_start'])).dt.days
 
-# Defining threshold for q value
+# %% Exclude model fits failure
+def count_median_number_of_events_perGrid(df):
+    grouped = df.groupby(['EASE_row_index', 'EASE_column_index']).agg(
+    median_diff_R2=('diff_R2', 'median'),
+    count=('diff_R2', 'count')
+    )
+    print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
+
+print(f"Total number of events: {len(df)}")
+count_median_number_of_events_perGrid(df)
+
+###################################################
+# Defining model acceptabiltiy criteria
 q_thresh = 1e-03
+success_modelfit_thresh = 0.7
+sm_range_thresh = 0.1
+event_length_thresh = 30
+###################################################
 
 # Runs where q model performed reasonablly well
 df_filt_q = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range, plus extremely small q removed: {len(df_filt_q)}"
 )
+count_median_number_of_events_perGrid(df_filt_q)
 
 # Runs where q model performed reasonablly well
 df_filt_allq = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(
     f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_allq)}"
 )
+count_median_number_of_events_perGrid(df_filt_allq)
 
 # Runs where exponential model performed good
 df_filt_exp = df[
     (df["exp_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
 )
+count_median_number_of_events_perGrid(df_filt_exp)
 
 # Runs where either of the model performed satisfactory
 df_filt_q_or_exp = df[
@@ -313,22 +333,55 @@ df_filt_q_or_exp = df[
         | (df["exp_r_squared"] >= success_modelfit_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
+count_median_number_of_events_perGrid(df_filt_q_or_exp)
 
 # Runs where both of the model performed satisfactory
 df_filt_q_and_exp = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["exp_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] <=event_length_thresh)
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
+count_median_number_of_events_perGrid(df_filt_q_and_exp)
 
+# How many events showed better R2? 
+n_nonlinear_better_events = sum(df_filt_q_and_exp['q_r_squared'] > df_filt_q_and_exp['exp_r_squared'])
+print(f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}")
 
 # %%
-###################### Statistics
+##################################################################
+##### Statistics
+#################################################################
+
+# %%
+###################################################################
+# Number of samples 
+################################################################
+
+# How much percent area (based on SMAP pixels) had better R2
+grouped = df_filt_q_and_exp.groupby(['EASE_row_index', 'EASE_column_index']).agg(
+    median_diff_R2=('diff_R2', 'median'),
+    count=('diff_R2', 'count')
+)
+print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
+print(f"Number of SMAP grids with data: {len(grouped)}")
+num_positive_median_diff_R2 = (grouped['median_diff_R2'] > 0).sum()
+print(f"Number of SMAP grids with bettter nonlinear model fits: {num_positive_median_diff_R2} ({(num_positive_median_diff_R2/len(grouped))*100:.1f} percent)")
+
+sns.histplot(
+        grouped['count'], binwidth=0.5, color="#2c7fb8", fill=False, linewidth=3
+    )
+
+
+###################################################################
+# Number of samples 
+###################################################################
 sample_sand_stat = df_filt_q[["id_x", "sand_bins"]].groupby("sand_bins").count()
 print(sample_sand_stat)
 sample_sand_stat.to_csv(os.path.join(fig_dir, f"sample_sand_stat.csv"))
@@ -343,6 +396,7 @@ sample_veg_stat.to_csv(os.path.join(fig_dir, f"sample_veg_stat.csv"))
 
 # Check no data in sand 
 print(sum(pd.isna(df_filt_q["sand_fraction"])==True))
+
 
 # %%
 ############################################################################
@@ -400,6 +454,10 @@ def plot_R2_models_v2(df, R2_threshold):
     coefficients = np.polyfit(x, y, 1)
     trendline_x = np.array([R2_threshold, 1])
     trendline_y = coefficients[0] * trendline_x + coefficients[1]
+    
+    # Display the R2 values where nonlinear model got better  
+    x_intersect = coefficients[1]/(1-coefficients[0])
+    print(f"The trendline intersects with 1:1 line at {x_intersect:.2f}")
     ax.plot(trendline_x, trendline_y, color="white", label="Trendline", linewidth=3)
 
     ax.set_xlim([R2_threshold, 1])
@@ -518,7 +576,9 @@ print(f"Global mean q: {df_filt_q['q_q'].mean()}")
 # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
 var_key = "diff_R2"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-fig_map_R2 = plot_map(
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map(
+    ax=ax, 
     df=df_filt_q_and_exp,
     coord_info=coord_info,
     cmap="RdBu",
@@ -562,7 +622,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
-    title="(A)"
+    title="A"
 )
 fig_map_theta_star.savefig(os.path.join(fig_dir, f"sup_map_thetastar.png"), dpi=900, bbox_inches="tight")
 # fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
@@ -583,7 +643,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
-    title="(B)"
+    title="B"
 )
 fig_map_ETmax.savefig(os.path.join(fig_dir, f"sup_map_ETmax.png"), dpi=900, bbox_inches="tight")
 # fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
@@ -813,7 +873,8 @@ def plot_scatter_with_errorbar_categorical(
     if plot_legend: 
         ax.legend(bbox_to_anchor=(1, 1))
     if plot_logscale:
-        ax.set_xscale("log")
+        ax.set_yscale("log")
+        # ax.set_xscale("log")
     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
 
@@ -903,7 +964,7 @@ plot_loss_func_categorical(
     var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    title="(A)",
+    title="A",
     plot_legend=False
     )
 
@@ -916,7 +977,7 @@ plot_scatter_with_errorbar_categorical(
     categories=list(vegetation_color_dict.keys()), 
     colors=list(vegetation_color_dict.values()), 
     quantile=25,
-    title="(B)",
+    title="B",
     plot_logscale=False,
     plot_legend=False
     )
@@ -943,7 +1004,7 @@ plot_loss_func_categorical(
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
     plot_legend=False,
-    title="(A)"
+    title="A"
     )
 
 plot_scatter_with_errorbar_categorical(
@@ -955,7 +1016,7 @@ plot_scatter_with_errorbar_categorical(
     list(vegetation_color_dict.keys()), 
     list(vegetation_color_dict.values()), 
     25, 
-    "(B)",
+    "B",
     False,
     False
     )
@@ -969,7 +1030,7 @@ plot_scatter_with_errorbar_categorical(
     list(vegetation_color_dict.keys()), 
     list(vegetation_color_dict.values()), 
     25, 
-    "(C)",
+    "C",
     False,
     False
     )
@@ -982,7 +1043,7 @@ plot_scatter_with_errorbar_categorical(
     list(vegetation_color_dict.keys()), 
     list(vegetation_color_dict.values()), 
     25,
-    "(D)",
+    "D",
     False,
     False
     )
@@ -1007,7 +1068,7 @@ plot_loss_func(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     plot_legend=False,
-    title="(A)"
+    title="A"
     )
 
 plot_scatter_with_errorbar(
@@ -1018,7 +1079,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     quantile=25, 
-    title="(B)",
+    title="B",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1031,7 +1092,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     quantile=25, 
-    title="(C)",
+    title="C",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1043,7 +1104,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap, 
     quantile=25, 
-    title="(D)",
+    title="D",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1070,7 +1131,7 @@ plot_loss_func(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     plot_legend=False,
-    title="(A)"
+    title="A"
     )
 
 plot_scatter_with_errorbar(
@@ -1081,7 +1142,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     quantile=25, 
-    title="(B)",
+    title="B",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1094,7 +1155,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     quantile=25, 
-    title="(C)",
+    title="C",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1106,7 +1167,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap, 
     quantile=25, 
-    title="(D)",
+    title="D",
     plot_logscale=False,
     plot_legend=False
     )
@@ -1209,7 +1270,7 @@ fig_hist_q_veg, _ = plot_histograms_with_mean_median_categorical(
 )
 
 fig_hist_q_veg.savefig(
-    os.path.join(fig_dir, f"hist_q_veg.png"), dpi=1200, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_hist_q_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %%
@@ -1362,7 +1423,7 @@ def wrap_at_space(text, max_width):
     return "\n".join([" ".join(wrapped_part) for wrapped_part in wrapped_parts])
 
 def plot_box_ai_veg(df):
-    plt.rcParams.update({'font.size': 24})  # Adjust the font size as needed
+    plt.rcParams.update({'font.size': 26})  # Adjust the font size as needed
 
     fig, ax =  plt.subplots(figsize=(20, 8))
     for i, category in enumerate(vegetation_color_dict.keys()):
@@ -1377,107 +1438,62 @@ def plot_box_ai_veg(df):
     # ax.set_xticklabels([textwrap.fill(t.get_text(), 10) for t in ax.get_xticklabels()])
     ax.set_ylabel("Aridity index [MAP/MAE]")
     ax.set_xlabel("IGBP Landcover Class")
-    ax.set_ylim(0, 1.75)
+    ax.set_ylim(0, 2.0)
+    ax.set_title("A", loc="left")
     plt.tight_layout()
 
     return fig, ax
 
 fig_box_ai_veg, _ = plot_box_ai_veg(df_filt_q)
 fig_box_ai_veg.savefig(
-    os.path.join(fig_dir, f"box_ai_veg.png"), dpi=1200, bbox_inches="tight"
+    os.path.join(fig_dir, f"sup_box_ai_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
 # %%
 # # %% Vegetation vs AI Boxplot
-fig_ai_vs_q_veg, ax = plt.subplots(figsize=(6, 6))
+fig_ai_vs_veg, axs = plt.subplots(1,2, figsize=(12, 6))
 plot_scatter_with_errorbar_categorical(
-    ax=ax,
+    ax=axs[0],
     df=df_filt_q,
     x_var=var_dict["ai"],
     y_var=var_dict["theta_star"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
+    title="B",
     quantile=25,
     plot_logscale=False,
+    plot_legend=False
 )
 
-fig_ai_vs_q_veg.savefig(
-    os.path.join(fig_dir, f"ai_vs_q_veg.png"), dpi=1200, bbox_inches="tight"
-)
-
-
-############################################################################
-# Other plots (sandbox)
-###########################################################################
-
-# %%
-def plot_scatter_per_pixel_categorical(
-    df, x_var, y_var, z_var, categories, colors, plot_logscale
-):
-    # Get the median values of the variable
-    x_stat = (
-        df.groupby(["EASE_row_index", "EASE_column_index"])[x_var["column_name"]]
-        .median()
-        .reset_index()
-    )
-
-    y_stat = (
-        df.groupby(["EASE_row_index", "EASE_column_index"])[y_var["column_name"]]
-        .median()
-        .reset_index()
-    )
-
-    _merged_data = x_stat.merge(
-        df[[z_var["column_name"], "EASE_row_index", "EASE_column_index"]],
-        on=["EASE_row_index", "EASE_column_index"],
-        how="left",
-    )
-    merged_data = y_stat.merge(
-        _merged_data, on=["EASE_row_index", "EASE_column_index"], how="left"
-    )
-
-    fig, ax = plt.subplots(figsize=(5, 5))
-
-    # Calculate median and 90% confidence intervals for each vegetation class
-    for i, category in enumerate(categories):
-        # i = 4
-        # category = "Woody savannas"
-        subset = merged_data[merged_data[z_var["column_name"]] == category]
-
-        plt.scatter(
-            subset[x_var["column_name"]],
-            subset[y_var["column_name"]],
-            color=colors[i],
-            alpha=0.05,
-            s=0.1,
-        )
-
-    # Add labels and title
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-
-    # Add a legend
-    plt.legend(bbox_to_anchor=(1, 1))
-    if plot_logscale:
-        plt.xscale("log")
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-
-    # Show the plot
-    return fig, ax
-
-
-fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
+plot_scatter_with_errorbar_categorical(
+    ax=axs[1],
     df=df_filt_q,
     x_var=var_dict["ai"],
-    y_var=var_dict["q_q"],
+    y_var=var_dict["q_ETmax"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    plot_logscale=False,
+    title="C",
+    quantile=25,
+    plot_logscale=True,
+    plot_legend=False
 )
 
+fig_ai_vs_veg.tight_layout()
+fig_ai_vs_veg.savefig(
+    os.path.join(fig_dir, f"sup_ai_vs_veg.png"), dpi=1200, bbox_inches="tight"
+)
+
+
+# %%
+###########################################################################
+###########################################################################
+############################################################################
+# Other plots (sandbox)
+###########################################################################
+###########################################################################
+###########################################################################
 
 # %%
 ############################################################################
@@ -1595,6 +1611,11 @@ def plot_hist_diffR2(df, var_key):
 
 plot_hist_diffR2(df=df_filt_q_and_exp, var_key="diff_R2")
 
+fig_thetastar_vs_et_ai.savefig(
+    os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
+)
+
+
 # %%
 pixel_counts = (
     df_filt_q_and_exp.groupby(["EASE_row_index", "EASE_column_index"])
@@ -1607,65 +1628,69 @@ plt.hist(
 )
 pixel_counts["count"].median()
 
-# %% q vs. k per vegetation
-fig_et_vs_q, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=33,
-    plot_logscale=True,
-)
-fig_et_vs_q.savefig(
-    os.path.join(fig_dir, f"et_vs_q_veg.png"), dpi=600, bbox_inches="tight"
-)
+# # %%
+# def plot_scatter_per_pixel_categorical(
+#     df, x_var, y_var, z_var, categories, colors, plot_logscale
+# ):
+#     # Get the median values of the variable
+#     x_stat = (
+#         df.groupby(["EASE_row_index", "EASE_column_index"])[x_var["column_name"]]
+#         .median()
+#         .reset_index()
+#     )
 
-# %% q vs. s* per vegetation
-fig_thetastar_vs_q, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["theta_star"],
-    y_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=25,
-    plot_logscale=False,
-)
+#     y_stat = (
+#         df.groupby(["EASE_row_index", "EASE_column_index"])[y_var["column_name"]]
+#         .median()
+#         .reset_index()
+#     )
 
-fig_thetastar_vs_q.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_q_veg.png"), dpi=600, bbox_inches="tight"
-)
+#     _merged_data = x_stat.merge(
+#         df[[z_var["column_name"], "EASE_row_index", "EASE_column_index"]],
+#         on=["EASE_row_index", "EASE_column_index"],
+#         how="left",
+#     )
+#     merged_data = y_stat.merge(
+#         _merged_data, on=["EASE_row_index", "EASE_column_index"], how="left"
+#     )
+
+#     fig, ax = plt.subplots(figsize=(5, 5))
+
+#     # Calculate median and 90% confidence intervals for each vegetation class
+#     for i, category in enumerate(categories):
+#         # i = 4
+#         # category = "Woody savannas"
+#         subset = merged_data[merged_data[z_var["column_name"]] == category]
+
+#         plt.scatter(
+#             subset[x_var["column_name"]],
+#             subset[y_var["column_name"]],
+#             color=colors[i],
+#             alpha=0.05,
+#             s=0.1,
+#         )
+
+#     # Add labels and title
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+
+#     # Add a legend
+#     plt.legend(bbox_to_anchor=(1, 1))
+#     if plot_logscale:
+#         plt.xscale("log")
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+#     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+
+#     # Show the plot
+#     return fig, ax
 
 
-# %% ETmax vs .s* per vegetation
-fig_thetastar_vs_et, _ = plot_scatter_with_errorbar_categorical(
-    df=df_filt_q,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    quantile=33,
-    plot_logscale=True,
-)
-fig_thetastar_vs_et.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_et_veg.png"), dpi=600, bbox_inches="tight"
-)
-
-
-# %%
-fig_thetastar_vs_et_ai, _ = plot_scatter_with_errorbar(
-    df=df_filt_q,
-    x_var=var_dict["q_ETmax"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["ai_bins"],
-    cmap=ai_cmap,
-    quantile=33,
-    plot_logscale=True,
-)
-
-fig_thetastar_vs_et_ai.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
-)
+# fig_ai_vs_q, _ = plot_scatter_per_pixel_categorical(
+#     df=df_filt_q,
+#     x_var=var_dict["ai"],
+#     y_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     plot_logscale=False,
+# )

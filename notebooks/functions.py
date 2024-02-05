@@ -17,11 +17,11 @@ def q_drydown(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
     float: Rate of change in soil moisture (dtheta/dt) for the given timestep, in m3/m3/day.
     """
 
-    theta_0 = (delta_theta - theta_w) ** (1 - q)
+    b = delta_theta ** (1 - q)
 
     a = (1 - q) / ((theta_star - theta_w) ** q)
 
-    return (-k * a * t + theta_0) ** (1 / (1 - q)) + theta_w
+    return (-k * a * t + b) ** (1 / (1 - q)) + theta_w
 
 
 def exponential_drydown(t, delta_theta, theta_w, tau):
