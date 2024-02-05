@@ -31,7 +31,7 @@ from matplotlib.colors import LinearSegmentedColormap
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = "raraki_2024-02-01" # f"raraki_2023-11-25_global_95asmax"
+dir_name = "raraki_2024-02-02" # f"raraki_2023-11-25_global_95asmax"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -143,8 +143,6 @@ results_file = rf"all_results.csv"
 _df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 print("Loaded results file")
 
-# %%
-_df.head()
 # %%
 # Read coordinate information
 coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
