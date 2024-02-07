@@ -1626,6 +1626,85 @@ plt.hist(
 )
 pixel_counts["count"].median()
 
+
+# %% Ridgeplot for poster
+def plot_ridgeplot(df, x_var, z_var, categories, colors):
+    # # Create a figure
+    # fig, ax = plt.subplots(figsize=(10, 10))
+    
+    # Create a FacetGrid varying by the categorical variable, using the order and palette defined
+    g = sns.FacetGrid(df, row=z_var["column_name"], hue=z_var["column_name"], aspect=2.5, height=1.5, palette=colors, row_order=categories)
+    # https://stackoverflow.com/questions/45911709/limit-the-range-of-x-in-seaborn-distplot-kde-estimation
+
+    # Map the kdeplot for the variable of interest across the FacetGrid
+    def plot_kde_and_lines(x, color, label):
+        ax = plt.gca()  # Get current axis
+        sns.kdeplot(x, bw_adjust=0.1, clip_on=False, fill=True, alpha=0.5, clip=[0, 5], linewidth=0, color=color, ax=ax)
+        sns.kdeplot(x, bw_adjust=0.1, clip_on=False, clip=[0, 5], linewidth=2.5, color='w', ax=ax)
+        # Median
+        median_value = x.median()
+        ax.axvline(median_value, color=color, linestyle=":", lw=2, label="Median")
+        # Mode (using KDE peak as a proxy)
+        kde = gaussian_kde(x, bw_method=0.1)
+        kde_values = np.linspace(x.min(), x.max(), 1000)
+        mode_value = kde_values[np.argmax(kde(kde_values))]
+        ax.axvline(mode_value, color=color, linestyle="--", lw=2, label="Mode")
+    
+    # 
+    g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+
+    # Map the custom plotting function
+    g.map(plot_kde_and_lines, x_var["column_name"])
+
+    # Set the subplots to overlap
+    g.fig.subplots_adjust(hspace=-2)
+
+    # Add a horizontal line for each plot
+    g.map(plt.axhline, y=0, lw=2, clip_on=False)
+
+    # Define and use a simple function to label the plot in axes coordinates
+    def label(x, color, label):
+        ax = plt.gca()
+        ax.text(0, .2, label, fontweight="bold", color=color, ha="left", va="center", transform=ax.transAxes, size=16)
+
+    g.map(label, x_var["column_name"])
+
+    # Remove axes details that don't play well with overlap
+    g.set_titles("")
+    g.set(yticks=[], ylabel="", xlabel=r"$q$ [-]")
+    g.despine(bottom=True, left=True)
+    
+    # Adjust the layout
+    plt.tight_layout()
+    plt.show()
+
+    return g
+
+
+vegetation_color_dict_limit = {
+    "Open shrublands": "#C99728",
+    "Grasslands": "#13BFB2",
+    "Savannas": "#92BA31",
+    "Woody savannas": "#4C6903",
+    "Croplands": "#F7C906",
+}
+
+fig_ridge_veg = plot_ridgeplot(
+    df=df_filt_q,
+    x_var=var_dict["q_q"],
+    z_var=var_dict["veg_class"],
+    categories=vegetation_color_dict_limit.keys(),
+    colors=list(vegetation_color_dict_limit.values()),
+)
+
+fig_ridge_veg.savefig(
+    os.path.join(fig_dir, f"sup_hist_ridge_veg.pdf"), dpi=1200, bbox_inches="tight"
+)
+
+fig_ridge_veg.savefig(
+    os.path.join(fig_dir, f"sup_hist_ridge_veg.png"), dpi=1200, bbox_inches="tight"
+)
+
 # # %%
 # def plot_scatter_per_pixel_categorical(
 #     df, x_var, y_var, z_var, categories, colors, plot_logscale
@@ -1692,3 +1771,4 @@ pixel_counts["count"].median()
 #     colors=list(vegetation_color_dict.values()),
 #     plot_logscale=False,
 # )
+# %%
