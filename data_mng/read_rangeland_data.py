@@ -163,7 +163,7 @@ def main():
 
     # Configs
     out_dir = create_output_dir(
-        os.path.join(data_dir, datarods_dir, "rangeland_resampled")
+        os.path.join(data_dir, "rangeland_resampled_avg")
     )
 
     # Get original files
@@ -171,35 +171,47 @@ def main():
         filename_pattern=f"vegetation-cover-v3-*.tif",
         directory=os.path.join(data_dir, "rap-vegetation-cover-v3"),
     )
+    print("Files found: ")
+    print(filenames)
 
     for i, filename in enumerate(filenames):
+        # Open datasets
+        _ds = rioxarray.open_rasterio(filename)
+        ds = _ds.rio.write_crs("epsg:4326", inplace=True)
+
+        # Subset according to bbox
+        left, bottom, right, top = ds.rio.bounds()
+        subset_ease_template = ease_template.sel(
+            x=slice(left, right), y=slice(top, bottom)
+        )
+
+        # Using regular expression to find year pattern in the string
+        match = re.search(r"\d{4}", filename)
+        record_year = match.group() if match else "Year not found"
+
+        # Loop through bands
         for band_num in range(1, 7):  # This will loop from 1 to 6
-            # Open datasets
-            _ds = rioxarray.open_rasterio(filename)
-            ds = _ds.rio.write_crs("epsg:4326", inplace=True)
-
-            # Subset according to bbox
-            left, bottom, right, top = ds.rio.bounds()
-            subset_ease_template = ease_template.sel(
-                x=slice(left, right), y=slice(top, bottom)
-            )
-
-            # Using regular expression to find year pattern in the string
-            match = re.search(r"\d{4}", filenames[0])
-            record_year = match.group() if match else "Year not found"
-
             # Select one vegetation type and start resample
-            veg_ds = ds["band" == band_num]
+            veg_ds = ds.sel(band=band_num)
 
+            # print(
+            #     f"Currently masking the data of Year {record_year} - band {band_num}"
+            # )
+            # start_time = time.time()
+            # veg_ds = veg_ds.where(veg_ds != veg_ds._FillValue, np.nan)
+            # end_time = time.time()
+            # elapsed_time = end_time - start_time
+            # print(
+            #     f"Finished masking the data of Year {record_year} - band {band_num}\nTime taken for the operation: {elapsed_time} seconds"
+            # )
+            
             print(
                 f"Currently resampling the data of Year {record_year} - band {band_num}"
             )
-            start_time = time.time()
-
-            veg_ds_resampled = veg_ds.interp_like(
-                subset_ease_template, method="linear", kwargs={"fill_value": np.nan}
-            )
-
+            veg_ds_resampled = veg_ds.rio.reproject_match(subset_ease_template, resampling=Resampling.average)
+            # veg_ds_resampled = veg_ds.interp_like(
+            #     subset_ease_template, method="linear", kwargs={"fill_value": np.nan}
+            # )
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(
