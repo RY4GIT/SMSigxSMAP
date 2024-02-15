@@ -163,7 +163,7 @@ def main():
 
     # Configs
     out_dir = create_output_dir(
-        os.path.join(data_dir, "rangeland_resampled_avg")
+        os.path.join(data_dir, "rangeland_resampled_linear")
     )
 
     # Get original files
@@ -208,10 +208,11 @@ def main():
             print(
                 f"Currently resampling the data of Year {record_year} - band {band_num}"
             )
-            veg_ds_resampled = veg_ds.rio.reproject_match(subset_ease_template, resampling=Resampling.average)
-            # veg_ds_resampled = veg_ds.interp_like(
-            #     subset_ease_template, method="linear", kwargs={"fill_value": np.nan}
-            # )
+            start_time = time.time()
+            # veg_ds_resampled = veg_ds.rio.reproject_match(subset_ease_template, resampling=Resampling.average) # Somehow this didn't align with the coastline
+            veg_ds_resampled = veg_ds.interp_like(
+                subset_ease_template, method="linear", kwargs={"fill_value": np.nan}
+            )
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(
