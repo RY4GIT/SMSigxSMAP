@@ -133,6 +133,7 @@ data_dir = rf"/home/{user_name}/waves/projects/smap-drydown/data"
 datarod_dir = "datarods"
 anc_dir = "SMAP_L1_L3_ANC_STATIC"
 anc_file = "anc_info.csv"
+anc_rangeland_file = "anc_info_rangeland.csv"
 IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
@@ -142,6 +143,9 @@ output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
 results_file = rf"all_results.csv"
 _df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 print("Loaded results file")
+
+# %%
+_df['year'] = pd.to_datetime(_df['event_start']).dt.year
 
 # %%
 # Read coordinate information
@@ -170,8 +174,6 @@ df = df.merge(df_anc, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
 print("Loaded ancillary information (land-cover)")
-
-print(f"Total number of drydown event: {len(df)}")
 
 # %% Create output directory
 fig_dir = os.path.join(output_dir, dir_name, "figs")
@@ -1705,6 +1707,172 @@ fig_ridge_veg.savefig(
     os.path.join(fig_dir, f"sup_hist_ridge_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
+
+# %%
+######################################################################
+# Rangeland analysis
+######################################################################
+
+# Continuous rangeland landcover 
+rangeland_info = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_rangeland_file)).drop(
+    ["Unnamed: 0"], axis=1
+)
+df_filt_q_conus = df_filt_q.merge(rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left")
+print("Loaded ancillary rangeland information")
+# %%
+print(f"Total number of drydown event with successful q fits & within CONUS: {len(df_filt_q_conus)}")
+print(f"No data: {df_filt_q_conus['landcover_percent'].isna().mean() * 100:.2f}%")
+
+# %%
+years = range(2015, 2023)  # 2023 is not included, so it goes up to 2022
+band_numbers = [1,4,5,6] #range(1, 7)  # 7 is not included, so it goes up to 6
+
+band_descriptions = {
+    1: "Annual forb and grass",
+    2: "Bare ground",
+    3: "Litter",
+    4: "Perennial forb and grass",
+    5: "Shrub",
+    6: "Tree"
+}
+
+
+for band in band_numbers:
+    fig, ax = plt.subplots(figsize=(4,4))
+    varname = f'landcover_percent'
+    df_filt_q_conus[df_filt_q_conus['band']==band][varname].hist(ax=ax)
+    ax.set_title(band_descriptions[band])
+    ax.set_xlabel('coverage [%]')
+    ax.set_ylabel('Frequency [-]')
+
+# %%
+for band in band_numbers:
+    fig, ax = plt.subplots(figsize=(5,3))
+    subset = df_filt_q_conus[df_filt_q_conus['band']==band]
+    scatter=ax.scatter(subset['landcover_percent'], subset['q_q'], c=subset['AI'], alpha=0.5, cmap='RdBu')
+    ax.set_title(band_descriptions[band])
+    # ax.set_ylim([0,100])
+    ax.set_xlabel('Coverage [%]')
+    ax.set_ylabel(r'$q$ [-]')
+    plt.colorbar(scatter, ax=ax, label='Aridity Index')
+# %%
+for band in band_numbers:
+    fig, ax = plt.subplots(figsize=(5,3))
+    subset = df_filt_q_conus[df_filt_q_conus['band']==band]
+    scatter=ax.scatter(subset['AI'], subset['q_q'], c=subset['landcover_percent'], alpha=0.5, cmap='YlGn', vmin=0, vmax=30)
+    ax.set_title(band_descriptions[band])
+    # ax.set_ylim([0,100])
+    ax.set_ylabel('Coverage [%]')
+    ax.set_xlabel(r'Aridity index')
+    plt.colorbar(scatter, ax=ax, label=r'$q$')
+
+# %%
+fig, ax = plt.subplots(figsize=(5,3))
+tree_subset = df_filt_q_conus[df_filt_q_conus['band']==6]
+shrub_subset = df_filt_q_conus[df_filt_q_conus['band']==5]
+annual_grass_subset = df_filt_q_conus[df_filt_q_conus['band']==1]
+perrenial_grass_subset = df_filt_q_conus[df_filt_q_conus['band']==4]
+
+# %%
+from mpl_toolkits.mplot3d import Axes3D
+
+# Assuming the subsets are defined as follows for demonstration
+# Filter the DataFrame to create subsets for tree, shrub, and annual grass
+tree_subset = df_filt_q_conus[df_filt_q_conus['band'] == 6]
+shrub_subset = df_filt_q_conus[df_filt_q_conus['band'] == 5]
+annual_grass_subset = df_filt_q_conus[df_filt_q_conus['band'] == 1]
+perrenial_grass_subset = df_filt_q_conus[df_filt_q_conus['band']==4]
+# %%
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from matplotlib.colors import LightSource
+
+
+def plot_ai_q_veglevel(subset, vegtype=""):
+    num_bins = 3
+    veg_bins = pd.cut(subset['landcover_percent'].values, bins=num_bins, labels=['low', 'medium', 'high'])
+    colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
+    # cmap = plt.get_cmap("Greens")
+    # colors = {bin_label: cmap(i / num_bins) for i, bin_label in enumerate(['low', 'medium', 'high'])}
+
+    # Create a figure and subplots
+    fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
+    # ls = LightSource()
+    # Iterate over bins and plot scatter plots
+    for i, bin_label in enumerate(['low', 'medium', 'high']):
+        level_subset = subset[veg_bins == bin_label]
+        scatter_color = colors[bin_label]
+        ax.scatter(level_subset['AI'], 
+                        level_subset['q_q'], 
+                        color=scatter_color,  alpha=0.1)
+        # Apply LOWESS, fraction controls the degree of smoothing
+        fraction = 0.1 # This is a parameter you might want to adjust based on your data
+        lowess_results = lowess(level_subset['q_q'], level_subset['AI'], frac=fraction)
+        smoothed_q_q = lowess_results[:, 1]
+        smoothed_AI = lowess_results[:, 0]
+
+        ax.plot(smoothed_AI, smoothed_q_q, color=scatter_color, linestyle='-', label=bin_label, linewidth=2)
+
+    ax.set_title(f"{vegtype} fractional coverage")
+    ax.set_xlabel('Aridity index [MAP/MAE]')
+    ax.set_ylabel(r'Nonlinear parameter $q$ [-]')
+    ax.set_ylim([0,15])
+    ax.legend(loc='best', fontsize='small')
+    plt.tight_layout()
+    plt.show()
+
+plot_ai_q_veglevel(tree_subset, "Tree")
+plot_ai_q_veglevel(shrub_subset, "Shrub")
+plot_ai_q_veglevel(annual_grass_subset, "Annual grass and herbs")
+plot_ai_q_veglevel(perrenial_grass_subset, "Perrenial grass and herbs")
+# %%
+# Creating the 3D scatter plot
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot each subset with different colors
+ax.scatter(tree_subset['AI'], tree_subset['q_q'], tree_subset['landcover_percent'], color='g', label='Trees', alpha=0.5)
+# ax.scatter(shrub_subset['landcover_percent'], shrub_subset['q_q'], shrub_subset['AI'], color='r', label='Shrubs', alpha=0.5)
+# ax.scatter(annual_grass_subset['landcover_percent'], annual_grass_subset['q_q'], annual_grass_subset['AI'], color='b', label='Annual Grass', alpha=0.5)
+
+# Labeling
+ax.set_xlabel('Landcover Percent')
+ax.set_ylabel('q_q')
+ax.set_zlabel('AI')
+ax.set_title('3D Scatter Plot of Vegetation Types')
+ax.legend()
+
+plt.show()
+
+#%%
+# Adjusting the 3D scatter plot to compare 'landcover_percent' among the three vegetation types
+
+# Dummy data for z-axis since we're comparing the same 'landcover_percent' across different subsets
+z = range(max(len(tree_subset), len(shrub_subset), len(annual_grass_subset)))
+
+fig = plt.figure(figsize=(10, 7))
+ax = fig.add_subplot(111, projection='3d')
+
+tree_subset = rangeland_info[rangeland_info['band'] == 6]
+shrub_subset = rangeland_info[rangeland_info['band'] == 5]
+annual_grass_subset = rangeland_info[rangeland_info['band'] == 1]
+
+# Since we're comparing the same attribute across different subsets, we use a dummy z-axis for visualization
+ax.scatter(tree_subset['landcover_percent'].head(len(z)), shrub_subset['landcover_percent'].head(len(z)), z, color='g', label='Trees', alpha=0.5)
+ax.scatter(shrub_subset['landcover_percent'].head(len(z)), annual_grass_subset['landcover_percent'].head(len(z)), z, color='r', label='Shrubs', alpha=0.5)
+ax.scatter(annual_grass_subset['landcover_percent'].head(len(z)), tree_subset['landcover_percent'].head(len(z)), z, color='b', label='Annual Grass', alpha=0.5)
+
+# Labeling
+ax.set_xlabel('Tree Landcover Percent')
+ax.set_ylabel('Shrub Landcover Percent')
+ax.set_zlabel('Index')  # Using an index for the third dimension
+ax.set_title('3D Scatter Plot Comparing Landcover Percent')
+ax.legend()
+
+plt.show()
+# %%
+rangeland_info
+
+# %%
 # # %%
 # def plot_scatter_per_pixel_categorical(
 #     df, x_var, y_var, z_var, categories, colors, plot_logscale
