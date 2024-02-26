@@ -1729,8 +1729,12 @@ fig_ridge_veg.savefig(
 rangeland_info = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_rangeland_file)).drop(
     ["Unnamed: 0"], axis=1
 )
-df_filt_q_conus = df_filt_q.merge(rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left")
-print("Loaded ancillary rangeland information")
+# %%
+rangeland_info[~pd.isna(rangeland_info["landcover_percent"])].head()
+rangeland_info[(rangeland_info["EASE_column_index"]==152)&(rangeland_info["EASE_row_index"]==49)&(rangeland_info["year"]==2015)]
+sum()
+# df_filt_q_conus = df_filt_q.merge(rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left")
+# print("Loaded ancillary rangeland information")
 # %%
 print(f"Total number of drydown event with successful q fits & within CONUS: {len(df_filt_q_conus)}")
 print(f"No data: {df_filt_q_conus['landcover_percent'].isna().mean() * 100:.2f}%")
