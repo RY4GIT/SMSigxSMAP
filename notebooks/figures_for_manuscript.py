@@ -142,6 +142,7 @@ datarod_dir = "datarods"
 anc_dir = "SMAP_L1_L3_ANC_STATIC"
 anc_file = "anc_info.csv"
 anc_rangeland_file = "anc_info_rangeland.csv"
+anc_rangeland_processed_file = "anc_info_rangeland_processed.csv"
 IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
@@ -150,10 +151,9 @@ coord_info_file = "coord_info.csv"
 output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
 results_file = rf"all_results.csv"
 _df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
+_df['year'] = pd.to_datetime(_df['event_start']).dt.year
 print("Loaded results file")
 
-# %%
-_df['year'] = pd.to_datetime(_df['event_start']).dt.year
 
 # %%
 # Read coordinate information
@@ -296,6 +296,7 @@ q_thresh = 1e-03
 success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
 event_length_thresh = 30
+obs_freq_thresh = 0.33333
 ###################################################
 
 # Runs where q model performed reasonablly well
@@ -303,7 +304,7 @@ df_filt_q = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["event_length"] <=event_length_thresh)
+    & ((df["n_days"]/df["event_length"])>obs_freq_thresh)
 ].copy()
 
 print(
@@ -315,7 +316,7 @@ count_median_number_of_events_perGrid(df_filt_q)
 df_filt_allq = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["event_length"] <=event_length_thresh)
+    & ((df["n_days"]/df["event_length"])>obs_freq_thresh)
 ].copy()
 
 print(
@@ -327,7 +328,7 @@ count_median_number_of_events_perGrid(df_filt_allq)
 df_filt_exp = df[
     (df["exp_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["event_length"] <=event_length_thresh)
+    & ((df["n_days"]/df["event_length"])>obs_freq_thresh)
 ].copy()
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
@@ -341,7 +342,7 @@ df_filt_q_or_exp = df[
         | (df["exp_r_squared"] >= success_modelfit_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
-    & (df["event_length"] <=event_length_thresh)
+    & ((df["n_days"]/df["event_length"])>obs_freq_thresh)
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
@@ -352,7 +353,7 @@ df_filt_q_and_exp = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["exp_r_squared"] >= success_modelfit_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["event_length"] <=event_length_thresh)
+    & ((df["n_days"]/df["event_length"])>obs_freq_thresh)
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
@@ -583,7 +584,7 @@ print(f"Global mean q: {df_filt_q['q_q'].mean()}")
 # %% Map of R2 values
 # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
 var_key = "diff_R2"
-norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+norm = Normalize(vmin=var_dict[var_key]["lim"][0]*1.5, vmax=var_dict[var_key]["lim"][1]*1.5)
 fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
 plot_map(
     ax=ax, 
@@ -604,7 +605,9 @@ fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_median.png"), dpi=900, bbox_in
 
 var_key = "diff_R2"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0]*2, vmax=var_dict[var_key]["lim"][1]*2)
-fig_map_R2 = plot_map(
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map(
+    ax=ax, 
     df=df_filt_q_and_exp,
     coord_info=coord_info,
     cmap="RdBu",
@@ -1729,17 +1732,192 @@ fig_ridge_veg.savefig(
 rangeland_info = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_rangeland_file)).drop(
     ["Unnamed: 0"], axis=1
 )
-# %%
-rangeland_info[~pd.isna(rangeland_info["landcover_percent"])].head()
-rangeland_info[(rangeland_info["EASE_column_index"]==152)&(rangeland_info["EASE_row_index"]==49)&(rangeland_info["year"]==2015)]
-sum()
-# df_filt_q_conus = df_filt_q.merge(rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left")
-# print("Loaded ancillary rangeland information")
-# %%
-print(f"Total number of drydown event with successful q fits & within CONUS: {len(df_filt_q_conus)}")
-print(f"No data: {df_filt_q_conus['landcover_percent'].isna().mean() * 100:.2f}%")
 
-# df_filt_q_conus["veg_bins"] = pd.cut(df_filt_q_conus['landcover_percent'].values, bins=3, labels=['low', 'medium', 'high'], include_lowest=True)
+rangeland_info2 = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)).drop(
+    ["Unnamed: 0"], axis=1
+)
+rangeland_info2
+# # %%
+# rangeland_info[~pd.isna(rangeland_info["landcover_percent"])].head()
+# rangeland_info[(rangeland_info["EASE_column_index"]==152)&(rangeland_info["EASE_row_index"]==49)&(rangeland_info["year"]==2015)]
+# sum()
+df_filt_q_conus = df_filt_q.merge(rangeland_info2, on=["EASE_row_index", "EASE_column_index", "year"], how="left")
+# # print("Loaded ancillary rangeland information")
+# %%
+print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
+print(f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}")
+print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
+
+# %%
+##########################################################
+# Scatter plots 
+##########################################################
+plot_idx = ~pd.isna(df_filt_q_conus["fractional_wood"])
+fix,ax = plt.subplots()
+scatter=ax.scatter(df_filt_q_conus["fractional_wood"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
+ax.set_xlabel("Fractional woody vegetation cover [%]")
+ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
+cbar = fig.colorbar(scatter, ax=ax)
+cbar.set_label('Aridity index [MAP/MAE]')
+
+fix,ax = plt.subplots()
+scatter=ax.scatter(df_filt_q_conus["fractional_herb"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
+ax.set_xlabel("Fractional herbacious vegetation cover [%]")
+ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
+cbar = fig.colorbar(scatter, ax=ax)
+cbar.set_label('Aridity index [MAP/MAE]')
+
+# %%
+##########################################################
+# Scatter plots 
+##########################################################
+# Convert fractional_herb to percentage and bin it
+
+veg_bins = [0, 20, 40, 60, 80, 100]
+# veg_bins= [0, 100/3, 100/3*2, 100]
+veg_labels = ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']
+# veg_labels = ['low', 'medium', 'high']
+df_filt_q_conus['fractional_herb_pct'] = pd.cut(df_filt_q_conus['fractional_herb'] * 100, bins=veg_bins, labels=veg_labels)
+
+# Bin AI values
+df_filt_q_conus['AI_binned2'] = pd.cut(df_filt_q_conus['AI'], bins=[0, 0.5, 1.0, 1.5, np.inf], labels=['0-0.5', '0.5-1.0', '1.0-1.5', '1.5-'])
+
+# Assuming plot_idx filters the data we're interested in
+# For demonstration, let's use the entire dataset as plot_idx
+plot_idx = df_filt_q_conus.index
+
+# Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
+plt.figure(figsize=(9, 5))
+boxplot = sns.boxplot(x='fractional_herb_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
+outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
+for dot in outlier_dots:
+    dot.set_markeredgecolor('#dcdcdc')
+
+plt.xlabel('Fractional Herb Coverage (%)')
+plt.ylabel(r"Nonlinearity parameter $q$ [-]")
+plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small') 
+plt.ylim([0, 15])
+plt.tight_layout()
+plt.xticks(rotation=45)
+plt.show()
+
+# %%
+df_filt_q_conus['fractional_wood_pct'] = pd.cut(df_filt_q_conus['fractional_wood'] * 100, bins=veg_bins, labels=veg_labels)
+
+plot_idx = df_filt_q_conus.index
+
+# Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
+plt.figure(figsize=(9, 5))
+boxplot = sns.boxplot(x='fractional_wood_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
+outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
+for dot in outlier_dots:
+    dot.set_markeredgecolor('#dcdcdc')
+
+plt.xlabel('Fractional wood Coverage (%)')
+plt.ylabel(r"Nonlinearity parameter $q$ [-]")
+plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small') 
+plt.ylim([0, 15])
+plt.tight_layout()
+plt.xticks(rotation=45)
+plt.show()
+
+
+# %%
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
+
+
+# Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+q_greater_1 = df_filt_q_conus[df_filt_q_conus['q_q'] > 1].groupby(['AI_binned2', 'fractional_wood_pct']).size().reset_index(name='count_greater_1')
+total_counts = df_filt_q_conus.groupby(['AI_binned2', 'fractional_wood_pct']).size().reset_index(name='total_count')
+percentage_df = pd.merge(q_greater_1, total_counts, on=['AI_binned2', 'fractional_wood_pct'])
+percentage_df['percentage_q_gt_1'] = (percentage_df['count_greater_1'] / percentage_df['total_count']) * 100
+
+cmap = plt.get_cmap('RdBu')
+norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
+scholarmap = ScalarMappable(norm=norm, cmap=cmap)
+# Assigning colors to each AI bin based on its position
+ai_bins_unique = percentage_df['AI_binned2'].unique()
+colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
+
+
+# Plotting the scatter plot|
+plt.figure(figsize=(8, 5))
+for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+    plt.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+
+plt.xlabel('Fractional Wood Coverage (%)')
+plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+#%%
+
+# Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+q_greater_1 = df_filt_q_conus[df_filt_q_conus['q_q'] > 1].groupby(['AI_binned2', 'fractional_herb_pct']).size().reset_index(name='count_greater_1')
+total_counts = df_filt_q_conus.groupby(['AI_binned2', 'fractional_herb_pct']).size().reset_index(name='total_count')
+percentage_df = pd.merge(q_greater_1, total_counts, on=['AI_binned2', 'fractional_herb_pct'])
+percentage_df['percentage_q_gt_1'] = (percentage_df['count_greater_1'] / percentage_df['total_count']) * 100
+
+cmap = plt.get_cmap('RdBu')
+norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
+scholarmap = ScalarMappable(norm=norm, cmap=cmap)
+# Assigning colors to each AI bin based on its position
+ai_bins_unique = percentage_df['AI_binned2'].unique()
+colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
+
+
+# Plotting the scatter plot|
+plt.figure(figsize=(8, 5))
+for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+    plt.plot(group['fractional_herb_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+
+plt.xlabel('Fractional Herb Coverage (%)')
+plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+# %%
+# Simplifying the approach to correct the data processing for the stacked plot
+
+varname = "fractional_herb_pct"
+# Re-aggregating data with correct grouping
+grouped_data = df_filt_q_conus.groupby(['AI_binned2', varname, 'q_q_category']).size().reset_index(name='count')
+
+# Creating a pivot table for the plot
+pivot_data = grouped_data.pivot_table(index=['AI_binned2', varname], columns='q_q_category', values='count', fill_value=0)
+
+# Calculate the total counts for each group for normalization
+pivot_data['total'] = pivot_data.sum(axis=1)
+
+# Normalize the counts by the total to get percentages
+for category in ['q<1', 'q>1']:
+    pivot_data[category] = pivot_data[category] / pivot_data['total'] * 100
+
+# Plotting the stacked bar chart
+# pivot_data.plot(kind='bar', stacked=True, figsize=(14, 8), color=['#1f77b4', '#ff7f0e'])
+
+# Drop the 'total' column as it's no longer needed for plotting
+normalized_data = pivot_data.drop(columns='total')
+
+# Plotting the normalized stacked bar chart
+normalized_data.plot(kind='bar', stacked=True, figsize=(10, 5), color=['#1f77b4', '#ff7f0e'])
+
+
+plt.xlabel(f'(AI Bin,{varname} %)')
+plt.ylabel('Number of Events')
+plt.legend(title='q_q Category', loc='upper right')
+
+# Improving the readability of the x-axis labels
+plt.xticks(rotation=45, ha="right")
+
+plt.tight_layout()
+plt.show()
+
 
 # %%
 years = range(2015, 2023)  # 2023 is not included, so it goes up to 2022
