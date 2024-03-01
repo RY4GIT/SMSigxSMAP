@@ -24,9 +24,21 @@ from textwrap import wrap
 
 from functions import q_drydown, exponential_drydown, loss_model
 
-!pip install mpl-scatter-density
+# !pip install mpl-scatter-density
 import mpl_scatter_density
 from matplotlib.colors import LinearSegmentedColormap
+
+#%%
+import matplotlib as mpl
+
+mpl.font_manager.findSystemFonts(fontpaths=None, fontext='ttf')
+font_files = mpl.font_manager.findSystemFonts(fontpaths=['/home/brynmorgan/Fonts/'])
+
+for font_file in font_files:
+    mpl.font_manager.fontManager.addfont(font_file)
+
+mpl.rcParams['font.family'] = 'sans-serif'
+mpl.rcParams['font.sans-serif'] = 'Myriad Pro'
 
 # %% Plot config
 
@@ -54,36 +66,40 @@ var_dict = {
     "theta": {
         "column_name": "sm",
         "symbol": r"$\theta$",
-        "label": r"SMAP soil moisture",
-        "unit": r"$[m^3/m^3]$",
+        # "label": r"Soil moisture",
+        "label": r"Soil moisture, $\theta$",
+        "unit": r"(m$^3$ m$^{-3}$)",
         "lim": [0, 0.50],
     },
     "dtheta": {
         "column_name": "",
-        "symbol": r"$-d\theta/dt$",
+        "symbol": r"$-\frac{d\theta}{dt}$",
         "label": r"Change in soil moisture",
-        "unit": r"$[m^3/m^3/day]$",
+        # "label": r"Change in soil moisture, $-\frac{d\theta}{dt}$",
+        "unit": r"(m$^3$ m$^{-3}$ day$^{-1}$)",
         "lim": [-0.10, 0],
     },
     "q_q": {
         "column_name": "q_q",
         "symbol": r"$q$",
-        "label": r"Nonlinear parameter $q$",
-        "unit": "[-]",
+        # "label": r"Nonlinear parameter $q$",
+        "label": r"$q$",
+        # "unit": "[-]",
+        "unit": "",
         "lim": [0.5, 4.0],
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
-        "symbol": r"$ET_{max}$",
+        "symbol": r"$ET_{\mathrm{max}}$",
         "label": r"Estimated $ET_{max}$",
-        "unit": "[mm/day]",
+        "unit": r"(mm day$^{-1}$)",
         "lim": [0, 17.5],
     },
     "theta_star": {
         "column_name": "max_sm",
-        "symbol": r"$\theta*$",
-        "label": r"Estimated $\theta*$",
-        "unit": r"$[m^3/m^3]$",
+        "symbol": r"$\theta_*$",
+        "label": r"Estimated $\theta_*$",
+        "unit": r"(m$^3$ m$^{-3}$)",
         "lim": [0.1, 0.45],
     },
     "sand_bins": {
@@ -97,7 +113,7 @@ var_dict = {
         "column_name": "ai_bins",
         "symbol": r"AI",
         "label": r"Aridity Index",
-        "unit": "[MAP/MAE]",
+        "unit": "(MAP/MAE)",
         "lim": [0.0, 2.0],
     },
     "veg_class": {
@@ -111,7 +127,7 @@ var_dict = {
         "column_name": "AI",
         "symbol": r"AI",
         "label": r"Aridity Index",
-        "unit": "[MAP/MAE]",
+        "unit": "(MAP/MAE)",
         "lim": [0.0, 1.1],
     },
     "diff_R2": {
@@ -174,7 +190,7 @@ print("Loaded ancillary information (land-cover)")
 print(f"Total number of drydown event: {len(df)}")
 
 # %% Create output directory
-fig_dir = os.path.join(output_dir, dir_name, "figs")
+fig_dir = os.path.join(output_dir, dir_name, "figs/chapman")
 if not os.path.exists(fig_dir):
     os.mkdir(fig_dir)
     print(f"Created dir: {fig_dir}")
@@ -421,7 +437,7 @@ def using_mpl_scatter_density(fig, x, y):
     density = ax.scatter_density(x, y, cmap=white_viridis)
     fig.colorbar(density, label='Number of points per pixel')
     
-def plot_R2_models_v2(df, R2_threshold):
+def plot_R2_models_v2(df, R2_threshold, save=False):
     plt.rcParams.update({"font.size": 30})
     # Read data
     x = df["exp_r_squared"].values
@@ -462,22 +478,23 @@ def plot_R2_models_v2(df, R2_threshold):
     ax.set_ylim([R2_threshold, 1])
     ax.set_title(r"$R^2$ comparison")
 
-    fig.savefig(os.path.join(fig_dir, f"R2_scatter.png"), dpi=900, bbox_inches="tight")
-    fig.savefig(os.path.join(fig_dir, f"R2_scatter.pdf"), dpi=900, bbox_inches="tight")
+    if save:
+        fig.savefig(os.path.join(fig_dir, f"R2_scatter.png"), dpi=900, bbox_inches="tight")
+        fig.savefig(os.path.join(fig_dir, f"R2_scatter.pdf"), dpi=900, bbox_inches="tight")
     return fig, ax
 
 # plot_R2_models(df=df, R2_threshold=0.0)
 
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
 plot_R2_models_v2(
-    df=df_filt_q_and_exp, R2_threshold=success_modelfit_thresh
+    df=df_filt_q_and_exp, R2_threshold=success_modelfit_thresh, save=False
 )
 
 # %%
 ############################################################################
 # Map plots
 ###########################################################################
-def plot_map(ax, df, coord_info, cmap, norm, var_item, stat_type, title=""):
+def plot_map(ax, df, coord_info, cmap, norm, var_item, stat_type, title="", bar_label=None):
     plt.rcParams.update({"font.size": 12})
 
     # Get the mean values of the variable
@@ -529,13 +546,18 @@ def plot_map(ax, df, coord_info, cmap, norm, var_item, stat_type, title=""):
     ax.set_extent([-160, 170, -60, 90], crs=ccrs.PlateCarree())
     ax.coastlines()
 
+    if not bar_label:
+        bar_label = f'{stat_label} {var_item["label"]}'
+
     # Add colorbar
     plt.colorbar(
         im,
         ax=ax,
         orientation="vertical",
-        label=f'{stat_label} {var_item["label"]} {var_item["unit"]}',
+        # label=f'{stat_label} {var_item["label"]} {var_item["unit"]}',
+        label=bar_label,
         shrink=0.35,
+        # width=0.1,
         pad=0.02,
     )
 
@@ -550,12 +572,12 @@ def plot_map(ax, df, coord_info, cmap, norm, var_item, stat_type, title=""):
 #################################
 # Map figures (Main manuscript)
 ################################
-
+save = False
 # Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
 # Also exclude the extremely small value of q that deviates the analysis
 var_key = "q_q"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}, frameon=False)
 plot_map(
     ax=ax,
     df=df_filt_q,
@@ -565,15 +587,22 @@ plot_map(
     var_item=var_dict[var_key],
     stat_type="median"
 )
-fig_map_q.savefig(os.path.join(fig_dir, f"q_map_median.png"), dpi=900, bbox_inches="tight")
+if save:
+    fig_map_q.savefig(os.path.join(fig_dir, f"q_map_median.png"), dpi=900, bbox_inches="tight", transparent=True)
+    fig_map_q.savefig(os.path.join(fig_dir, f"q_map_median.pdf"), dpi=900, bbox_inches="tight", transparent=True)
+    # fig_map_q.savefig(os.path.join(fig_dir, f"q_map_median.svg"), dpi=900, bbox_inches="tight", transparent=True)
 
 print(f"Global median q: {df_filt_q['q_q'].median()}")
 print(f"Global mean q: {df_filt_q['q_q'].mean()}")
 
 # %% Map of R2 values
+
+save = save
+stat_type = "mean"
 # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
 var_key = "diff_R2"
-norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+# norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+norm = Normalize(vmin=var_dict[var_key]["lim"][0]*2, vmax=var_dict[var_key]["lim"][1]*2)
 fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
 plot_map(
     ax=ax, 
@@ -582,32 +611,41 @@ plot_map(
     cmap="RdBu",
     norm=norm,
     var_item=var_dict[var_key],
-    stat_type="median",
+    stat_type=stat_type,
+    bar_label="Difference in " + stat_type + " " + var_dict[var_key]["label"]
 )
-fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_median.png"), dpi=900, bbox_inches="tight")
+if save:
+    fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_{stat_type}.png"), dpi=900, bbox_inches="tight", transparent=True)
+    fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_{stat_type}.pdf"), dpi=900, bbox_inches="tight", transparent=True)
+    # fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_{stat_type}.svg"), dpi=900, bbox_inches="tight", transparent=True)
 
-# %% 
+# # %% 
 
-################################
-# Map figures (Supplemental)
-################################
+# ################################
+# # Map figures (Supplemental)
+# ################################
+# save = save
+# fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
 
-var_key = "diff_R2"
-norm = Normalize(vmin=var_dict[var_key]["lim"][0]*2, vmax=var_dict[var_key]["lim"][1]*2)
-fig_map_R2 = plot_map(
-    df=df_filt_q_and_exp,
-    coord_info=coord_info,
-    cmap="RdBu",
-    norm=norm,
-    var_item=var_dict[var_key],
-    stat_type="mean",
-)
-fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_mean.png"), dpi=900, bbox_inches="tight")
+# var_key = "diff_R2"
+# norm = Normalize(vmin=var_dict[var_key]["lim"][0]*2, vmax=var_dict[var_key]["lim"][1]*2)
+# fig_map_R2 = plot_map(
+#     ax = ax,
+#     df=df_filt_q_and_exp,
+#     coord_info=coord_info,
+#     cmap="RdBu",
+#     norm=norm,
+#     var_item=var_dict[var_key],
+#     stat_type="mean",
+# )
+# if save:
+#     fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_mean.png"), dpi=900, bbox_inches="tight")
 
-print(f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].median()}")
-print(f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].mean()}")
+# print(f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].median()}")
+# print(f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].mean()}")
 
 # %%
+save = save
 # Map of theta_star
 var_key = "theta_star"
 norm = Normalize(vmin=0.0, vmax=0.6)
@@ -622,7 +660,8 @@ plot_map(
     stat_type="median",
     title="A"
 )
-fig_map_theta_star.savefig(os.path.join(fig_dir, f"sup_map_thetastar.png"), dpi=900, bbox_inches="tight")
+if save:
+    fig_map_theta_star.savefig(os.path.join(fig_dir, f"sup_map_thetastar.png"), dpi=900, bbox_inches="tight")
 # fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
 
 print(f"Global median theta_star: {df_filt_q['max_sm'].median()}")
@@ -643,7 +682,8 @@ plot_map(
     stat_type="median",
     title="B"
 )
-fig_map_ETmax.savefig(os.path.join(fig_dir, f"sup_map_ETmax.png"), dpi=900, bbox_inches="tight")
+if save:
+    fig_map_ETmax.savefig(os.path.join(fig_dir, f"sup_map_ETmax.png"), dpi=900, bbox_inches="tight")
 # fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
 
 print(f"Global median ETmax: {df_filt_q['q_ETmax'].median()}")
@@ -677,16 +717,17 @@ def plot_hist(df, var_key):
 
     # Adding title and labels
     # ax.set_title("Histogram of $q$ values")
-    ax.set_xlabel(r"$q$ [-]")
-    ax.set_ylabel("Frequency [-]")
+    ax.set_xlabel(r"$q$")
+    ax.set_ylabel("Frequency")
     fig.legend(loc='upper right', bbox_to_anchor=(0.93, 0.9))
 
     return fig, ax
 
 
 fig_q_hist, _ = plot_hist(df=df_filt_q, var_key="q_q")
-fig_q_hist.savefig(os.path.join(fig_dir, f"q_hist.png"), dpi=1200, bbox_inches="tight")
-fig_q_hist.savefig(os.path.join(fig_dir, f"q_hist.pdf"), dpi=1200, bbox_inches="tight")
+if save:
+    fig_q_hist.savefig(os.path.join(fig_dir, f"q_hist.png"), dpi=1200, bbox_inches="tight", transparent=True)
+    fig_q_hist.savefig(os.path.join(fig_dir, f"q_hist.pdf"), dpi=1200, bbox_inches="tight", transparent=True)
 
 # %%
 ############################################################################
@@ -774,10 +815,12 @@ def plot_loss_func_categorical(ax, df, z_var, categories, colors, title="", plot
 
     ax.invert_yaxis()
     ax.set_xlabel(
-        f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
+        # f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
+        f"{var_dict['theta']['label']} {var_dict['theta']['unit']}"
     )
     ax.set_ylabel(
         f"{var_dict['dtheta']['label']}\n{var_dict['dtheta']['symbol']} {var_dict['dtheta']['unit']}"
+        # f"{var_dict['dtheta']['label']} {var_dict['dtheta']['unit']}"
     )
     if title=="": 
         title = f'Median loss function by {z_var["label"]} {z_var["unit"]}'
@@ -853,8 +896,8 @@ def plot_scatter_with_errorbar_categorical(
             capthick=2,
             color=stats["color"],
             alpha=0.7,
-            markersize=15,
-            mec="darkgray",
+            markersize=17,
+            mec=stats["color"], #"darkgray",
             mew=1,
             linewidth=3,
         )
@@ -925,8 +968,8 @@ def plot_scatter_with_errorbar(ax, df, x_var, y_var, z_var, cmap, quantile, titl
             capthick=2,
             color=stats["color"],
             alpha=0.7,
-            markersize=15,
-            mec="darkgray",
+            markersize=17,
+            mec= stats["color"], #"darkgray",
             mew=1,
             linewidth=3
         )
@@ -951,10 +994,12 @@ def plot_scatter_with_errorbar(ax, df, x_var, y_var, z_var, cmap, quantile, titl
 # %%  ##########################
 ## Loss function plots + parameter scatter plots  (Figure 4)
 ##########################
-
+save = True
 # Create a figure with subplots
 fig, axs = plt.subplots(1, 2, figsize=(12, 6))
-plt.rcParams.update({"font.size": 18})
+# mpl.rcParams['font.size'] = 18
+# # plt.rcParams.update({'axes.labelsize' : 14})
+# plt.rcParams.update({"font.size": 18})
 # Plotting
 plot_loss_func_categorical(
     axs[0],
@@ -962,9 +1007,10 @@ plot_loss_func_categorical(
     var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
-    title="A",
+    title=None,
     plot_legend=False
     )
+
 
 plot_scatter_with_errorbar_categorical(
     ax=axs[1], 
@@ -975,18 +1021,25 @@ plot_scatter_with_errorbar_categorical(
     categories=list(vegetation_color_dict.keys()), 
     colors=list(vegetation_color_dict.values()), 
     quantile=25,
-    title="B",
+    title=None,
     plot_logscale=False,
     plot_legend=False
     )
+
+axs[1].set_ylim([0.4,4.0])
+
+axs[0].set_yticks([-0.1 , -0.08, -0.06, -0.04, -0.02,  0.], ['0.10' , 0.08, 0.06, 0.04, 0.02,  '0.00'])
+axs[1].set_yticks([0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0], ['', 1.0, '', 2.0, '', 3.0, '', 4.0])
 
 
 plt.tight_layout()
 plt.show()
 
+if save:
 # Save the combined figure
-fig.savefig(os.path.join(fig_dir, "q_veg_ai.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "q_veg_ai.pdf"), dpi=1200, bbox_inches="tight")
+    fig.savefig(os.path.join(fig_dir, "q_veg_ai.png"), dpi=1200, bbox_inches="tight", transparent=True)
+    fig.savefig(os.path.join(fig_dir, "q_veg_ai.pdf"), dpi=1200, bbox_inches="tight", transparent=True)
+    fig.savefig(os.path.join(fig_dir, "q_veg_ai.svg"), dpi=600, bbox_inches="tight", transparent=True)
 
 # %%
 #####################################
@@ -994,7 +1047,7 @@ fig.savefig(os.path.join(fig_dir, "q_veg_ai.pdf"), dpi=1200, bbox_inches="tight"
 #######################################
 # Vegetation
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-plt.rcParams.update({"font.size": 18})
+plt.rcParams.update({"font.size": 14})
 plot_loss_func_categorical(
     axs[0, 0],
     df_filt_q,
@@ -1049,9 +1102,10 @@ plot_scatter_with_errorbar_categorical(
 plt.tight_layout()
 plt.show()
 
+if save:
 # Save the combined figure
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg.pdf"), dpi=1200, bbox_inches="tight")
+    fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg.png"), dpi=1200, bbox_inches="tight")
+    fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg.pdf"), dpi=1200, bbox_inches="tight")
 
 # fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg_legend.pdf"), dpi=1200, bbox_inches="tight")
 # %%

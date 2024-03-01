@@ -9,42 +9,68 @@ import ast
 from functions import q_drydown, exponential_drydown, loss_model, exponential_drydown2
 
 # %%
+
 var_dict = {
     "theta": {
-        "column_name": "",
+        "column_name": "sm",
         "symbol": r"$\theta$",
-        "label": r"Soil moisture $\theta$",
-        "unit": r"$[m^3/m^3]$",
+        # "label": r"Soil moisture",
+        "label": r"Soil moisture, $\theta$",
+        "unit": r"(m$^3$ m$^{-3}$)",
         "lim": [0, 0.50],
     },
     "dtheta": {
         "column_name": "",
-        "symbol": r"$-d\theta/dt$",
-        "label": r"$-d\theta/dt$",
-        "unit": r"$[m^3/m^3/day]$",
+        "symbol": r"$-\frac{d\theta}{dt}$",
+        "label": r"$-\frac{d\theta}{dt}$",
+        # "label": r"Change in soil moisture, $-\frac{d\theta}{dt}$",
+        "unit": r"(m$^3$ m$^{-3}$ day$^{-1}$)",
         "lim": [-0.10, 0],
-    },
-    "theta_norm": {
-        "column_name": "",
-        "symbol": r"$\theta_{norm}$",
-        "label": r"Normalized soil moisture $\theta_{norm}$",
-        "unit": r"$[-]$",
-        "lim": [0, 1.0],
-    },
-    "dtheta_norm": {
-        "column_name": "",
-        "symbol": r"$-d\theta/dt$",
-        "label": r"$-d\theta_{norm}/dt$",
-        "unit": r"$[-/day]$",
-        "lim": [-0.15, 0],
     },
     "t": {
         "column_name": "",
         "symbol": r"$t$",
-        "label": r"Timestep $t$",
-        "unit": r"$[day]$",
+        "label": r"$t$",
+        "unit": r"(days)",
     },
 }
+
+# var_dict = {
+#     "theta": {
+#         "column_name": "",
+#         "symbol": r"$\theta$",
+#         "label": r"Soil moisture $\theta$",
+#         "unit": r"$[m^3/m^3]$",
+#         "lim": [0, 0.50],
+#     },
+#     "dtheta": {
+#         "column_name": "",
+#         "symbol": r"$-d\theta/dt$",
+#         "label": r"$-d\theta/dt$",
+#         "unit": r"$[m^3/m^3/day]$",
+#         "lim": [-0.10, 0],
+#     },
+#     "theta_norm": {
+#         "column_name": "",
+#         "symbol": r"$\theta_{norm}$",
+#         "label": r"Normalized soil moisture $\theta_{norm}$",
+#         "unit": r"$[-]$",
+#         "lim": [0, 1.0],
+#     },
+#     "dtheta_norm": {
+#         "column_name": "",
+#         "symbol": r"$-d\theta/dt$",
+#         "label": r"$-d\theta_{norm}/dt$",
+#         "unit": r"$[-/day]$",
+#         "lim": [-0.15, 0],
+#     },
+#     "t": {
+#         "column_name": "",
+#         "symbol": r"$t$",
+#         "label": r"Timestep $t$",
+#         "unit": r"$[day]$",
+#     },
+# }
 theta_vardict = var_dict["theta"]
 dtheta_vardict = var_dict["dtheta"]
 
