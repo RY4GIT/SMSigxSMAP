@@ -32,7 +32,7 @@ import ast
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-02-02"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -358,7 +358,8 @@ def plot_drydown(event_id):
     # Plotting
 
     # Create a figure
-    fig = plt.figure(figsize=(7, 3.5))
+    fig = plt.figure(figsize=(7*2, 3.5))
+    plt.rcParams.update({"font.size": 12})
 
     import matplotlib.gridspec as gridspec
     # Set up a GridSpec layout
@@ -401,6 +402,18 @@ print_goodones(df_filt_q_and_exp)
 
 # %%
 ################################################
-event_id = 544064
+event_id = 2170
 ################################################
 plot_drydown(event_id=event_id)
+
+# %%
+print(df[(df["event_length"] > 50)].index)
+# print(df[(df["q_q"] > 100)& (df["sm_range"]>0.1)& (df["q_r_squared"]>0.7)].index)
+
+# %%
+# The number of days with soil moisture record, divided by the length of the event
+(df["n_days"]/df["event_length"]).hist()
+
+# %%
+df[((df["n_days"]/df["event_length"])>0.33)&((df["n_days"]/df["event_length"])<0.5)&(df['q_r_squared']>0.7)].index
+# %%
