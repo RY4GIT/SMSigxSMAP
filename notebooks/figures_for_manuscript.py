@@ -16,6 +16,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import TwoSlopeNorm
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from matplotlib import cm
 from matplotlib.colors import Normalize
 import datashader as ds
@@ -1743,525 +1745,655 @@ rangeland_info2
 # sum()
 df_filt_q_conus = df_filt_q.merge(rangeland_info2, on=["EASE_row_index", "EASE_column_index", "year"], how="left")
 # # print("Loaded ancillary rangeland information")
+
+# %%
+rangeland_info2.head()
 # %%
 print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
 print(f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}")
 print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
 
 # %%
-##########################################################
-# Scatter plots 
-##########################################################
-plot_idx = ~pd.isna(df_filt_q_conus["fractional_wood"])
-fix,ax = plt.subplots()
-scatter=ax.scatter(df_filt_q_conus["fractional_wood"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
-ax.set_xlabel("Fractional woody vegetation cover [%]")
-ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
-cbar = fig.colorbar(scatter, ax=ax)
-cbar.set_label('Aridity index [MAP/MAE]')
-
-fix,ax = plt.subplots()
-scatter=ax.scatter(df_filt_q_conus["fractional_herb"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
-ax.set_xlabel("Fractional herbacious vegetation cover [%]")
-ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
-cbar = fig.colorbar(scatter, ax=ax)
-cbar.set_label('Aridity index [MAP/MAE]')
-
 # %%
 ##########################################################
 # Scatter plots 
 ##########################################################
 # Convert fractional_herb to percentage and bin it
 
+# veg_bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 veg_bins = [0, 20, 40, 60, 80, 100]
 # veg_bins= [0, 100/3, 100/3*2, 100]
+# veg_labels = ['0-10%', '10-20%','20-30%', '30-40%','40-50%', '50-60%','60-70%','70-80%', '80-90%','90-100%']
 veg_labels = ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%']
 # veg_labels = ['low', 'medium', 'high']
 df_filt_q_conus['fractional_herb_pct'] = pd.cut(df_filt_q_conus['fractional_herb'] * 100, bins=veg_bins, labels=veg_labels)
+df_filt_q_conus['fractional_wood_pct'] = pd.cut(df_filt_q_conus['fractional_wood'] * 100, bins=veg_bins, labels=veg_labels)
 
 # Bin AI values
 df_filt_q_conus['AI_binned2'] = pd.cut(df_filt_q_conus['AI'], bins=[0, 0.5, 1.0, 1.5, np.inf], labels=['0-0.5', '0.5-1.0', '1.0-1.5', '1.5-'])
-
-# Assuming plot_idx filters the data we're interested in
-# For demonstration, let's use the entire dataset as plot_idx
-plot_idx = df_filt_q_conus.index
-
-# Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
-plt.figure(figsize=(9, 5))
-boxplot = sns.boxplot(x='fractional_herb_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
-outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
-for dot in outlier_dots:
-    dot.set_markeredgecolor('#dcdcdc')
-
-plt.xlabel('Fractional Herb Coverage (%)')
-plt.ylabel(r"Nonlinearity parameter $q$ [-]")
-plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small') 
-plt.ylim([0, 15])
-plt.tight_layout()
-plt.xticks(rotation=45)
-plt.show()
-
-# %%
-df_filt_q_conus['fractional_wood_pct'] = pd.cut(df_filt_q_conus['fractional_wood'] * 100, bins=veg_bins, labels=veg_labels)
-
-plot_idx = df_filt_q_conus.index
-
-# Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
-plt.figure(figsize=(9, 5))
-boxplot = sns.boxplot(x='fractional_wood_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
-outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
-for dot in outlier_dots:
-    dot.set_markeredgecolor('#dcdcdc')
-
-plt.xlabel('Fractional wood Coverage (%)')
-plt.ylabel(r"Nonlinearity parameter $q$ [-]")
-plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small') 
-plt.ylim([0, 15])
-plt.tight_layout()
-plt.xticks(rotation=45)
-plt.show()
+# df_filt_q_conus['AI_binned2'] = pd.cut(df_filt_q_conus['AI'], bins=[0, 1.0,  np.inf], labels=['0-1.0', '1.0-'])
 
 
 # %%
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
-
 
 # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
 q_greater_1 = df_filt_q_conus[df_filt_q_conus['q_q'] > 1].groupby(['AI_binned2', 'fractional_wood_pct']).size().reset_index(name='count_greater_1')
 total_counts = df_filt_q_conus.groupby(['AI_binned2', 'fractional_wood_pct']).size().reset_index(name='total_count')
 percentage_df = pd.merge(q_greater_1, total_counts, on=['AI_binned2', 'fractional_wood_pct'])
 percentage_df['percentage_q_gt_1'] = (percentage_df['count_greater_1'] / percentage_df['total_count']) * 100
-
-cmap = plt.get_cmap('RdBu')
-norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
-scholarmap = ScalarMappable(norm=norm, cmap=cmap)
-# Assigning colors to each AI bin based on its position
-ai_bins_unique = percentage_df['AI_binned2'].unique()
-colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
-
-
-# Plotting the scatter plot|
-plt.figure(figsize=(8, 5))
-for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-    plt.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
-
-plt.xlabel('Fractional Wood Coverage (%)')
-plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
-plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
-#%%
-
-# Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
-q_greater_1 = df_filt_q_conus[df_filt_q_conus['q_q'] > 1].groupby(['AI_binned2', 'fractional_herb_pct']).size().reset_index(name='count_greater_1')
-total_counts = df_filt_q_conus.groupby(['AI_binned2', 'fractional_herb_pct']).size().reset_index(name='total_count')
-percentage_df = pd.merge(q_greater_1, total_counts, on=['AI_binned2', 'fractional_herb_pct'])
-percentage_df['percentage_q_gt_1'] = (percentage_df['count_greater_1'] / percentage_df['total_count']) * 100
-
-cmap = plt.get_cmap('RdBu')
-norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
-scholarmap = ScalarMappable(norm=norm, cmap=cmap)
-# Assigning colors to each AI bin based on its position
-ai_bins_unique = percentage_df['AI_binned2'].unique()
-colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
-
-
-# Plotting the scatter plot|
-plt.figure(figsize=(8, 5))
-for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-    plt.plot(group['fractional_herb_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
-
-plt.xlabel('Fractional Herb Coverage (%)')
-plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
-plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
-# %%
-# Simplifying the approach to correct the data processing for the stacked plot
-
-varname = "fractional_herb_pct"
-# Re-aggregating data with correct grouping
-grouped_data = df_filt_q_conus.groupby(['AI_binned2', varname, 'q_q_category']).size().reset_index(name='count')
-
-# Creating a pivot table for the plot
-pivot_data = grouped_data.pivot_table(index=['AI_binned2', varname], columns='q_q_category', values='count', fill_value=0)
-
-# Calculate the total counts for each group for normalization
-pivot_data['total'] = pivot_data.sum(axis=1)
-
-# Normalize the counts by the total to get percentages
-for category in ['q<1', 'q>1']:
-    pivot_data[category] = pivot_data[category] / pivot_data['total'] * 100
-
-# Plotting the stacked bar chart
-# pivot_data.plot(kind='bar', stacked=True, figsize=(14, 8), color=['#1f77b4', '#ff7f0e'])
-
-# Drop the 'total' column as it's no longer needed for plotting
-normalized_data = pivot_data.drop(columns='total')
-
-# Plotting the normalized stacked bar chart
-normalized_data.plot(kind='bar', stacked=True, figsize=(10, 5), color=['#1f77b4', '#ff7f0e'])
-
-
-plt.xlabel(f'(AI Bin,{varname} %)')
-plt.ylabel('Number of Events')
-plt.legend(title='q_q Category', loc='upper right')
-
-# Improving the readability of the x-axis labels
-plt.xticks(rotation=45, ha="right")
-
-plt.tight_layout()
-plt.show()
-
-
-# %%
-years = range(2015, 2023)  # 2023 is not included, so it goes up to 2022
-band_numbers = [1,4,5,6] #range(1, 7)  # 7 is not included, so it goes up to 6
-
-band_descriptions = {
-    1: "Annual forb and grass",
-    2: "Bare ground",
-    3: "Litter",
-    4: "Perennial forb and grass",
-    5: "Shrub",
-    6: "Tree"
-}
-
-# %%
-tree_subset = df_filt_q_conus[df_filt_q_conus['band'] == 6]
-shrub_subset = df_filt_q_conus[df_filt_q_conus['band'] == 5]
-annual_grass_subset = df_filt_q_conus[df_filt_q_conus['band'] == 1]
-perrenial_grass_subset = df_filt_q_conus[df_filt_q_conus['band']==4]
-
-# %%
-# vegetation cover bins
-
-# %%
-
-def plot_ai_q_veglevel(subset, vegtype=""):
-    num_bins = 3
-    veg_bins = pd.cut(subset['landcover_percent'].values, bins=num_bins, labels=['low', 'medium', 'high'])
-    colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
-    # cmap = plt.get_cmap("Greens")
-    # colors = {bin_label: cmap(i / num_bins) for i, bin_label in enumerate(['low', 'medium', 'high'])}
-
-    # Create a figure and subplots
-    fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
-    # ls = LightSource()
-    # Iterate over bins and plot scatter plots
-    for i, bin_label in enumerate(['low', 'medium', 'high']):
-        level_subset = subset[veg_bins == bin_label]
-        scatter_color = colors[bin_label]
-        ax.scatter(level_subset['AI'], 
-                        level_subset['q_q'], 
-                        color=scatter_color,  alpha=0.1)
-        # Apply LOWESS, fraction controls the degree of smoothing
-        fraction = 0.1 # This is a parameter you might want to adjust based on your data
-        lowess_results = lowess(level_subset['q_q'], level_subset['AI'], frac=fraction)
-        smoothed_q_q = lowess_results[:, 1]
-        smoothed_AI = lowess_results[:, 0]
-
-        ax.plot(smoothed_AI, smoothed_q_q, color=scatter_color, linestyle='-', label=bin_label, linewidth=2)
-
-    ax.set_title(f"{vegtype} fractional coverage")
-    ax.set_xlabel('Aridity index [MAP/MAE]')
-    ax.set_ylabel(r'Nonlinear parameter $q$ [-]')
-    ax.set_ylim([0,15])
-    ax.legend(loc='best', fontsize='small')
-    plt.tight_layout()
-    plt.show()
-
-plot_ai_q_veglevel(tree_subset, "Tree")
-plot_ai_q_veglevel(shrub_subset, "Shrub")
-plot_ai_q_veglevel(annual_grass_subset, "Annual grass and herbs")
-plot_ai_q_veglevel(perrenial_grass_subset, "Perrenial grass and herbs")
-
-
-# %%
-def plot_scatter_with_errorbar2(ax, df, x_var, y_var, z_var, quantile, title="", plot_logscale=False, plot_legend=False):
-    # fig, ax = plt.subplots(figsize=(5, 5))
-    stats_dict = {}
-
-    # Get unique bins
-    num_bins = 3
-    bins_sorted = ['low', 'medium', 'high']
-    df["subset_bins"] = pd.cut(df[z_var["column_name"]].values, bins=num_bins, labels=bins_sorted, include_lowest=True)
-    colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
-    # Calculate median and 90% confidence intervals for each vegetation class
-
-    for i, category in enumerate(bins_sorted):
-        subset = df[df["subset_bins"] == category]
-
-        # Median calculation
-        x_median = subset[x_var["column_name"]].median()
-        y_median = subset[y_var["column_name"]].median()
-
-        # 90% CI calculation, using the 5th and 95th percentiles
-        x_ci_low, x_ci_high = np.percentile(
-            subset[x_var["column_name"]], [quantile, 100 - quantile]
-        )
-        y_ci_low, y_ci_high = np.percentile(
-            subset[y_var["column_name"]], [quantile, 100 - quantile]
-        )
-
-        color_val = colors[category] #(i / (len(bin_sorted) - 1))
-        # Store in dict
-        stats_dict[category] = {
-            "x_median": x_median,
-            "y_median": y_median,
-            "x_ci": (x_median - x_ci_low, x_ci_high - x_median),
-            "y_ci": (y_median - y_ci_low, y_ci_high - y_median),
-            "color": color_val,
-        }
-
-    # Now plot medians with CIs
-    for category, stats in stats_dict.items():
-        ax.errorbar(
-            stats["x_median"],
-            stats["y_median"],
-            xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
-            yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
-            fmt="o",
-            label=str(category),
-            capsize=5,
-            capthick=2,
-            color=stats["color"],
-            alpha=0.7,
-            markersize=15,
-            mec="darkgray",
-            mew=1,
-            linewidth=3
-        )
-
-    # Add labels and title
-    ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-    if title=="":
-        title=f"Median with {quantile}% confidence interval"
-
-    ax.set_title(title, loc="center")
-
-    # Add a legend
-    if plot_legend:
-        plt.legend(bbox_to_anchor=(1, 1.5))
-    if plot_logscale:
-        plt.xscale("log")
-    ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
-
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_scatter_with_errorbar2(ax, tree_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Tree", plot_logscale=False, plot_legend=True)
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_scatter_with_errorbar2(ax, shrub_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Shrub", plot_logscale=False, plot_legend=True)
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_scatter_with_errorbar2(ax, annual_grass_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Annual grass and herbs", plot_logscale=False, plot_legend=True)
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_scatter_with_errorbar2(ax, perrenial_grass_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Perrenial grass and herbs", plot_logscale=False, plot_legend=False)
+percentage_df['percentage_q_le_1'] = 100 - percentage_df['percentage_q_gt_1']
 
 
 # %%
 
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar(ax, tree_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, cmap="RdBu", title="Tree", plot_logscale=False, plot_legend=True)
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar(ax, shrub_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, cmap="RdBu", title="Shrub", plot_logscale=False, plot_legend=True)
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar(ax, annual_grass_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25,  cmap="RdBu",title="Annual grass and herbs", plot_logscale=False, plot_legend=True)
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar(ax, perrenial_grass_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25,  cmap="RdBu",title="Perrenial grass and herbs", plot_logscale=False, plot_legend=False)
+# %%
+# Plotting for AI > 1.5
+fig = plt.figure(figsize=(8, 4))
 
+# Plotting the first set of bars (percentage_q_gt_1)
+def plot_fracq_by_pct(ax, df, title_name):
 
-
-#%%
-def plot_scatter_with_errorbar3(ax, df, x_var, y_var, z_var, quantile, title="", plot_logscale=False, plot_legend=False):
-    # fig, ax = plt.subplots(figsize=(5, 5))
-    stats_dict = {}
-
-    # Get unique bins
-    num_bins = 5
-    bin_edges = [0, 25, 50, 75, 100]
-    x_bins_sorted = ['0-25%', '25-50%', '50-75%', '75-100%']
-    # x_bins_sorted = ['low', 'medium', 'high', 'highest']
-    df["x_subset_bins"] = pd.cut(df[x_var["column_name"]].values, bins=bin_edges, labels=x_bins_sorted, include_lowest=True)
-    x_colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
-    # Calculate median and 90% confidence intervals for each vegetation class
-
-    z_bins_in_range = df[z_var["column_name"]].unique()
-    z_bins_list = [bin for bin in z_bins_in_range if pd.notna(bin)]
-    z_bins_sorted = sorted(z_bins_list, key=lambda x: x.left)
-    cmap="RdBu"
-    z_colors = plt.cm.get_cmap(cmap, len(z_bins_sorted))
-
-    for j, x_category in enumerate(x_bins_sorted):
-        for i, category in enumerate(z_bins_sorted):
-            subset = df[(df[z_var["column_name"]] == category) & (df["x_subset_bins"] == x_category)]
-            print(len(subset))
-
-            # Median calculation
-            x_median = subset[x_var["column_name"]].median()
-            y_median = subset[y_var["column_name"]].median()
-
-            # 90% CI calculation, using the 5th and 95th percentiles
-            try: 
-                x_ci_low, x_ci_high = np.nanpercentile(
-                    subset[x_var["column_name"]], [quantile, 100 - quantile]
-                )
-                y_ci_low, y_ci_high = np.nanpercentile(
-                    subset[y_var["column_name"]], [quantile, 100 - quantile]
+    sns.barplot(x='fractional_wood_pct', y='percentage_q_le_1', data=df,
+                color='#FFE268', label='percentage_q_le_1', ax=ax, width=.98, edgecolor='white', linewidth=3,
                 )
 
-                color_val = z_colors(i / (len(z_bins_list) - 1))
-                # Store in dict
-                stats_dict[category] = {
-                    "x_median": x_median,
-                    "y_median": y_median,
-                    "x_ci": (x_median - x_ci_low, x_ci_high - x_median),
-                    "y_ci": (y_median - y_ci_low, y_ci_high - y_median),
-                    "color": color_val,
-                }
-            except:
-                continue
+    sns.barplot(x='fractional_wood_pct', y='percentage_q_gt_1', data=df,
+                color='#22BBA9', label='percentage_q_gt_1', ax=ax,width=.98, edgecolor='white', linewidth=3,
+                bottom=df['percentage_q_le_1'])
+    # Plotting the second set of bars (percentage_q_le_1) on top of the first set
 
-        # Now plot medians with CIs
-        for category, stats in stats_dict.items():
-            ax.errorbar(
-                stats["x_median"],
-                stats["y_median"],
-                xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
-                yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
-                fmt="o",
-                label="Aridity:" + str(category) + " Vegetation - " + x_category,
-                capsize=5,
-                capthick=2,
-                color=stats["color"],
-                alpha=0.7,
-                markersize=15,
-                mec="darkgray",
-                mew=1,
-                linewidth=3
-            )
+    # Adding abbreviation line for '50-100%'
+    # # Find the position for '50-100%' bar
+    # bar_pos = df[df['fractional_wood_pct'] == '50-100%'].index[0]
+    # # Get the height of the 'percentage_q_gt_1' bar
+    # bar_height = df.iloc[bar_pos]['percentage_q_gt_1']
+    # # Draw the abbreviation line above the '50-100%' bar
+    # ax.text(bar_pos, bar_height + 5, '---', ha='center', va='bottom', color='black', fontsize=12)
 
-        # Add labels and title
-        ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
-        ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
-        if title=="":
-            title=f"Median with {quantile}% confidence interval"
 
-        ax.set_title(title, loc="center")
+    ax.set_xlabel('Fractional wood coverage (%)')
+    ax.set_ylabel('Fraction to total number of events (%)')
+    # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+    ax.set_ylim([0, 50])
+    plt.xticks(rotation=45)
+    ax.set_title(title_name, loc="left")
+    
+    ax.legend_ = None
 
-        # Add a legend
-        if plot_legend:
-            plt.legend(bbox_to_anchor=(1, 1.5))
-        if plot_logscale:
-            plt.xscale("log")
-        ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
-        ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+plt.rcParams.update({'font.size': 12})
+ax1 = plt.subplot(121)
+subset_df = percentage_df[percentage_df['AI_binned2']=='0-0.5']
+plot_fracq_by_pct(ax1, subset_df, "A.              P/PET < 0.5")
 
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar3(ax, tree_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Tree", plot_logscale=False, plot_legend=False)
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar3(ax, shrub_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Shrub", plot_logscale=False, plot_legend=False)
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar3(ax, annual_grass_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Annual grass and herbs", plot_logscale=False, plot_legend=False)
-fig, ax = plt.subplots(figsize=(5, 4))
-plot_scatter_with_errorbar3(ax, perrenial_grass_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Perrenial grass and herbs", plot_logscale=False, plot_legend=False)
+ax1 = plt.subplot(122)
+subset_df2 = percentage_df[percentage_df['AI_binned2']=='1.5-']
+plot_fracq_by_pct(ax1, subset_df2, "B.             P/PET > 1.5")
+plt.tight_layout()
+
+plt.savefig(os.path.join(fig_dir, f"fracq_fracwood_ai.pdf"), dpi=1200, bbox_inches="tight")
+    # %%
+# plt.bar(subset_df['fractional_wood_pct'], subset_df['percentage_q_gt_1'], label='Percentage $q>1$', color='skyblue')
+# plt.bar(subset_df['fractional_wood_pct'], subset_df['percentage_q_le_1'], bottom=subset_df['percentage_q_gt_1'], label='Percentage $q\leq1$', color='orange')
+# %%
+# subset_df[['fractional_wood_pct','percentage_q_gt_1', 'percentage_q_le_1']].plot( 
+#     x='fractional_wood_pct',  
+#     kind='bar',  
+#     stacked=True,  
+#     mark_right=True, 
+#     width=1.0,
+#     ax=ax1,
+#     edgecolor='white',  # Setting the bar outline to white
+#     linewidth=2  # Setting the linewidth of the bar edge
+# )
+
+# subset_df2 = percentage_df[percentage_df['AI_binned2']=='1.5-']
+# subset_df2
+# # Inset plot for AI between 0-0.5
+# plt.subplot(122)
+# plt.xlabel('Fractional Wood Coverage (%)')
+# plt.ylabel('Fractional events with $q>1$\n(%)')
+# plt.bar(subset_df2['fractional_wood_pct'], subset_df2['percentage_q_gt_1'], label='Percentage $q>1$', color='skyblue')
+# plt.bar(subset_df2['fractional_wood_pct'], subset_df2['percentage_q_le_1'], bottom=subset_df2['percentage_q_gt_1'], label='Percentage $q\leq1$', color='orange')
+# plt.ylim([60, 100])
+# plt.xticks(rotation=45)
+# plt.title('Percentage of Events with $q>1$ for AI 0-0.5')
+# plt.tight_layout()
+
+# plt.show()
+# %%
+
+# # Plotting the scatter plot|
+# plt.figure(figsize=(8, 5))
+# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+#     plt.plot(group['fractional_herb_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+
+# plt.xlabel('Fractional Herb Coverage (%)')
+# plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+# plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+
+# # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+# q_greater_1 = df_filt_q_conus[df_filt_q_conus['q_q'] > 1].groupby(['AI_binned2', 'fractional_wood_pct']).size().reset_index(name='count_greater_1')
+# total_counts = df_filt_q_conus.groupby(['AI_binned2', 'fractional_wood_pct']).size().reset_index(name='total_count')
+# percentage_df = pd.merge(q_greater_1, total_counts, on=['AI_binned2', 'fractional_wood_pct'])
+# percentage_df['percentage_q_gt_1'] = (percentage_df['count_greater_1'] / percentage_df['total_count']) * 100
+
+# cmap = plt.get_cmap('RdBu')
+# norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
+# scholarmap = ScalarMappable(norm=norm, cmap=cmap)
+# # Assigning colors to each AI bin based on its position
+# ai_bins_unique = percentage_df['AI_binned2'].unique()
+# colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
+
+
+# # Plotting the scatter plot|
+# plt.figure(figsize=(8, 5))
+# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+#     plt.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+
+# plt.xlabel('Fractional Wood Coverage (%)')
+# plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+# plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+
+# cmap = plt.get_cmap('RdBu')
+# norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
+# scholarmap = ScalarMappable(norm=norm, cmap=cmap)
+# # Assigning colors to each AI bin based on its position
+# ai_bins_unique = percentage_df['AI_binned2'].unique()
+# colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
 
 
 # %%
+# # %%
+# ##################################################################################
+# ##################################################################################
+# ##################################################################################
+# # Some draft plots
+# ##################################################################################
+# ##################################################################################
+# ##################################################################################
+# ##################################################################################
 
-def plot_veg_q_ai(subset, vegtype=""):
+# # Assuming plot_idx filters the data we're interested in
+# # For demonstration, let's use the entire dataset as plot_idx
+# plot_idx = df_filt_q_conus.index
 
-    # Create a figure and subplots
-    fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
-    scatter=ax.scatter(subset['landcover_percent'], subset['q_q'], c=subset['AI'], cmap="RdBu",  alpha=0.2)
+# # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
+# plt.figure(figsize=(9, 5))
+# boxplot = sns.boxplot(x='fractional_herb_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
+# outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
+# for dot in outlier_dots:
+#     dot.set_markeredgecolor('#dcdcdc')
 
-    ax.set_title(vegtype)
-    ax.set_xlabel('Vegetation cover [%]')
-    ax.set_ylabel(r'Nonlinear parameter $q$ [-]')
-    cbar = fig.colorbar(scatter, ax=ax)
-    cbar.set_label('Aridity index [MAP/MAE]')
+# plt.xlabel('Fractional Herb Coverage (%)')
+# plt.ylabel(r"Nonlinearity parameter $q$ [-]")
+# plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small') 
+# plt.ylim([0, 15])
+# plt.tight_layout()
+# plt.xticks(rotation=45)
+# plt.show()
 
-    ax.set_ylim([0,15])
-    plt.tight_layout()
-    plt.show()
+# # %%
 
-plot_veg_q_ai(tree_subset, "Tree")
-plot_veg_q_ai(shrub_subset, "Shrub")
-plot_veg_q_ai(annual_grass_subset, "Annual grass and herbs")
-plot_veg_q_ai(perrenial_grass_subset, "Perrenial grass and herbs")
+# # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
+# plt.figure(figsize=(9, 5))
+# boxplot = sns.boxplot(x='fractional_wood_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
+# outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
+# for dot in outlier_dots:
+#     dot.set_markeredgecolor('#dcdcdc')
 
-# %%
-def plot_ai_veg_q(subset, vegtype=""):
-    bin_edges = np.append(np.arange(0, 11, 2), np.inf)
-    bin_labels=["0-2", "2-4", "4-6", "6-8", "8-10", "10+"]
-    q_bins = pd.cut(subset['q_q'].values, bins=bin_edges, include_lowest=True, right=False, labels=bin_labels)
+# plt.xlabel('Fractional wood Coverage (%)')
+# plt.ylabel(r"Nonlinearity parameter $q$ [-]")
+# plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small') 
+# plt.ylim([0, 15])
+# plt.tight_layout()
+# plt.xticks(rotation=45)
+# plt.show()
 
 
-    cmap = plt.get_cmap("YlGn")
-    colors = {bin_label: cmap(i / len(bin_labels)) for i, bin_label in enumerate(bin_labels)}
+# # %%
+# ##########################################################
+# # Scatter plots 
+# ##########################################################
+# plot_idx = ~pd.isna(df_filt_q_conus["fractional_wood"])
+# fix,ax = plt.subplots()
+# scatter=ax.scatter(df_filt_q_conus["fractional_wood"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
+# ax.set_xlabel("Fractional woody vegetation cover [%]")
+# ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
+# cbar = fig.colorbar(scatter, ax=ax)
+# cbar.set_label('Aridity index [MAP/MAE]')
 
-    # Create a figure and subplots
-    fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
+# fix,ax = plt.subplots()
+# scatter=ax.scatter(df_filt_q_conus["fractional_herb"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
+# ax.set_xlabel("Fractional herbacious vegetation cover [%]")
+# ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
+# cbar = fig.colorbar(scatter, ax=ax)
+# cbar.set_label('Aridity index [MAP/MAE]')
 
-    # ls = LightSource()
-    # Iterate over bins and plot scatter plots
-    scatter = ax.scatter(subset['landcover_percent'], 
-                        subset['AI'],c= subset['q_q'], 
-                        cmap=cmap,  alpha=0.3, vmin=0, vmax=10, s=5)
-    # Add colorbar with defined limits
-    cbar = fig.colorbar(scatter, ax=ax)
-    cbar.set_label(r'Nonlinear parmaeter $q$ [-]')
-    # cbar.set_ticks(np.linspace(vmin, vmax, 4))  # Example for setting custom ticks
 
-    for i, bin_label in enumerate(bin_labels):
-        level_subset = subset[q_bins == bin_label]
-        # Apply LOWESS, fraction controls the degree of smoothing
-        fraction = 0.1 # This is a parameter you might want to adjust based on your data
-        lowess_results = lowess(level_subset['landcover_percent'], level_subset['AI'], frac=fraction)
-        smoothed_vegcover = lowess_results[:, 1]
-        smoothed_AI = lowess_results[:, 0]
-        linecolor = colors[bin_label]
+
+# # %%
+
+
+# # %%
+
+# # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+
+
+# df_filt_q_conus['barren_pct'] = pd.cut(df_filt_q_conus['barren_percent'], bins=veg_bins, labels=veg_labels)
+
+# q_greater_1 = df_filt_q_conus[df_filt_q_conus['q_q'] > 1].groupby(['AI_binned2', 'barren_pct']).size().reset_index(name='count_greater_1')
+# total_counts = df_filt_q_conus.groupby(['AI_binned2', 'barren_pct']).size().reset_index(name='total_count')
+# percentage_df = pd.merge(q_greater_1, total_counts, on=['AI_binned2', 'barren_pct'])
+# percentage_df['percentage_q_gt_1'] = (percentage_df['count_greater_1'] / percentage_df['total_count']) * 100
+
+# cmap = plt.get_cmap('RdBu')
+# norm = Normalize(vmin=0, vmax=len(percentage_df['AI_binned2'].unique()) - 1)
+# scholarmap = ScalarMappable(norm=norm, cmap=cmap)
+# # Assigning colors to each AI bin based on its position
+# ai_bins_unique = percentage_df['AI_binned2'].unique()
+# colors = {ai_bin: scholarmap.to_rgba(i) for i, ai_bin in enumerate(ai_bins_unique)}
+
+# # Plotting the scatter plot|
+# plt.figure(figsize=(8, 5))
+# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+#     plt.plot(group['barren_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+
+# plt.xlabel('Barren land cover(%)')
+# plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+# plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# plt.ylim([50, 90])  # Adjusting y-axis limits to 0-100% for percentage
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+# # %%
+# # Simplifying the approach to correct the data processing for the stacked plot
+
+# varname = "fractional_herb_pct"
+# # Re-aggregating data with correct grouping
+# grouped_data = df_filt_q_conus.groupby(['AI_binned2', varname, 'q_q_category']).size().reset_index(name='count')
+
+# # Creating a pivot table for the plot
+# pivot_data = grouped_data.pivot_table(index=['AI_binned2', varname], columns='q_q_category', values='count', fill_value=0)
+
+# # Calculate the total counts for each group for normalization
+# pivot_data['total'] = pivot_data.sum(axis=1)
+
+# # Normalize the counts by the total to get percentages
+# for category in ['q<1', 'q>1']:
+#     pivot_data[category] = pivot_data[category] / pivot_data['total'] * 100
+
+# # Plotting the stacked bar chart
+# # pivot_data.plot(kind='bar', stacked=True, figsize=(14, 8), color=['#1f77b4', '#ff7f0e'])
+
+# # Drop the 'total' column as it's no longer needed for plotting
+# normalized_data = pivot_data.drop(columns='total')
+
+# # Plotting the normalized stacked bar chart
+# normalized_data.plot(kind='bar', stacked=True, figsize=(10, 5), color=['#1f77b4', '#ff7f0e'])
+
+
+# plt.xlabel(f'(AI Bin,{varname} %)')
+# plt.ylabel('Number of Events')
+# plt.legend(title='q_q Category', loc='upper right')
+
+# # Improving the readability of the x-axis labels
+# plt.xticks(rotation=45, ha="right")
+
+# plt.tight_layout()
+# plt.show()
+
+
+# # %%
+# years = range(2015, 2023)  # 2023 is not included, so it goes up to 2022
+# band_numbers = [1,4,5,6] #range(1, 7)  # 7 is not included, so it goes up to 6
+
+# band_descriptions = {
+#     1: "Annual forb and grass",
+#     2: "Bare ground",
+#     3: "Litter",
+#     4: "Perennial forb and grass",
+#     5: "Shrub",
+#     6: "Tree"
+# }
+
+# # %%
+# tree_subset = df_filt_q_conus[df_filt_q_conus['band'] == 6]
+# shrub_subset = df_filt_q_conus[df_filt_q_conus['band'] == 5]
+# annual_grass_subset = df_filt_q_conus[df_filt_q_conus['band'] == 1]
+# perrenial_grass_subset = df_filt_q_conus[df_filt_q_conus['band']==4]
+
+# # %%
+# # vegetation cover bins
+
+# # %%
+
+# def plot_ai_q_veglevel(subset, vegtype=""):
+#     num_bins = 3
+#     veg_bins = pd.cut(subset['landcover_percent'].values, bins=num_bins, labels=['low', 'medium', 'high'])
+#     colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
+#     # cmap = plt.get_cmap("Greens")
+#     # colors = {bin_label: cmap(i / num_bins) for i, bin_label in enumerate(['low', 'medium', 'high'])}
+
+#     # Create a figure and subplots
+#     fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
+#     # ls = LightSource()
+#     # Iterate over bins and plot scatter plots
+#     for i, bin_label in enumerate(['low', 'medium', 'high']):
+#         level_subset = subset[veg_bins == bin_label]
+#         scatter_color = colors[bin_label]
+#         ax.scatter(level_subset['AI'], 
+#                         level_subset['q_q'], 
+#                         color=scatter_color,  alpha=0.1)
+#         # Apply LOWESS, fraction controls the degree of smoothing
+#         fraction = 0.1 # This is a parameter you might want to adjust based on your data
+#         lowess_results = lowess(level_subset['q_q'], level_subset['AI'], frac=fraction)
+#         smoothed_q_q = lowess_results[:, 1]
+#         smoothed_AI = lowess_results[:, 0]
+
+#         ax.plot(smoothed_AI, smoothed_q_q, color=scatter_color, linestyle='-', label=bin_label, linewidth=2)
+
+#     ax.set_title(f"{vegtype} fractional coverage")
+#     ax.set_xlabel('Aridity index [MAP/MAE]')
+#     ax.set_ylabel(r'Nonlinear parameter $q$ [-]')
+#     ax.set_ylim([0,15])
+#     ax.legend(loc='best', fontsize='small')
+#     plt.tight_layout()
+#     plt.show()
+
+# plot_ai_q_veglevel(tree_subset, "Tree")
+# plot_ai_q_veglevel(shrub_subset, "Shrub")
+# plot_ai_q_veglevel(annual_grass_subset, "Annual grass and herbs")
+# plot_ai_q_veglevel(perrenial_grass_subset, "Perrenial grass and herbs")
+
+
+# # %%
+# def plot_scatter_with_errorbar2(ax, df, x_var, y_var, z_var, quantile, title="", plot_logscale=False, plot_legend=False):
+#     # fig, ax = plt.subplots(figsize=(5, 5))
+#     stats_dict = {}
+
+#     # Get unique bins
+#     num_bins = 3
+#     bins_sorted = ['low', 'medium', 'high']
+#     df["subset_bins"] = pd.cut(df[z_var["column_name"]].values, bins=num_bins, labels=bins_sorted, include_lowest=True)
+#     colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
+#     # Calculate median and 90% confidence intervals for each vegetation class
+
+#     for i, category in enumerate(bins_sorted):
+#         subset = df[df["subset_bins"] == category]
+
+#         # Median calculation
+#         x_median = subset[x_var["column_name"]].median()
+#         y_median = subset[y_var["column_name"]].median()
+
+#         # 90% CI calculation, using the 5th and 95th percentiles
+#         x_ci_low, x_ci_high = np.percentile(
+#             subset[x_var["column_name"]], [quantile, 100 - quantile]
+#         )
+#         y_ci_low, y_ci_high = np.percentile(
+#             subset[y_var["column_name"]], [quantile, 100 - quantile]
+#         )
+
+#         color_val = colors[category] #(i / (len(bin_sorted) - 1))
+#         # Store in dict
+#         stats_dict[category] = {
+#             "x_median": x_median,
+#             "y_median": y_median,
+#             "x_ci": (x_median - x_ci_low, x_ci_high - x_median),
+#             "y_ci": (y_median - y_ci_low, y_ci_high - y_median),
+#             "color": color_val,
+#         }
+
+#     # Now plot medians with CIs
+#     for category, stats in stats_dict.items():
+#         ax.errorbar(
+#             stats["x_median"],
+#             stats["y_median"],
+#             xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
+#             yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
+#             fmt="o",
+#             label=str(category),
+#             capsize=5,
+#             capthick=2,
+#             color=stats["color"],
+#             alpha=0.7,
+#             markersize=15,
+#             mec="darkgray",
+#             mew=1,
+#             linewidth=3
+#         )
+
+#     # Add labels and title
+#     ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#     ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+#     if title=="":
+#         title=f"Median with {quantile}% confidence interval"
+
+#     ax.set_title(title, loc="center")
+
+#     # Add a legend
+#     if plot_legend:
+#         plt.legend(bbox_to_anchor=(1, 1.5))
+#     if plot_logscale:
+#         plt.xscale("log")
+#     ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+#     ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+
+# fig, ax = plt.subplots(figsize=(4, 4))
+# plot_scatter_with_errorbar2(ax, tree_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Tree", plot_logscale=False, plot_legend=True)
+# fig, ax = plt.subplots(figsize=(4, 4))
+# plot_scatter_with_errorbar2(ax, shrub_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Shrub", plot_logscale=False, plot_legend=True)
+# fig, ax = plt.subplots(figsize=(4, 4))
+# plot_scatter_with_errorbar2(ax, annual_grass_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Annual grass and herbs", plot_logscale=False, plot_legend=True)
+# fig, ax = plt.subplots(figsize=(4, 4))
+# plot_scatter_with_errorbar2(ax, perrenial_grass_subset, var_dict["ai"], var_dict["q_q"],  var_dict["rangeland"], quantile=25, title="Perrenial grass and herbs", plot_logscale=False, plot_legend=False)
+
+
+# # %%
+
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar(ax, tree_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, cmap="RdBu", title="Tree", plot_logscale=False, plot_legend=True)
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar(ax, shrub_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, cmap="RdBu", title="Shrub", plot_logscale=False, plot_legend=True)
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar(ax, annual_grass_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25,  cmap="RdBu",title="Annual grass and herbs", plot_logscale=False, plot_legend=True)
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar(ax, perrenial_grass_subset, var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25,  cmap="RdBu",title="Perrenial grass and herbs", plot_logscale=False, plot_legend=False)
+
+
+
+# #%%
+# def plot_scatter_with_errorbar3(ax, df, x_var, y_var, z_var, quantile, title="", plot_logscale=False, plot_legend=False):
+#     # fig, ax = plt.subplots(figsize=(5, 5))
+#     stats_dict = {}
+
+#     # Get unique bins
+#     num_bins = 5
+#     bin_edges = [0, 25, 50, 75, 100]
+#     x_bins_sorted = ['0-25%', '25-50%', '50-75%', '75-100%']
+#     # x_bins_sorted = ['low', 'medium', 'high', 'highest']
+#     df["x_subset_bins"] = pd.cut(df[x_var["column_name"]].values, bins=bin_edges, labels=x_bins_sorted, include_lowest=True)
+#     x_colors = {'low': '#bae4b3', 'medium': '#74c476', 'high': '#006d2c'}
+#     # Calculate median and 90% confidence intervals for each vegetation class
+
+#     z_bins_in_range = df[z_var["column_name"]].unique()
+#     z_bins_list = [bin for bin in z_bins_in_range if pd.notna(bin)]
+#     z_bins_sorted = sorted(z_bins_list, key=lambda x: x.left)
+#     cmap="RdBu"
+#     z_colors = plt.cm.get_cmap(cmap, len(z_bins_sorted))
+
+#     for j, x_category in enumerate(x_bins_sorted):
+#         for i, category in enumerate(z_bins_sorted):
+#             subset = df[(df[z_var["column_name"]] == category) & (df["x_subset_bins"] == x_category)]
+#             print(len(subset))
+
+#             # Median calculation
+#             x_median = subset[x_var["column_name"]].median()
+#             y_median = subset[y_var["column_name"]].median()
+
+#             # 90% CI calculation, using the 5th and 95th percentiles
+#             try: 
+#                 x_ci_low, x_ci_high = np.nanpercentile(
+#                     subset[x_var["column_name"]], [quantile, 100 - quantile]
+#                 )
+#                 y_ci_low, y_ci_high = np.nanpercentile(
+#                     subset[y_var["column_name"]], [quantile, 100 - quantile]
+#                 )
+
+#                 color_val = z_colors(i / (len(z_bins_list) - 1))
+#                 # Store in dict
+#                 stats_dict[category] = {
+#                     "x_median": x_median,
+#                     "y_median": y_median,
+#                     "x_ci": (x_median - x_ci_low, x_ci_high - x_median),
+#                     "y_ci": (y_median - y_ci_low, y_ci_high - y_median),
+#                     "color": color_val,
+#                 }
+#             except:
+#                 continue
+
+#         # Now plot medians with CIs
+#         for category, stats in stats_dict.items():
+#             ax.errorbar(
+#                 stats["x_median"],
+#                 stats["y_median"],
+#                 xerr=np.array([[stats["x_ci"][0]], [stats["x_ci"][1]]]),
+#                 yerr=np.array([[stats["y_ci"][0]], [stats["y_ci"][1]]]),
+#                 fmt="o",
+#                 label="Aridity:" + str(category) + " Vegetation - " + x_category,
+#                 capsize=5,
+#                 capthick=2,
+#                 color=stats["color"],
+#                 alpha=0.7,
+#                 markersize=15,
+#                 mec="darkgray",
+#                 mew=1,
+#                 linewidth=3
+#             )
+
+#         # Add labels and title
+#         ax.set_xlabel(f"{x_var['label']} {x_var['unit']}")
+#         ax.set_ylabel(f"{y_var['label']} {y_var['unit']}")
+#         if title=="":
+#             title=f"Median with {quantile}% confidence interval"
+
+#         ax.set_title(title, loc="center")
+
+#         # Add a legend
+#         if plot_legend:
+#             plt.legend(bbox_to_anchor=(1, 1.5))
+#         if plot_logscale:
+#             plt.xscale("log")
+#         ax.set_xlim(x_var["lim"][0], x_var["lim"][1])
+#         ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
+
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar3(ax, tree_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Tree", plot_logscale=False, plot_legend=False)
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar3(ax, shrub_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Shrub", plot_logscale=False, plot_legend=False)
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar3(ax, annual_grass_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Annual grass and herbs", plot_logscale=False, plot_legend=False)
+# fig, ax = plt.subplots(figsize=(5, 4))
+# plot_scatter_with_errorbar3(ax, perrenial_grass_subset,  var_dict["rangeland"], var_dict["q_q"],  var_dict["ai_bins"], quantile=25, title="Perrenial grass and herbs", plot_logscale=False, plot_legend=False)
+
+
+# # %%
+
+# def plot_veg_q_ai(subset, vegtype=""):
+
+#     # Create a figure and subplots
+#     fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
+#     scatter=ax.scatter(subset['landcover_percent'], subset['q_q'], c=subset['AI'], cmap="RdBu",  alpha=0.2)
+
+#     ax.set_title(vegtype)
+#     ax.set_xlabel('Vegetation cover [%]')
+#     ax.set_ylabel(r'Nonlinear parameter $q$ [-]')
+#     cbar = fig.colorbar(scatter, ax=ax)
+#     cbar.set_label('Aridity index [MAP/MAE]')
+
+#     ax.set_ylim([0,15])
+#     plt.tight_layout()
+#     plt.show()
+
+# plot_veg_q_ai(tree_subset, "Tree")
+# plot_veg_q_ai(shrub_subset, "Shrub")
+# plot_veg_q_ai(annual_grass_subset, "Annual grass and herbs")
+# plot_veg_q_ai(perrenial_grass_subset, "Perrenial grass and herbs")
+
+# # %%
+# def plot_ai_veg_q(subset, vegtype=""):
+#     bin_edges = np.append(np.arange(0, 11, 2), np.inf)
+#     bin_labels=["0-2", "2-4", "4-6", "6-8", "8-10", "10+"]
+#     q_bins = pd.cut(subset['q_q'].values, bins=bin_edges, include_lowest=True, right=False, labels=bin_labels)
+
+
+#     cmap = plt.get_cmap("YlGn")
+#     colors = {bin_label: cmap(i / len(bin_labels)) for i, bin_label in enumerate(bin_labels)}
+
+#     # Create a figure and subplots
+#     fig, ax = plt.subplots(figsize=(5, 4), sharey=True)
+
+#     # ls = LightSource()
+#     # Iterate over bins and plot scatter plots
+#     scatter = ax.scatter(subset['landcover_percent'], 
+#                         subset['AI'],c= subset['q_q'], 
+#                         cmap=cmap,  alpha=0.3, vmin=0, vmax=10, s=5)
+#     # Add colorbar with defined limits
+#     cbar = fig.colorbar(scatter, ax=ax)
+#     cbar.set_label(r'Nonlinear parmaeter $q$ [-]')
+#     # cbar.set_ticks(np.linspace(vmin, vmax, 4))  # Example for setting custom ticks
+
+#     for i, bin_label in enumerate(bin_labels):
+#         level_subset = subset[q_bins == bin_label]
+#         # Apply LOWESS, fraction controls the degree of smoothing
+#         fraction = 0.1 # This is a parameter you might want to adjust based on your data
+#         lowess_results = lowess(level_subset['landcover_percent'], level_subset['AI'], frac=fraction)
+#         smoothed_vegcover = lowess_results[:, 1]
+#         smoothed_AI = lowess_results[:, 0]
+#         linecolor = colors[bin_label]
         
-        ax.plot(smoothed_vegcover, smoothed_AI, color=linecolor, linestyle='-', label=bin_label, linewidth=2)
+#         ax.plot(smoothed_vegcover, smoothed_AI, color=linecolor, linestyle='-', label=bin_label, linewidth=2)
 
 
-    ax.set_title(f"{vegtype}")
-    ax.set_xlabel('Vegetation fractional coverage [%]')
-    ax.set_ylabel('Aridity index [MAP/MAE]')
-    plt.tight_layout()
-    plt.show()
+#     ax.set_title(f"{vegtype}")
+#     ax.set_xlabel('Vegetation fractional coverage [%]')
+#     ax.set_ylabel('Aridity index [MAP/MAE]')
+#     plt.tight_layout()
+#     plt.show()
 
-plot_ai_veg_q(tree_subset, "Tree")
-plot_ai_veg_q(shrub_subset, "Shrub")
-plot_ai_veg_q(annual_grass_subset, "Annual grass and herbs")
-plot_ai_veg_q(perrenial_grass_subset, "Perrenial grass and herbs")
+# plot_ai_veg_q(tree_subset, "Tree")
+# plot_ai_veg_q(shrub_subset, "Shrub")
+# plot_ai_veg_q(annual_grass_subset, "Annual grass and herbs")
+# plot_ai_veg_q(perrenial_grass_subset, "Perrenial grass and herbs")
 
 
-# %%
-# Creating the 3D scatter plot
-fig = plt.figure(figsize=(10, 7))
-ax = fig.add_subplot(111, projection='3d')
+# # %%
+# # Creating the 3D scatter plot
+# fig = plt.figure(figsize=(10, 7))
+# ax = fig.add_subplot(111, projection='3d')
 
-# Plot each subset with different colors
-ax.scatter(tree_subset['AI'], tree_subset['q_q'], tree_subset['landcover_percent'], color='g', label='Trees', alpha=0.5)
-# ax.scatter(shrub_subset['landcover_percent'], shrub_subset['q_q'], shrub_subset['AI'], color='r', label='Shrubs', alpha=0.5)
-# ax.scatter(annual_grass_subset['landcover_percent'], annual_grass_subset['q_q'], annual_grass_subset['AI'], color='b', label='Annual Grass', alpha=0.5)
+# # Plot each subset with different colors
+# ax.scatter(tree_subset['AI'], tree_subset['q_q'], tree_subset['landcover_percent'], color='g', label='Trees', alpha=0.5)
+# # ax.scatter(shrub_subset['landcover_percent'], shrub_subset['q_q'], shrub_subset['AI'], color='r', label='Shrubs', alpha=0.5)
+# # ax.scatter(annual_grass_subset['landcover_percent'], annual_grass_subset['q_q'], annual_grass_subset['AI'], color='b', label='Annual Grass', alpha=0.5)
 
-# Labeling
-ax.set_xlabel('Landcover Percent')
-ax.set_ylabel('q_q')
-ax.set_zlabel('AI')
-ax.set_title('3D Scatter Plot of Vegetation Types')
-ax.legend()
+# # Labeling
+# ax.set_xlabel('Landcover Percent')
+# ax.set_ylabel('q_q')
+# ax.set_zlabel('AI')
+# ax.set_title('3D Scatter Plot of Vegetation Types')
+# ax.legend()
 
-plt.show()
+# plt.show()
 
-#%%
+# #%%
 
 
 # %%
