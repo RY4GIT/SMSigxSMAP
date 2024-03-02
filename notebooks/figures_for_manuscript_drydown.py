@@ -32,7 +32,7 @@ import ast
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-02-02"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -416,6 +416,7 @@ def plot_drydown(event_id, ax=None, plot_precip=False, save=False):
             os.path.join(fig_dir, f"event_{event_id}.png"), dpi=1200, bbox_inches="tight"
         )
 
+
 #%%
         
 def plot_drydown(event_id, ax=None, legend=True, save=False):
@@ -583,19 +584,20 @@ print_goodones(df_filt_q_and_exp)
 
 # %%
 ################################################
-# event_id = 544064
-event_id1 = 544064  # woody savanna
-event_id2 = 43384   # grassland
+
+event_id = 2170
 ################################################
-fig = plt.figure()
-
-ax1 = fig.add_subplot(1, 2, 1)
-ax2 = fig.add_subplot(1, 2, 2)
-
-plot_drydown(event_id=event_id1, ax=ax1, legend=False, save=False)
-plot_drydown(event_id=event_id2, ax=ax2, save=False)
-
-
-
+plot_drydown(event_id=event_id)
 
 # %%
+print(df[(df["event_length"] > 50)].index)
+# print(df[(df["q_q"] > 100)& (df["sm_range"]>0.1)& (df["q_r_squared"]>0.7)].index)
+
+# %%
+# The number of days with soil moisture record, divided by the length of the event
+(df["n_days"]/df["event_length"]).hist()
+
+# %%
+df[((df["n_days"]/df["event_length"])>0.33)&((df["n_days"]/df["event_length"])<0.5)&(df['q_r_squared']>0.7)].index
+# %%
+
