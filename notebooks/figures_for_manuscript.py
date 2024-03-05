@@ -1993,6 +1993,14 @@ df_filt_q_conus = df_filt_q.merge(
 )
 # # print("Loaded ancillary rangeland information")
 
+# Bin AI values
+df_filt_q_conus["AI_binned2"] = pd.cut(
+    df_filt_q_conus["AI"],
+    bins=[0, 0.5, 1.0, 1.5, np.inf],
+    labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
+)
+
+
 # %%
 rangeland_info2.head()
 # %%
@@ -2002,6 +2010,9 @@ print(
 )
 print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
 
+# Change to percentage (fix this in the data management)
+df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
+df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
 # %%
 # %%
 ##########################################################
@@ -2009,63 +2020,46 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 ##########################################################
 # Convert fractional_herb to percentage and bin it
 
-# veg_bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-veg_bins = [0, 20, 40, 60, 80, 100]
-# veg_bins= [0, 100/3, 100/3*2, 100]
-# veg_labels = ['0-10%', '10-20%','20-30%', '30-40%','40-50%', '50-60%','60-70%','70-80%', '80-90%','90-100%']
-veg_labels = ["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"]
-# veg_labels = ['low', 'medium', 'high']
-df_filt_q_conus["fractional_herb_pct"] = pd.cut(
-    df_filt_q_conus["fractional_herb"] * 100, bins=veg_bins, labels=veg_labels
-)
-df_filt_q_conus["fractional_wood_pct"] = pd.cut(
-    df_filt_q_conus["fractional_wood"] * 100, bins=veg_bins, labels=veg_labels
-)
 
-# Bin AI values
-df_filt_q_conus["AI_binned2"] = pd.cut(
-    df_filt_q_conus["AI"],
-    bins=[0, 0.5, 1.0, 1.5, np.inf],
-    labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
-)
-# df_filt_q_conus['AI_binned2'] = pd.cut(df_filt_q_conus['AI'], bins=[0, 1.0,  np.inf], labels=['0-1.0', '1.0-'])
+def get_df_percentage_q(
+    df,
+    var_name,
+    bins=[0, 20, 40, 60, 80, 100],
+    labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
+):
 
+    new_varname = var_name + "_pct"
+    df[new_varname] = pd.cut(df[var_name], bins=bins, labels=labels)
 
-# %%
+    # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+    q_greater_1 = (
+        df[df["q_q"] > 1]
+        .groupby(["AI_binned2", new_varname])
+        .size()
+        .reset_index(name="count_greater_1")
+    )
+    total_counts = (
+        df.groupby(["AI_binned2", new_varname]).size().reset_index(name="total_count")
+    )
+    percentage_df = pd.merge(q_greater_1, total_counts, on=["AI_binned2", new_varname])
+    percentage_df["percentage_q_gt_1"] = (
+        percentage_df["count_greater_1"] / percentage_df["total_count"]
+    ) * 100
+    percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
+    percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
+    percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
+    return percentage_df
 
-# Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
-q_greater_1 = (
-    df_filt_q_conus[df_filt_q_conus["q_q"] > 1]
-    .groupby(["AI_binned2", "fractional_wood_pct"])
-    .size()
-    .reset_index(name="count_greater_1")
-)
-total_counts = (
-    df_filt_q_conus.groupby(["AI_binned2", "fractional_wood_pct"])
-    .size()
-    .reset_index(name="total_count")
-)
-percentage_df = pd.merge(
-    q_greater_1, total_counts, on=["AI_binned2", "fractional_wood_pct"]
-)
-percentage_df["percentage_q_gt_1"] = (
-    percentage_df["count_greater_1"] / percentage_df["total_count"]
-) * 100
-percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
-
-
-# %%
 
 # %%
 # Plotting for AI > 1.5
-fig = plt.figure(figsize=(8, 4))
 
 
 # Plotting the first set of bars (percentage_q_gt_1)
-def plot_fracq_by_pct(ax, df, title_name):
+def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name):
 
     sns.barplot(
-        x="fractional_wood_pct",
+        x=x_column_to_plot,
         y="percentage_q_le_1",
         data=df,
         color="#FFE268",
@@ -2077,7 +2071,7 @@ def plot_fracq_by_pct(ax, df, title_name):
     )
 
     sns.barplot(
-        x="fractional_wood_pct",
+        x=x_column_to_plot,
         y="percentage_q_gt_1",
         data=df,
         color="#22BBA9",
@@ -2088,18 +2082,9 @@ def plot_fracq_by_pct(ax, df, title_name):
         linewidth=3,
         bottom=df["percentage_q_le_1"],
     )
-    # Plotting the second set of bars (percentage_q_le_1) on top of the first set
 
-    # Adding abbreviation line for '50-100%'
-    # # Find the position for '50-100%' bar
-    # bar_pos = df[df['fractional_wood_pct'] == '50-100%'].index[0]
-    # # Get the height of the 'percentage_q_gt_1' bar
-    # bar_height = df.iloc[bar_pos]['percentage_q_gt_1']
-    # # Draw the abbreviation line above the '50-100%' bar
-    # ax.text(bar_pos, bar_height + 5, '---', ha='center', va='bottom', color='black', fontsize=12)
-
-    ax.set_xlabel("Fractional wood coverage (%)")
-    ax.set_ylabel("Fraction to total number of events (%)")
+    ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+    ax.set_ylabel("Fraction of drydown events (%)")
     # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
     ax.set_ylim([0, 50])
     plt.xticks(rotation=45)
@@ -2108,19 +2093,113 @@ def plot_fracq_by_pct(ax, df, title_name):
     ax.legend_ = None
 
 
+# %%
+percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood")
+
+fig = plt.figure(figsize=(8, 4))
+
 plt.rcParams.update({"font.size": 12})
 ax1 = plt.subplot(121)
 subset_df = percentage_df[percentage_df["AI_binned2"] == "0-0.5"]
-plot_fracq_by_pct(ax1, subset_df, "A.              P/PET < 0.5")
+plot_fracq_by_pct(
+    ax1,
+    subset_df,
+    "fractional_wood_pct",
+    "rangeland_wood",
+    "A.              P/PET < 0.5",
+)
 
 ax1 = plt.subplot(122)
 subset_df2 = percentage_df[percentage_df["AI_binned2"] == "1.5-"]
-plot_fracq_by_pct(ax1, subset_df2, "B.             P/PET > 1.5")
+plot_fracq_by_pct(
+    ax1,
+    subset_df2,
+    "fractional_wood_pct",
+    "rangeland_wood",
+    "B.             P/PET > 1.5",
+)
 plt.tight_layout()
 
 plt.savefig(
     os.path.join(fig_dir, f"fracq_fracwood_ai.pdf"), dpi=1200, bbox_inches="tight"
 )
 
+# %%
+# Get the Barren + Litter + Other percentage
 
+# plt_idx= ~pd.isna(df_filt_q_conus["barren_percent"])
+df_filt_q_conus["nonveg_percent"] = df_filt_q_conus["barren_percent"] + (
+    100 - df_filt_q_conus["totalrangeland_percent"]
+)
+
+# %%
+# %%
+percentage_df2 = get_df_percentage_q(df_filt_q_conus, "barren_percent")
+
+fig = plt.figure(figsize=(8, 4))
+
+plt.rcParams.update({"font.size": 12})
+ax1 = plt.subplot(121)
+subset_df = percentage_df2[percentage_df2["AI_binned2"] == "0-0.5"]
+plot_fracq_by_pct(
+    ax1,
+    subset_df,
+    "barren_percent_pct",
+    "rangeland_barren",
+    "A.              P/PET < 0.5",
+)
+
+ax1 = plt.subplot(122)
+subset_df2 = percentage_df2[percentage_df2["AI_binned2"] == "1.5-"]
+plot_fracq_by_pct(
+    ax1,
+    subset_df2,
+    "barren_percent_pct",
+    "rangeland_barren",
+    "B.             P/PET > 1.5",
+)
+plt.tight_layout()
+
+plt.savefig(
+    os.path.join(fig_dir, f"fracq_fracbarren_ai.pdf"), dpi=1200, bbox_inches="tight"
+)
+
+# %%
+percentage_df3 = get_df_percentage_q(
+    df_filt_q_conus[df_filt_q_conus["nonveg_percent"] < 20],
+    "nonveg_percent",
+    bins=[0, 5, 10, 15, 20],
+    labels=["0-5%", "5-10%", "10-15%", "15-20%"],
+)
+percentage_df3
+# %%
+fig = plt.figure(figsize=(8, 4))
+
+plt.rcParams.update({"font.size": 12})
+ax1 = plt.subplot(121)
+subset_df = percentage_df3[percentage_df3["AI_binned2"] == "0-0.5"]
+plot_fracq_by_pct(
+    ax1,
+    subset_df,
+    "nonveg_percent_pct",
+    "rangeland_20%",
+    "A.              P/PET < 0.5",
+)
+
+ax1 = plt.subplot(122)
+subset_df2 = percentage_df3[percentage_df3["AI_binned2"] == "1.5-"]
+plot_fracq_by_pct(
+    ax1,
+    subset_df2,
+    "nonveg_percent_pct",
+    "rangeland_20%",
+    "B.             P/PET > 1.5",
+)
+plt.tight_layout()
+
+plt.savefig(
+    os.path.join(fig_dir, f"fracq_frac20pctNonveg_ai.pdf"),
+    dpi=1200,
+    bbox_inches="tight",
+)
 # %%
