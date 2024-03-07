@@ -1,7 +1,6 @@
 name: SMAP
 channels:
   - conda-forge
-  - travis
   - defaults
 dependencies:
   - pandas
@@ -18,15 +17,13 @@ dependencies:
   - planetary-computer
   - rioxarray
   - pystac-client
-  - fiona
-  - shapely
-  - rich
   - scikit-learn
   - scipy
   - netcdf4
-  - pygeogrids
   - tqdm
   - seaborn
   - pip
+  - ipykernel
   - pip:
-    - datashader
+    - mpl-scatter-density
+

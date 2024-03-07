@@ -25,13 +25,15 @@ trash/*
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*/__pycache__/
 *.py[cod]
 *$py.class
 # **/__pycache__/*      # old version
 
 # Jupyter notebook
 .ipynb_checkpoints
-# **/.ipynb_checkpoints/*   # old version
+*/.ipynb_checkpoints/
+
 # IPython
 profile_default/
 ipython_config.py

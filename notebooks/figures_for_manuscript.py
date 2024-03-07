@@ -5,31 +5,21 @@ import getpass
 import os
 import numpy as np
 import pandas as pd
-import xarray as xr
-from scipy.interpolate import interpn
 from scipy.stats import gaussian_kde
 
 import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.colors import TwoSlopeNorm
-from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
-from matplotlib import cm
 from matplotlib.colors import Normalize
-import datashader as ds
-from datashader.mpl_ext import dsshow
 from textwrap import wrap
 
-from functions import q_drydown, exponential_drydown, loss_model
-
-# !pip install mpl-scatter-density
-import mpl_scatter_density
+from functions import loss_model
 from matplotlib.colors import LinearSegmentedColormap
-
+!pip install mpl-scatter-density
+import mpl_scatter_density
 
 # %%
 # Ryoko do not have this font on my system
@@ -57,7 +47,7 @@ z_mm = 50  # Soil thickness
 
 # Define the specific order for vegetation categories.
 vegetation_color_dict = {
-    "Barren": "#808080",  # "#7A422A",
+    "Barren": "#808080",
     "Open shrublands": "#C99728",
     "Grasslands": "#13BFB2",
     "Savannas": "#92BA31",
@@ -176,7 +166,7 @@ var_dict = {
 
 
 # %% ############################################################################
-# DATA IMPORT
+# DATA IMPORT & PATH CONFIGS
 
 # Data dir
 user_name = getpass.getuser()
@@ -190,15 +180,22 @@ IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
 
-# Read the output
+# Read the model output (results)
 output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
 results_file = rf"all_results.csv"
 _df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 _df["year"] = pd.to_datetime(_df["event_start"]).dt.year
 print("Loaded results file")
 
+# Create figure output directory in the model output directory
+fig_dir = os.path.join(output_dir, dir_name, "figs")
+if not os.path.exists(fig_dir):
+    os.mkdir(fig_dir)
+    print(f"Created dir: {fig_dir}")
+else:
+    print(f"Already exists: {fig_dir}")
 
-# %%
+# %% ANCILLARY DATA IMPORT
 # Read coordinate information
 coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
 df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
@@ -226,14 +223,7 @@ df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
 print("Loaded ancillary information (land-cover)")
 
-# %% Create output directory
-fig_dir = os.path.join(output_dir, dir_name, "figs")
-if not os.path.exists(fig_dir):
-    os.mkdir(fig_dir)
-    print(f"Created dir: {fig_dir}")
-else:
-    print(f"Already exists: {fig_dir}")
-# %% Get some stats
+# %% Calculate some metrics for evaluation
 
 # Difference between R2 values of two models
 df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
@@ -540,12 +530,8 @@ def plot_R2_models_v2(df, R2_threshold, save=False):
     return fig, ax
 
 
-# plot_R2_models(df=df, R2_threshold=0.0)
-
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
-plot_R2_models_v2(
-    df=df_filt_q_and_exp, R2_threshold=success_modelfit_thresh, save=False
-)
+plot_R2_models_v2(df=df_filt_q_and_exp, R2_threshold=success_modelfit_thresh, save=True)
 
 
 # %%
@@ -638,9 +624,7 @@ save = False
 # Also exclude the extremely small value of q that deviates the analysis
 var_key = "q_q"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-fig_map_q, ax = plt.subplots(
-    figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}, frameon=False
-)
+fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
 plot_map(
     ax=ax,
     df=df_filt_q,
@@ -663,20 +647,17 @@ if save:
         bbox_inches="tight",
         transparent=True,
     )
-    # fig_map_q.savefig(os.path.join(fig_dir, f"q_map_median.svg"), dpi=900, bbox_inches="tight", transparent=True)
 
 print(f"Global median q: {df_filt_q['q_q'].median()}")
 print(f"Global mean q: {df_filt_q['q_q'].mean()}")
 
-# %% Map of R2 values
+# %% Map of differences in R2 values
 
-save = save
-stat_type = "mean"
+save = True
+stat_type = "median"
 # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
 var_key = "diff_R2"
-norm = Normalize(
-    vmin=var_dict[var_key]["lim"][0] * 1.5, vmax=var_dict[var_key]["lim"][1] * 1.5
-)
+norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 fig_map_R2, ax = plt.subplots(
     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
 )
@@ -688,7 +669,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type=stat_type,
-    bar_label="Difference in " + stat_type + " " + var_dict[var_key]["label"],
+    bar_label= stat_type.capitalize() + " differences in\n" + var_dict[var_key]["label"],
 )
 if save:
     fig_map_R2.savefig(
@@ -697,38 +678,13 @@ if save:
         bbox_inches="tight",
         transparent=True,
     )
-    fig_map_R2.savefig(
-        os.path.join(fig_dir, f"R2_map_{stat_type}.pdf"),
-        dpi=1200,
-        bbox_inches="tight",
-        transparent=True,
-    )
-    # fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_{stat_type}.svg"), dpi=900, bbox_inches="tight", transparent=True)
 
-# # %%
-
-# ################################
-# # Map figures (Supplemental)
-# ################################
-# save = save
-# fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
-
-# var_key = "diff_R2"
-# norm = Normalize(vmin=var_dict[var_key]["lim"][0]*2, vmax=var_dict[var_key]["lim"][1]*2)
-# fig_map_R2 = plot_map(
-#     ax = ax,
-#     df=df_filt_q_and_exp,
-#     coord_info=coord_info,
-#     cmap="RdBu",
-#     norm=norm,
-#     var_item=var_dict[var_key],
-#     stat_type="mean",
-# )
-# if save:
-#     fig_map_R2.savefig(os.path.join(fig_dir, f"R2_map_mean.png"), dpi=900, bbox_inches="tight")
-
-# print(f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].median()}")
-# print(f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].mean()}")
+print(
+    f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].median()}"
+)
+print(
+    f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].mean()}"
+)
 
 # %%
 save = save
@@ -752,7 +708,6 @@ if save:
     fig_map_theta_star.savefig(
         os.path.join(fig_dir, f"sup_map_thetastar.png"), dpi=900, bbox_inches="tight"
     )
-# fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
 
 print(f"Global median theta_star: {df_filt_q['max_sm'].median()}")
 print(f"Global mean theta_star: {df_filt_q['max_sm'].mean()}")
@@ -778,7 +733,6 @@ if save:
     fig_map_ETmax.savefig(
         os.path.join(fig_dir, f"sup_map_ETmax.png"), dpi=900, bbox_inches="tight"
     )
-# fig_map_q.savefig(os.path.join(fig_dir, f"q_map.pdf"), bbox_inches="tight")
 
 print(f"Global median ETmax: {df_filt_q['q_ETmax'].median()}")
 print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
@@ -938,8 +892,6 @@ def plot_loss_func_categorical(
 
     ax.set_title(title, loc="left")
 
-    # Adjust the layout so the subplots fit into the figure area
-    # ax.tight_layout()
     # Add a legend
     if plot_legend:
         legend = ax.legend(bbox_to_anchor=(1, 1))
@@ -1019,7 +971,7 @@ def plot_scatter_with_errorbar_categorical(
             color=stats["color"],
             alpha=0.7,
             markersize=17,
-            mec=stats["color"],  # "darkgray",
+            mec=stats["color"],
             mew=1,
             linewidth=3,
         )
@@ -1055,7 +1007,7 @@ def plot_scatter_with_errorbar(
     plot_logscale=False,
     plot_legend=False,
 ):
-    # fig, ax = plt.subplots(figsize=(5, 5))
+
     stats_dict = {}
 
     # Get unique bins
@@ -1103,7 +1055,7 @@ def plot_scatter_with_errorbar(
             color=stats["color"],
             alpha=0.7,
             markersize=17,
-            mec=stats["color"],  # "darkgray",
+            mec=stats["color"],
             mew=1,
             linewidth=3,
         )
@@ -1425,7 +1377,7 @@ def plot_histograms_with_mean_median_categorical(df, x_var, z_var, categories, c
             subset[x_var["column_name"]],
             label="histogram",
             color=colors[i],
-            bins=bins,  # You can adjust the number of bins
+            bins=bins,
             kde=False,
             ax=ax,
         )
@@ -1470,7 +1422,7 @@ def plot_histograms_with_mean_median_categorical(df, x_var, z_var, categories, c
         ax.set_xlim(0, x_var["lim"][1] * 2)
         ax.legend()
 
-    plt.tight_layout()  # Adjust layout to prevent overlap
+    plt.tight_layout()
     plt.show()
 
     return fig, ax
@@ -1489,9 +1441,8 @@ fig_hist_q_veg.savefig(
     os.path.join(fig_dir, f"sup_hist_q_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
+
 # %%
-
-
 def plot_histograms_with_mean_median(df, x_var, z_var, cmap):
 
     # Get unique bins
@@ -1522,7 +1473,7 @@ def plot_histograms_with_mean_median(df, x_var, z_var, cmap):
             subset[x_var["column_name"]],
             label="histogram",
             color=color,
-            bins=bins,  # You can adjust the number of bins
+            bins=bins,
             kde=False,
             ax=ax,
         )
@@ -1620,9 +1571,8 @@ fig_hist_q_sand2.savefig(
     os.path.join(fig_dir, f"sup_hist_q_sand_allq.png"), dpi=1200, bbox_inches="tight"
 )
 
+
 # %% Loss function parameter by vegetaiton and AI, supplemental (support Figure 4)
-
-
 def wrap_at_space(text, max_width):
     parts = text.split(" ")
     wrapped_parts = [wrap(part, max_width) for part in parts]
@@ -1715,12 +1665,11 @@ fig_ai_vs_veg.savefig(
 ###########################################################################
 ###########################################################################
 
+
 # %%
 ############################################################################
 # Box plots (might go supplemental)
 ###########################################################################
-
-
 def plot_boxplots(df, x_var, y_var):
     plt.rcParams.update({"font.size": 12})
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -2013,14 +1962,13 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 # Change to percentage (fix this in the data management)
 df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
 df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
-# %%
+
+
 # %%
 ##########################################################
 # Scatter plots
 ##########################################################
 # Convert fractional_herb to percentage and bin it
-
-
 def get_df_percentage_q(
     df,
     var_name,
@@ -2202,4 +2150,73 @@ plt.savefig(
     dpi=1200,
     bbox_inches="tight",
 )
+# %%
+# ##########################################################
+# # Scatter plots
+# ##########################################################
+
+# # Plotting the scatter plot|
+# plt.figure(figsize=(8, 5))
+# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+#     plt.plot(group['fractional_herb_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+
+# plt.xlabel('Fractional Herb Coverage (%)')
+# plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+# plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+# # Assuming plot_idx filters the data we're interested in
+# # For demonstration, let's use the entire dataset as plot_idx
+# plot_idx = df_filt_q_conus.index
+
+# # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
+# plt.figure(figsize=(9, 5))
+# boxplot = sns.boxplot(x='fractional_herb_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
+# outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
+# for dot in outlier_dots:
+#     dot.set_markeredgecolor('#dcdcdc')
+
+# plt.xlabel('Fractional Herb Coverage (%)')
+# plt.ylabel(r"Nonlinearity parameter $q$ [-]")
+# plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# plt.ylim([0, 15])
+# plt.tight_layout()
+# plt.xticks(rotation=45)
+# plt.show()
+
+# # %%
+
+# # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
+# plt.figure(figsize=(9, 5))
+# boxplot = sns.boxplot(x='fractional_wood_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
+# outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
+# for dot in outlier_dots:
+#     dot.set_markeredgecolor('#dcdcdc')
+
+# plt.xlabel('Fractional wood Coverage (%)')
+# plt.ylabel(r"Nonlinearity parameter $q$ [-]")
+# plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# plt.ylim([0, 15])
+# plt.tight_layout()
+# plt.xticks(rotation=45)
+# plt.show()
+
+
+# plot_idx = ~pd.isna(df_filt_q_conus["fractional_wood"])
+# fix,ax = plt.subplots()
+# scatter=ax.scatter(df_filt_q_conus["fractional_wood"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
+# ax.set_xlabel("Fractional woody vegetation cover [%]")
+# ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
+# cbar = fig.colorbar(scatter, ax=ax)
+# cbar.set_label('Aridity index [MAP/MAE]')
+
+# fix,ax = plt.subplots()
+# scatter=ax.scatter(df_filt_q_conus["fractional_herb"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
+# ax.set_xlabel("Fractional herbacious vegetation cover [%]")
+# ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
+# cbar = fig.colorbar(scatter, ax=ax)
+# cbar.set_label('Aridity index [MAP/MAE]')
+
 # %%
