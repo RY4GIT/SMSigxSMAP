@@ -93,6 +93,8 @@ if not os.path.exists(fig_dir):
 else:
     print(f"Already exists: {fig_dir}")
 # %% Get some stats
+###################################
+# Get some stats
 
 # Difference between R2 values of two models
 df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
@@ -370,7 +372,7 @@ def plot_drydown(event_id, ax=None, save=False):
 # %%
 ################################################
 
-event_id = 2170
+event_id = 238922
 ################################################
 plot_drydown(event_id=event_id)
 
@@ -383,15 +385,28 @@ success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
 ###################################################
 
+# CONUS
+lat_min, lat_max = 24.396308, 49.384358
+lon_min, lon_max = -125.000000, -66.934570
+
 df_filt = df[
     ((df["n_days"] / df["event_length"]) > 0.33)
     & (df["q_r_squared"] >= success_modelfit_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["q_q"] < 1)
+    & (df["latitude"] >= lat_min)
+    & (df["latitude"] <= lat_max)
+    & (df["longitude"] >= lon_min)
+    & (df["longitude"] <= lon_max)
 ]
+
+print(df_filt.index)
 
 np.random.seed(0)
 random_indices = df_filt.sample(n=10).index
-print(df_filt.index)
 print(random_indices)
+
+# %%
+df.columns
 # %%
