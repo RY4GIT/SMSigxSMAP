@@ -669,7 +669,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type=stat_type,
-    bar_label= stat_type.capitalize() + " differences in\n" + var_dict[var_key]["label"],
+    bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
 )
 if save:
     fig_map_R2.savefig(
@@ -1949,9 +1949,6 @@ df_filt_q_conus["AI_binned2"] = pd.cut(
     labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
 )
 
-
-# %%
-rangeland_info2.head()
 # %%
 print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
 print(
@@ -1962,7 +1959,6 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 # Change to percentage (fix this in the data management)
 df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
 df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
-
 
 # %%
 ##########################################################
@@ -2081,7 +2077,6 @@ df_filt_q_conus["nonveg_percent"] = df_filt_q_conus["barren_percent"] + (
 )
 
 # %%
-# %%
 percentage_df2 = get_df_percentage_q(df_filt_q_conus, "barren_percent")
 
 fig = plt.figure(figsize=(8, 4))
@@ -2155,22 +2150,55 @@ plt.savefig(
 # # Scatter plots
 # ##########################################################
 
-# # Plotting the scatter plot|
-# plt.figure(figsize=(8, 5))
-# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-#     plt.plot(group['fractional_herb_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+# # Plotting the scatter plot
 
-# plt.xlabel('Fractional Herb Coverage (%)')
-# plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
-# plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-# plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+# Get unique AI_binned2 values and assign colors
+cmap = plt.get_cmap('RdBu')
+ai_bins_list = percentage_df['AI_binned2'].unique()
+colors = cmap(np.linspace(0, 1, len(ai_bins_list)))
+color_map = dict(zip(ai_bins_list, colors))
+
+fig, ax = plt.subplots(figsize=(8, 5))
+for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+    ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
+
+ax.set_xlabel('Fractional Herb Coverage (%)')
+ax.set_ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+ax.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+ax.set_ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
+plt.xticks(rotation=45)
+fig.tight_layout()
+
+
+# %% Relationship between q and the length of the drydown events
+
+
+
+
+
+
+
+# %%
+
+# # %%
+# cmap = plt.get_cmap('YlGnBu')
+# veg_bin_list = percentage_df['fractional_wood_pct'].unique()
+# colors = cmap(np.linspace(0, 1, len(veg_bin_list)))
+# color_map = dict(zip(veg_bin_list, colors))
+
+# fig, ax = plt.subplots(figsize=(8, 5))
+# for (veg_bin, group) in percentage_df.groupby('fractional_wood_pct'):
+#     ax.plot(group['AI_binned2'], group['percentage_q_gt_1'], label=veg_bin, alpha=0.7, marker='o', color=color_map[veg_bin])
+
+# ax.set_xlabel('Aridity Index\n[MAP/MAE]')
+# ax.set_ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
+# ax.legend(title='Fractional Herb Coverage (%)', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+# ax.set_ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
 # plt.xticks(rotation=45)
-# plt.tight_layout()
-# plt.show()
-# # Assuming plot_idx filters the data we're interested in
-# # For demonstration, let's use the entire dataset as plot_idx
-# plot_idx = df_filt_q_conus.index
+# fig.tight_layout()
 
+
+#%%
 # # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
 # plt.figure(figsize=(9, 5))
 # boxplot = sns.boxplot(x='fractional_herb_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)

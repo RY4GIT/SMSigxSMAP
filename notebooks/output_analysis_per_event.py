@@ -351,9 +351,9 @@ def get_sm(EASE_row_index, EASE_column_index, start_date, end_date):
     condition_bad_data_pm = (
         _df["Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm"] != 0.0
     ) & (_df["Soil_Moisture_Retrieval_Data_PM_retrieval_qual_flag_pm"] != 8.0)
-    _df.loc[
-        condition_bad_data_am, "Soil_Moisture_Retrieval_Data_AM_soil_moisture"
-    ] = np.nan
+    _df.loc[condition_bad_data_am, "Soil_Moisture_Retrieval_Data_AM_soil_moisture"] = (
+        np.nan
+    )
     _df.loc[
         condition_bad_data_pm, "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm"
     ] = np.nan
