@@ -330,7 +330,7 @@ count_median_number_of_events_perGrid(df)
 ###################################################
 # Defining model acceptabiltiy criteria
 q_thresh = 1e-03
-success_modelfit_thresh = 0.7
+success_modelfit_thresh = 0.8
 sm_range_thresh = 0.1
 event_length_thresh = 30
 obs_freq_thresh = 0.33333
@@ -669,7 +669,7 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type=stat_type,
-    bar_label= stat_type.capitalize() + " differences in\n" + var_dict[var_key]["label"],
+    bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
 )
 if save:
     fig_map_R2.savefig(
@@ -1949,9 +1949,9 @@ df_filt_q_conus["AI_binned2"] = pd.cut(
     labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
 )
 
-
-# %%
-rangeland_info2.head()
+# Change to percentage (fix this in the data management)
+df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
+df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
 # %%
 print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
 print(
@@ -1959,16 +1959,11 @@ print(
 )
 print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
 
-# Change to percentage (fix this in the data management)
-df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
-df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
-
-
 # %%
 ##########################################################
 # Scatter plots
 ##########################################################
-# Convert fractional_herb to percentage and bin it
+
 def get_df_percentage_q(
     df,
     var_name,
@@ -1983,35 +1978,51 @@ def get_df_percentage_q(
     q_greater_1 = (
         df[df["q_q"] > 1]
         .groupby(["AI_binned2", new_varname])
-        .size()
-        .reset_index(name="count_greater_1")
+        .agg(
+            count_greater_1=('q_q', 'size'),  # Count the occurrences
+            sum_event_length_q_gt_1=('event_length', 'sum')  # Sum the event_length
+        )
+        .reset_index()
     )
+
     total_counts = (
-        df.groupby(["AI_binned2", new_varname]).size().reset_index(name="total_count")
+        df.groupby(["AI_binned2", new_varname]).agg(
+            total_count=('q_q', 'size'),  # Count the occurrences
+            sum_event_length_total=('event_length', 'sum')  # Sum the event_length
+        )
+        .reset_index()
     )
     percentage_df = pd.merge(q_greater_1, total_counts, on=["AI_binned2", new_varname])
+
     percentage_df["percentage_q_gt_1"] = (
         percentage_df["count_greater_1"] / percentage_df["total_count"]
     ) * 100
     percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
     percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
     percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
+
+    
+    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
+    percentage_df["weighted_percentage_q_le_1"] = 100 - percentage_df["weighted_percentage_q_gt_1"]
+
     return percentage_df
 
-
-# %%
-# Plotting for AI > 1.5
-
-
 # Plotting the first set of bars (percentage_q_gt_1)
-def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name):
+def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=True):
+
+    if weighted:
+        y_var_q_le_1 = "weighted_percentage_q_le_1"
+        y_var_q_gt_1 = "weighted_percentage_q_gt_1"
+    else:
+        y_var_q_le_1 = "percentage_q_le_1"
+        y_var_q_gt_1 = "percentage_q_gt_1"
 
     sns.barplot(
         x=x_column_to_plot,
-        y="percentage_q_le_1",
+        y=y_var_q_le_1,
         data=df,
         color="#FFE268",
-        label="percentage_q_le_1",
+        label=y_var_q_le_1,
         ax=ax,
         width=0.98,
         edgecolor="white",
@@ -2020,26 +2031,25 @@ def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name):
 
     sns.barplot(
         x=x_column_to_plot,
-        y="percentage_q_gt_1",
+        y=y_var_q_gt_1,
         data=df,
         color="#22BBA9",
-        label="percentage_q_gt_1",
+        label=y_var_q_gt_1,
         ax=ax,
         width=0.98,
         edgecolor="white",
         linewidth=3,
-        bottom=df["percentage_q_le_1"],
+        bottom=df[y_var_q_le_1],
     )
 
     ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-    ax.set_ylabel("Fraction of drydown events (%)")
+    ax.set_ylabel("Proportion of drydown events (%)")
     # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-    ax.set_ylim([0, 50])
+    ax.set_ylim([0, 100])
     plt.xticks(rotation=45)
     ax.set_title(title_name, loc="left")
 
     ax.legend_ = None
-
 
 # %%
 percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood")
@@ -2080,7 +2090,6 @@ df_filt_q_conus["nonveg_percent"] = df_filt_q_conus["barren_percent"] + (
     100 - df_filt_q_conus["totalrangeland_percent"]
 )
 
-# %%
 # %%
 percentage_df2 = get_df_percentage_q(df_filt_q_conus, "barren_percent")
 
@@ -2155,68 +2164,54 @@ plt.savefig(
 # # Scatter plots
 # ##########################################################
 
-# # Plotting the scatter plot|
-# plt.figure(figsize=(8, 5))
+# # Plotting the scatter plot
+
+# Get unique AI_binned2 values and assign colors
+cmap = plt.get_cmap('RdBu')
+ai_bins_list = percentage_df['AI_binned2'].unique()
+colors = cmap(np.linspace(0, 1, len(ai_bins_list)))
+color_map = dict(zip(ai_bins_list, colors))
+
+plt.rcParams.update({"font.size": 16})
+fig, ax = plt.subplots(figsize=(8, 5))
 # for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-#     plt.plot(group['fractional_herb_pct'], group['percentage_q_gt_1'], label=ai_bin, color=colors[ai_bin], alpha=0.7, marker='o')
+#     ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
+for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+    ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
 
-# plt.xlabel('Fractional Herb Coverage (%)')
-# plt.ylabel(r'Fractional events with $q>1$'+'\n(convex non-linearity) (%)')
-# plt.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-# plt.ylim([65, 95])  # Adjusting y-axis limits to 0-100% for percentage
-# plt.xticks(rotation=45)
-# plt.tight_layout()
-# plt.show()
-# # Assuming plot_idx filters the data we're interested in
-# # For demonstration, let's use the entire dataset as plot_idx
-# plot_idx = df_filt_q_conus.index
-
-# # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
-# plt.figure(figsize=(9, 5))
-# boxplot = sns.boxplot(x='fractional_herb_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
-# outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
-# for dot in outlier_dots:
-#     dot.set_markeredgecolor('#dcdcdc')
-
-# plt.xlabel('Fractional Herb Coverage (%)')
-# plt.ylabel(r"Nonlinearity parameter $q$ [-]")
-# plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-# plt.ylim([0, 15])
-# plt.tight_layout()
-# plt.xticks(rotation=45)
-# plt.show()
-
-# # %%
-
-# # Now, let's create a boxplot for q_q values, grouped by binned fractional_herb categories
-# plt.figure(figsize=(9, 5))
-# boxplot = sns.boxplot(x='fractional_wood_pct', y='q_q', data=df_filt_q_conus.loc[plot_idx], hue='AI_binned2', palette="RdBu", width=0.5)
-# outlier_dots = [line for line in boxplot.lines if line.get_marker() == 'o']
-# for dot in outlier_dots:
-#     dot.set_markeredgecolor('#dcdcdc')
-
-# plt.xlabel('Fractional wood Coverage (%)')
-# plt.ylabel(r"Nonlinearity parameter $q$ [-]")
-# plt.legend(title='Aridity index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-# plt.ylim([0, 15])
-# plt.tight_layout()
-# plt.xticks(rotation=45)
-# plt.show()
+ax.set_xlabel('Fractional Wood Coverage (%)')
+ax.set_ylabel(r'Weighted proportion of events with $q>1$'+'\n(convex non-linearity) (%)')
+ax.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+ax.set_ylim([60, 95])  # Adjusting y-axis limits to 0-100% for percentage
+plt.xticks(rotation=45)
+fig.tight_layout()
 
 
-# plot_idx = ~pd.isna(df_filt_q_conus["fractional_wood"])
-# fix,ax = plt.subplots()
-# scatter=ax.scatter(df_filt_q_conus["fractional_wood"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
-# ax.set_xlabel("Fractional woody vegetation cover [%]")
-# ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
-# cbar = fig.colorbar(scatter, ax=ax)
-# cbar.set_label('Aridity index [MAP/MAE]')
+# %% Relationship between q and the length of the drydown events
+# Calculate the number of bins
 
-# fix,ax = plt.subplots()
-# scatter=ax.scatter(df_filt_q_conus["fractional_herb"][plot_idx].values*100, df_filt_q_conus["q_q"][plot_idx].values, c=df_filt_q_conus["AI"][plot_idx].values, cmap="RdBu", alpha=0.5)
-# ax.set_xlabel("Fractional herbacious vegetation cover [%]")
-# ax.set_ylabel(r"Nonlinearity parameter $q$ [-]")
-# cbar = fig.colorbar(scatter, ax=ax)
-# cbar.set_label('Aridity index [MAP/MAE]')
+def plot_eventlength_hist(df):
+    min_value = df['event_length'].min()
+    max_value = df['event_length'].max()
+    bin_width = 1
+    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
+
+    hist = df['event_length'].hist(bins=n_bins)
+    hist.set_xlabel('Length of the event [days]')
+    hist.set_ylabel('Frequency')
+    # hist.set_xlim([0, 20])
+
+# plot_eventlength_hist(df_filt_q)
+plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
 
 # %%
+
+def plot_eventlength_vs_q(df):
+    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
+    plt.ylabel(r'$q$')
+    plt.xlabel('Length of the event [days]')
+    # plt.xlim([0, 20])
+
+# plot_eventlength_vs_q(df_filt_q)
+plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
