@@ -45,6 +45,11 @@ dir_name = "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ## Define parameters
 z_mm = 50  # Soil thickness
 
+# Math font
+plt.rcParams["mathtext.fontset"] = (
+    "stixsans"  #'stix'  # Or 'cm' (Computer Modern), 'stixsans', etc.
+)
+
 # Define the specific order for vegetation categories.
 vegetation_color_dict = {
     "Barren": "#808080",
@@ -66,7 +71,7 @@ var_dict = {
     },
     "dtheta": {
         "column_name": "",
-        "symbol": r"$-\frac{d\theta}{dt}$",
+        "symbol": r"$\minus\frac{d\theta}{dt}$",
         "label": r"Change in soil moisture $-\frac{d\theta}{dt}$",
         "unit": r"(m$^3$ m$^{-3}$ day$^{-1}$)",
         "lim": [-0.10, 0],
@@ -330,7 +335,7 @@ count_median_number_of_events_perGrid(df)
 ###################################################
 # Defining model acceptabiltiy criteria
 q_thresh = 1e-03
-success_modelfit_thresh = 0.8
+success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
 event_length_thresh = 30
 obs_freq_thresh = 0.33333
@@ -446,6 +451,14 @@ sample_veg_stat.to_csv(os.path.join(fig_dir, f"sample_veg_stat.csv"))
 # Check no data in sand
 print(sum(pd.isna(df_filt_q["sand_fraction"]) == True))
 
+###################################################################
+# Stats on q 
+###################################################################
+
+print(f"Global q<1 median: {df_filt_q[df_filt_q["q_q"] < 1]["q_q"].median():.2f}")
+print(f"Global q<1 mean: {df_filt_q[df_filt_q["q_q"] < 1]["q_q"].mean():.2f}")
+print(f"Global q>1 median: {df_filt_q[df_filt_q["q_q"] > 1]["q_q"].median():.2f}")
+print(f"Global q<1 mean: {df_filt_q[df_filt_q["q_q"] > 1]["q_q"].mean():.2f}")
 
 # %%
 ############################################################################
