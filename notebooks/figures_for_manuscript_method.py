@@ -20,8 +20,8 @@ Global q>1 median: 2.47
 Global q<1 mean: 4.03
 """
 q0 = 1
-q1 = 1.5
-q2 = 0.7
+q1 = 1.75
+q2 = 0.675
 # q1 = 2.47
 # q2 = 0.59
 
@@ -180,7 +180,7 @@ for q, color in q_colors:
 
 # theta reaches to zero earlier for q > 1
 # Hard to get the value analytically ..
-t_after_star = np.arange(6.5, tmax, 1e-03)
+t_after_star = np.arange(6.05, tmax, 1e-03)
 ax2.plot(
     t_after_star,
     np.ones_like(t_after_star) * theta_w,

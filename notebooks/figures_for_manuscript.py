@@ -163,8 +163,15 @@ var_dict = {
     "q_event_frac": {
         "column_name": "",
         "symbol": r"",
-        "label": r"Fraction of drydown events",
+        "label": r"Proportion of drydown events",
         "unit": "(%)",
+        "lim": [0, 100],
+    },
+    "wood_and_ai": {
+        "column_name": "",
+        "symbol": r"",
+        "label": r"Fractional wood cover (%), Aridity index (MAP/MAE)",
+        "unit": "",
         "lim": [0, 100],
     },
 }
@@ -2016,12 +2023,12 @@ def get_df_percentage_q(
 
     
     percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
-    percentage_df["weighted_percentage_q_le_1"] = 100 - percentage_df["weighted_percentage_q_gt_1"]
+    percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
 
     return percentage_df
 
 # Plotting the first set of bars (percentage_q_gt_1)
-def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=True):
+def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=False):
 
     if weighted:
         y_var_q_le_1 = "weighted_percentage_q_le_1"
@@ -2058,7 +2065,11 @@ def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=T
     ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
     ax.set_ylabel("Proportion of drydown events (%)")
     # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-    ax.set_ylim([0, 100])
+    if weighted:
+        ymax=20
+    else:
+        ymax=50
+    ax.set_ylim([0, ymax])
     plt.xticks(rotation=45)
     ax.set_title(title_name, loc="left")
 
@@ -2094,6 +2105,109 @@ plt.tight_layout()
 plt.savefig(
     os.path.join(fig_dir, f"fracq_fracwood_ai.pdf"), dpi=1200, bbox_inches="tight"
 )
+
+# %%
+percentage_df['wood_ai_pair'] = list(zip(percentage_df['fractional_wood_pct'], percentage_df['AI_binned2']))
+percentage_df['wood_ai_pair'] = percentage_df['wood_ai_pair'].apply(lambda x: f"({x[0]}), ({x[1]})")
+fig, ax = plt.subplots(figsize=(7, 5))
+plot_fracq_by_pct(
+    ax,
+    percentage_df,
+    "wood_ai_pair",
+    "wood_and_ai",
+    ""
+)
+plt.tight_layout()
+
+#%%
+
+def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
+    # Determine unique groups and categories
+    # Define the width of the bars and the space between groups
+    bar_width = 0.2
+    space_between_bars  = 0.025
+    space_between_groups = 0.1
+    
+    # Determine unique values for grouping
+    x_unique = df[x_column_to_plot].unique()
+    z_unique = df[z_var].unique()
+    n_groups = len(z_unique)
+    
+    # Define colors for the stacked elements
+    colors = ['#FFE268', '#22BBA9']  # Gold, DarkOrange for the two stack elements
+    
+    # Setup for weighted or unweighted percentages
+    if weighted:
+        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
+    else:
+        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
+    
+    # Create the grouped and stacked bars
+    for z_i, z in enumerate(z_unique):
+        for x_i, x in enumerate(x_unique):
+            # Offset for the group of bars
+            # offset = (bar_width + space_between_groups) * z_i
+
+            # Calculate the x position for each group
+            group_offset = (bar_width + space_between_bars) * n_groups
+            x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
+            
+            # Get the subset of data for this group
+            subset = df[(df[x_column_to_plot] == x) & (df[z_var] == z)]
+            
+            # Get bottom values for stacked bars
+            bottom_value = 0
+            for i, (y_var, color) in enumerate(zip(y_vars, colors)):
+                # The actual position of the bar
+                # position = x_i - (len(z_unique) * bar_width / 2) + offset
+                
+                ax.bar(
+                    x_pos,
+                    subset[y_var].values[0],
+                    bar_width,
+                    bottom=bottom_value,
+                    color=color,
+                    edgecolor='white',
+                    label=f'{z} - {y_var.split("_")[-1]}' if x_i == 0 and i == 0 else ""
+                )
+
+                bottom_value += subset[y_var].values[0]
+    
+    # Set the x-ticks to the middle of the groups
+    ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
+    ax.set_xticklabels(x_unique, rotation=45)
+    # ax.set_xticks(range(len(x_unique)))
+    # ax.set_xticklabels(x_unique, rotation=45)
+    ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+    ax.set_ylabel("Proportion of drydown events (%)")
+    
+    # Set plot title and legend
+    ax.set_title(title_name)
+    # handles, labels = ax.get_legend_handles_labels()
+    # if handles:
+    #     ax.legend(handles[::-1], labels[::-1], title=z_var)
+    
+    # Set y-axis limit if needed
+    if weighted:
+        ax.set_ylim([0, 20])
+    else:
+        ax.set_ylim([0, 50])
+
+# Sample usage:
+# fig, ax = plt.subplots()
+# plot_grouped_stacked_bar(ax, df, 'wood_ai_pair_str', 'AI_binned2', 'Variable Name', 'Title', weighted=True)
+# plt.show()
+fig, ax = plt.subplots(figsize=(6, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
 
 # %%
 # Get the Barren + Litter + Other percentage
@@ -2228,3 +2342,5 @@ def plot_eventlength_vs_q(df):
 
 # plot_eventlength_vs_q(df_filt_q)
 plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
+# %%
