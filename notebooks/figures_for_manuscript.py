@@ -133,7 +133,14 @@ var_dict = {
         "lim": [-0.02, 0.02],
     },
     "rangeland_wood": {
-        "column_name": "",
+        "column_name": "fractional_wood",
+        "symbol": r"",
+        "label": "Fractional wood cover",
+        "unit": "(%)",
+        "lim": [0, 100],
+    },
+    "rangeland_wood_bins": {
+        "column_name": "fractional_wood_pct",
         "symbol": r"",
         "label": "Fractional wood cover",
         "unit": "(%)",
@@ -342,7 +349,7 @@ count_median_number_of_events_perGrid(df)
 ###################################################
 # Defining model acceptabiltiy criteria
 q_thresh = 1e-03
-success_modelfit_thresh = 0.7
+success_modelfit_thresh = 0.8
 sm_range_thresh = 0.1
 event_length_thresh = 30
 obs_freq_thresh = 0.33333
@@ -1949,10 +1956,11 @@ rangeland_info = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_file)
 ).drop(["Unnamed: 0"], axis=1)
 
-rangeland_info2 = pd.read_csv(
+_rangeland_info2 = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
 ).drop(["Unnamed: 0"], axis=1)
-rangeland_info2
+
+rangeland_info2 = _rangeland_info2.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
 # # %%
 # rangeland_info[~pd.isna(rangeland_info["landcover_percent"])].head()
 # rangeland_info[(rangeland_info["EASE_column_index"]==152)&(rangeland_info["EASE_row_index"]==49)&(rangeland_info["year"]==2015)]
@@ -2120,6 +2128,8 @@ plot_fracq_by_pct(
 plt.tight_layout()
 
 #%%
+percentage_df
+#%%
 
 def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
     # Determine unique groups and categories
@@ -2176,9 +2186,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     # Set the x-ticks to the middle of the groups
     ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
     ax.set_xticklabels(x_unique, rotation=45)
-    # ax.set_xticks(range(len(x_unique)))
-    # ax.set_xticklabels(x_unique, rotation=45)
-    ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+    ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
     ax.set_ylabel("Proportion of drydown events (%)")
     
     # Set plot title and legend
@@ -2189,9 +2197,44 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     
     # Set y-axis limit if needed
     if weighted:
-        ax.set_ylim([0, 20])
+        ax.set_ylim([0, 10])
     else:
         ax.set_ylim([0, 50])
+
+    # Replicate the z_var labels for the number of x_column_to_plot labels
+    z_labels = np.tile(z_unique, len(x_unique))
+
+    # Adjust the tick positions for the replicated z_var labels
+    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
+
+    # Hide the original x-axis ticks and labels
+    ax.tick_params(axis='x', which='both', length=0)
+
+    # Create a secondary x-axis for the new labels
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(new_tick_positions)
+
+    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+
+    # # Move the original x-axis label to the bottom
+    # ax.xaxis.set_label_position('bottom')
+    # ax.xaxis.set_ticks_position('bottom')
+    # ax.spines['bottom'].set_position(('outward', 40))
+
+    # Adjust the secondary x-axis to appear below the primary x-axis
+    ax2.spines['top'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.xaxis.set_label_position('bottom')
+    ax2.spines['bottom'].set_position(('outward', 60))
+    ax2.tick_params(axis='x', which='both', length=0)
+
+    ax2.set_xticklabels(z_labels, rotation=45)
+
+
+    # Set the y-axis label
+    ax.set_ylabel("Proportion of drydown events (%)")
+
 
 # Sample usage:
 # fig, ax = plt.subplots()
@@ -2205,7 +2248,7 @@ plot_grouped_stacked_bar(
     z_var="fractional_wood_pct",
     var_name="rangeland_wood",
     title_name="",
-    weighted=False
+    weighted=True
 )
 plt.tight_layout()
 
@@ -2331,7 +2374,6 @@ def plot_eventlength_hist(df):
 # plot_eventlength_hist(df_filt_q)
 plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
 
-
 # %%
 
 def plot_eventlength_vs_q(df):
@@ -2343,4 +2385,132 @@ def plot_eventlength_vs_q(df):
 # plot_eventlength_vs_q(df_filt_q)
 plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
 
+# %%
+longest_events = df_filt_q_conus.sort_values(by='event_length', ascending=False).groupby(['EASE_row_index', 'EASE_column_index']).first().reset_index()
+group_sizes = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).size().reset_index(name='size')
+filtered_groups = group_sizes[group_sizes['size'] >= 5]
+
+# Now, only keep rows from longest_events that have groups with size >= 5
+longest_events_filtered = longest_events[longest_events.set_index(['EASE_row_index', 'EASE_column_index']).index.isin(filtered_groups.set_index(['EASE_row_index', 'EASE_column_index']).index)]
+
+# %%
+percentage_df_longest_event = get_df_percentage_q(longest_events, "fractional_wood")
+fig, ax = plt.subplots(figsize=(6, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df_longest_event,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+# %%
+percentage_df_longest_event = get_df_percentage_q(longest_events_filtered, "fractional_wood")
+fig, ax = plt.subplots(figsize=(6, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df_longest_event,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+
+# %%
+
+def plot_q_ai_wood_scatter(df):
+    fig, ax = plt.subplots(figsize=(6, 4))
+    sc=ax.scatter(df["fractional_wood"], df["q_q"], c=df["AI"], cmap="RdBu", alpha=0.3)
+    ax.set_ylim(0,10)
+    ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
+    ax.set_ylabel(var_dict["q_q"]["label"]+" "+var_dict["q_q"]["symbol"])
+    # Create a colorbar with the scatter plot's color mapping
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label('Aridity Index (MAP/MAE')
+
+plot_q_ai_wood_scatter(longest_events_filtered)
+# %%
+# Assuming df is the DataFrame with the relevant data and it contains a column named 'data'
+# for which we want to calculate the coefficient of variation.
+# Group by 'EASE_row_index' and 'EASE_column_index' and filter groups with count 16
+
+# First, group by the indices and filter out the groups with exactly 16 observations
+long_events = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).filter(lambda x: len(x) >=16)
+
+# Now, calculate the coefficient of variation for each group
+def coefficient_of_variation(x):
+    return x.std() / x.mean()
+
+stat = long_events.groupby(['EASE_row_index', 'EASE_column_index']).agg(fractional_wood=("fractional_wood", "median"), AI=("AI", "median"))
+stat["q_cv"] = long_events.groupby(['EASE_row_index', 'EASE_column_index'])["q_q"].agg(coefficient_of_variation)
+
+# %%
+fig, ax = plt.subplots(figsize=(6, 4))
+sc=ax.scatter(stat["fractional_wood"], stat["q_cv"], c=stat["AI"], cmap="RdBu", alpha=0.4)
+ax.set_ylim(0,4)
+ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
+ax.set_ylabel("Coefficient of variation of" +var_dict["q_q"]["symbol"])
+# Create a colorbar with the scatter plot's color mapping
+cbar = plt.colorbar(sc, ax=ax)
+cbar.set_label('Aridity Index (MAP/MAE')
+# %%
+from pylab import *
+def plot_rangeland_map(ax, df, var_item, cmap):
+    plt.rcParams.update({"font.size": 12})
+
+    df = df.drop_duplicates(subset=['latitude', 'longitude'])
+    pivot_array = df.pivot(
+        index="latitude", columns="longitude", values=var_item
+    ) 
+    pivot_array[pivot_array.index > -60]
+
+    # Get lat and lon
+    lons = pivot_array.columns.values
+    lats = pivot_array.index.values
+
+    # Plot in the map
+    custom_cmap = cm.get_cmap(cmap, 5)
+
+    im = ax.pcolormesh(
+        lons, lats, pivot_array, cmap=custom_cmap, transform=ccrs.PlateCarree()
+    )
+    
+    ax.set_extent([-160, 170, -60, 90], crs=ccrs.PlateCarree())
+    ax.coastlines()
+    ax.set_extent([-125, -66.93457, 24.396308, 49.384358], crs=ccrs.PlateCarree())
+
+    # Add colorbar
+    plt.colorbar(
+        im,
+        ax=ax,
+        orientation="vertical",
+        shrink=0.35,
+        pad=0.02,
+    )
+
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    ax.set_title(var_item)
+
+fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+plot_rangeland_map(ax, rangeland_info2, "fractional_wood", cmap="BuGn")
+
+fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+plot_rangeland_map(ax, rangeland_info2, "fractional_herb", cmap="BuGn")
+
+#%%
+# Assuming rangeland_info2 is your DataFrame
+# This will mark all rows that are duplicates as True, keeping the first occurrence as False (not a duplicate by default)
+duplicates = rangeland_info2.duplicated(keep=False)
+
+# To show the duplicate rows
+duplicate_rows = rangeland_info2[duplicates]
+
+duplicate_rows
 # %%
