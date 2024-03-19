@@ -349,7 +349,7 @@ count_median_number_of_events_perGrid(df)
 ###################################################
 # Defining model acceptabiltiy criteria
 q_thresh = 1e-03
-success_modelfit_thresh = 0.8
+R2_thresh = 0.7
 sm_range_thresh = 0.1
 event_length_thresh = 30
 obs_freq_thresh = 0.33333
@@ -357,7 +357,7 @@ obs_freq_thresh = 0.33333
 
 # Runs where q model performed reasonablly well
 df_filt_q = df[
-    (df["q_r_squared"] >= success_modelfit_thresh)
+    (df["q_r_squared"] >= R2_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
     & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
@@ -370,7 +370,7 @@ count_median_number_of_events_perGrid(df_filt_q)
 
 # Runs where q model performed reasonablly well
 df_filt_allq = df[
-    (df["q_r_squared"] >= success_modelfit_thresh)
+    (df["q_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
     & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
@@ -382,7 +382,7 @@ count_median_number_of_events_perGrid(df_filt_allq)
 
 # Runs where exponential model performed good
 df_filt_exp = df[
-    (df["exp_r_squared"] >= success_modelfit_thresh)
+    (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
     & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
@@ -394,8 +394,8 @@ count_median_number_of_events_perGrid(df_filt_exp)
 # Runs where either of the model performed satisfactory
 df_filt_q_or_exp = df[
     (
-        (df["q_r_squared"] >= success_modelfit_thresh)
-        | (df["exp_r_squared"] >= success_modelfit_thresh)
+        (df["q_r_squared"] >= R2_thresh)
+        | (df["exp_r_squared"] >= R2_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
     & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
@@ -406,8 +406,8 @@ count_median_number_of_events_perGrid(df_filt_q_or_exp)
 
 # Runs where both of the model performed satisfactory
 df_filt_q_and_exp = df[
-    (df["q_r_squared"] >= success_modelfit_thresh)
-    & (df["exp_r_squared"] >= success_modelfit_thresh)
+    (df["q_r_squared"] >= R2_thresh)
+    & (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
     & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
@@ -558,7 +558,7 @@ def plot_R2_models_v2(df, R2_threshold, save=False):
 
 
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
-plot_R2_models_v2(df=df_filt_q_and_exp, R2_threshold=success_modelfit_thresh, save=True)
+plot_R2_models_v2(df=df_filt_q_and_exp, R2_threshold=R2_thresh, save=True)
 
 
 # %%
@@ -1943,13 +1943,13 @@ fig_ridge_veg.savefig(
 
 
 # %%
-######################################################################
-######################################################################
-######################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
 # Rangeland analysis
-######################################################################
-######################################################################
-######################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
 
 # Continuous rangeland landcover
 rangeland_info = pd.read_csv(
@@ -2029,106 +2029,19 @@ def get_df_percentage_q(
     percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
     percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
 
-    
-    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
-    percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
+    # count percentage * days percentage
+    # percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
+    # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
 
+    # Percentage of count * days
+    percentage_df["count_x_event_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_event_length_q_gt_1"]
+    percentage_df["count_x_event_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])
+    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_event_q_gt_1"] / (percentage_df["count_x_event_q_gt_1"]  + percentage_df["count_x_event_q_le_1"]) * 100
+    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_event_q_le_1"] / (percentage_df["count_x_event_q_gt_1"]  + percentage_df["count_x_event_q_le_1"]) * 100
     return percentage_df
 
-# Plotting the first set of bars (percentage_q_gt_1)
-def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=False):
-
-    if weighted:
-        y_var_q_le_1 = "weighted_percentage_q_le_1"
-        y_var_q_gt_1 = "weighted_percentage_q_gt_1"
-    else:
-        y_var_q_le_1 = "percentage_q_le_1"
-        y_var_q_gt_1 = "percentage_q_gt_1"
-
-    sns.barplot(
-        x=x_column_to_plot,
-        y=y_var_q_le_1,
-        data=df,
-        color="#FFE268",
-        label=y_var_q_le_1,
-        ax=ax,
-        width=0.98,
-        edgecolor="white",
-        linewidth=3,
-    )
-
-    sns.barplot(
-        x=x_column_to_plot,
-        y=y_var_q_gt_1,
-        data=df,
-        color="#22BBA9",
-        label=y_var_q_gt_1,
-        ax=ax,
-        width=0.98,
-        edgecolor="white",
-        linewidth=3,
-        bottom=df[y_var_q_le_1],
-    )
-
-    ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-    ax.set_ylabel("Proportion of drydown events (%)")
-    # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-    if weighted:
-        ymax=20
-    else:
-        ymax=50
-    ax.set_ylim([0, ymax])
-    plt.xticks(rotation=45)
-    ax.set_title(title_name, loc="left")
-
-    ax.legend_ = None
-
-# %%
 percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood")
 
-fig = plt.figure(figsize=(8, 4))
-
-plt.rcParams.update({"font.size": 12})
-ax1 = plt.subplot(121)
-subset_df = percentage_df[percentage_df["AI_binned2"] == "0-0.5"]
-plot_fracq_by_pct(
-    ax1,
-    subset_df,
-    "fractional_wood_pct",
-    "rangeland_wood",
-    "A.              P/PET < 0.5",
-)
-
-ax1 = plt.subplot(122)
-subset_df2 = percentage_df[percentage_df["AI_binned2"] == "1.5-"]
-plot_fracq_by_pct(
-    ax1,
-    subset_df2,
-    "fractional_wood_pct",
-    "rangeland_wood",
-    "B.             P/PET > 1.5",
-)
-plt.tight_layout()
-
-plt.savefig(
-    os.path.join(fig_dir, f"fracq_fracwood_ai.pdf"), dpi=1200, bbox_inches="tight"
-)
-
-# %%
-percentage_df['wood_ai_pair'] = list(zip(percentage_df['fractional_wood_pct'], percentage_df['AI_binned2']))
-percentage_df['wood_ai_pair'] = percentage_df['wood_ai_pair'].apply(lambda x: f"({x[0]}), ({x[1]})")
-fig, ax = plt.subplots(figsize=(7, 5))
-plot_fracq_by_pct(
-    ax,
-    percentage_df,
-    "wood_ai_pair",
-    "wood_and_ai",
-    ""
-)
-plt.tight_layout()
-
-#%%
-percentage_df
 #%%
 
 def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
@@ -2197,7 +2110,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     
     # Set y-axis limit if needed
     if weighted:
-        ax.set_ylim([0, 10])
+        ax.set_ylim([0, 30])
     else:
         ax.set_ylim([0, 50])
 
@@ -2233,13 +2146,25 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
 
 
     # Set the y-axis label
-    ax.set_ylabel("Proportion of drydown events (%)")
+    if weighted:
+        ax.set_ylabel("Weighted proportion of drydown events (%)")
+    else:
+        ax.set_ylabel("Proportion of drydown events (%)")
 
 
-# Sample usage:
-# fig, ax = plt.subplots()
-# plot_grouped_stacked_bar(ax, df, 'wood_ai_pair_str', 'AI_binned2', 'Variable Name', 'Title', weighted=True)
-# plt.show()
+plt.rcParams.update({"font.size": 11})
+fig, ax = plt.subplots(figsize=(6, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
 fig, ax = plt.subplots(figsize=(6, 4))
 plot_grouped_stacked_bar(
     ax=ax,
@@ -2347,12 +2272,12 @@ fig, ax = plt.subplots(figsize=(8, 5))
 # for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
 #     ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
 for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-    ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
+    ax.plot(group['fractional_wood_pct'], group['weighted_percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
 
 ax.set_xlabel('Fractional Wood Coverage (%)')
 ax.set_ylabel(r'Weighted proportion of events with $q>1$'+'\n(convex non-linearity) (%)')
 ax.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-ax.set_ylim([60, 95])  # Adjusting y-axis limits to 0-100% for percentage
+ax.set_ylim([80, 100])  # Adjusting y-axis limits to 0-100% for percentage
 plt.xticks(rotation=45)
 fig.tight_layout()
 
@@ -2396,6 +2321,8 @@ longest_events_filtered = longest_events[longest_events.set_index(['EASE_row_ind
 # %%
 percentage_df_longest_event = get_df_percentage_q(longest_events, "fractional_wood")
 fig, ax = plt.subplots(figsize=(6, 4))
+
+plt.rcParams.update({"font.size": 11})
 plot_grouped_stacked_bar(
     ax=ax,
     df=percentage_df_longest_event,
@@ -2403,7 +2330,7 @@ plot_grouped_stacked_bar(
     z_var="fractional_wood_pct",
     var_name="rangeland_wood",
     title_name="",
-    weighted=False
+    weighted=True
 )
 plt.tight_layout()
 
@@ -2514,3 +2441,80 @@ duplicate_rows = rangeland_info2[duplicates]
 
 duplicate_rows
 # %%
+
+
+# # Plotting the first set of bars (percentage_q_gt_1)
+# def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=False):
+
+#     if weighted:
+#         y_var_q_le_1 = "weighted_percentage_q_le_1"
+#         y_var_q_gt_1 = "weighted_percentage_q_gt_1"
+#     else:
+#         y_var_q_le_1 = "percentage_q_le_1"
+#         y_var_q_gt_1 = "percentage_q_gt_1"
+
+#     sns.barplot(
+#         x=x_column_to_plot,
+#         y=y_var_q_le_1,
+#         data=df,
+#         color="#FFE268",
+#         label=y_var_q_le_1,
+#         ax=ax,
+#         width=0.98,
+#         edgecolor="white",
+#         linewidth=3,
+#     )
+
+#     sns.barplot(
+#         x=x_column_to_plot,
+#         y=y_var_q_gt_1,
+#         data=df,
+#         color="#22BBA9",
+#         label=y_var_q_gt_1,
+#         ax=ax,
+#         width=0.98,
+#         edgecolor="white",
+#         linewidth=3,
+#         bottom=df[y_var_q_le_1],
+#     )
+
+#     ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+#     ax.set_ylabel("Proportion of drydown events (%)")
+#     # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+#     if weighted:
+#         ymax=20
+#     else:
+#         ymax=50
+#     ax.set_ylim([0, ymax])
+#     plt.xticks(rotation=45)
+#     ax.set_title(title_name, loc="left")
+
+#     ax.legend_ = None
+
+# fig = plt.figure(figsize=(8, 4))
+
+# plt.rcParams.update({"font.size": 12})
+# ax1 = plt.subplot(121)
+# subset_df = percentage_df[percentage_df["AI_binned2"] == "0-0.5"]
+# plot_fracq_by_pct(
+#     ax1,
+#     subset_df,
+#     "fractional_wood_pct",
+#     "rangeland_wood",
+#     "A.              P/PET < 0.5",
+# )
+
+# ax1 = plt.subplot(122)
+# subset_df2 = percentage_df[percentage_df["AI_binned2"] == "1.5-"]
+# plot_fracq_by_pct(
+#     ax1,
+#     subset_df2,
+#     "fractional_wood_pct",
+#     "rangeland_wood",
+#     "B.             P/PET > 1.5",
+# )
+# plt.tight_layout()
+
+# plt.savefig(
+#     os.path.join(fig_dir, f"fracq_fracwood_ai.pdf"), dpi=1200, bbox_inches="tight"
+# )
