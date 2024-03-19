@@ -1946,12 +1946,14 @@ fig_ridge_veg.savefig(
 ############################################################################################################################################
 ############################################################################################################################################
 ############################################################################################################################################
+#
 # Rangeland analysis
+#
 ############################################################################################################################################
 ############################################################################################################################################
 ############################################################################################################################################
 
-# Continuous rangeland landcover
+# Read continuous rangeland landcover information
 rangeland_info = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_file)
 ).drop(["Unnamed: 0"], axis=1)
@@ -1961,14 +1963,11 @@ _rangeland_info2 = pd.read_csv(
 ).drop(["Unnamed: 0"], axis=1)
 
 rangeland_info2 = _rangeland_info2.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
-# # %%
-# rangeland_info[~pd.isna(rangeland_info["landcover_percent"])].head()
-# rangeland_info[(rangeland_info["EASE_column_index"]==152)&(rangeland_info["EASE_row_index"]==49)&(rangeland_info["year"]==2015)]
-# sum()
+
+# Merge with existing dataframes 
 df_filt_q_conus = df_filt_q.merge(
     rangeland_info2, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
 )
-# # print("Loaded ancillary rangeland information")
 
 # Bin AI values
 df_filt_q_conus["AI_binned2"] = pd.cut(
@@ -1977,10 +1976,11 @@ df_filt_q_conus["AI_binned2"] = pd.cut(
     labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
 )
 
-# Change to percentage (fix this in the data management)
+# Change to percentage (TODO: fix this in the data management)
 df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
 df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
-# %%
+
+# Print some statistics
 print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
 print(
     f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
@@ -1988,10 +1988,7 @@ print(
 print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
 
 # %%
-##########################################################
-# Scatter plots
-##########################################################
-
+# Get the statistics on the proportion of q>1 and q<1 events 
 def get_df_percentage_q(
     df,
     var_name,
@@ -2043,8 +2040,9 @@ def get_df_percentage_q(
 percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood")
 
 #%%
-
+# Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
 def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
+
     # Determine unique groups and categories
     # Define the width of the bars and the space between groups
     bar_width = 0.2
@@ -2057,7 +2055,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     n_groups = len(z_unique)
     
     # Define colors for the stacked elements
-    colors = ['#FFE268', '#22BBA9']  # Gold, DarkOrange for the two stack elements
+    colors = ['#FFE268', '#22BBA9'] # (q<1, q>1)
     
     # Setup for weighted or unweighted percentages
     if weighted:
@@ -2068,8 +2066,6 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     # Create the grouped and stacked bars
     for z_i, z in enumerate(z_unique):
         for x_i, x in enumerate(x_unique):
-            # Offset for the group of bars
-            # offset = (bar_width + space_between_groups) * z_i
 
             # Calculate the x position for each group
             group_offset = (bar_width + space_between_bars) * n_groups
@@ -2080,10 +2076,8 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
             
             # Get bottom values for stacked bars
             bottom_value = 0
+
             for i, (y_var, color) in enumerate(zip(y_vars, colors)):
-                # The actual position of the bar
-                # position = x_i - (len(z_unique) * bar_width / 2) + offset
-                
                 ax.bar(
                     x_pos,
                     subset[y_var].values[0],
@@ -2100,20 +2094,16 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
     ax.set_xticklabels(x_unique, rotation=45)
     ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
-    ax.set_ylabel("Proportion of drydown events (%)")
-    
-    # Set plot title and legend
-    ax.set_title(title_name)
-    # handles, labels = ax.get_legend_handles_labels()
-    # if handles:
-    #     ax.legend(handles[::-1], labels[::-1], title=z_var)
-    
-    # Set y-axis limit if needed
+
+    # Set the y-axis
     if weighted:
-        ax.set_ylim([0, 30])
+        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
+        ax.set_ylim([0, 20])
     else:
+        ax.set_ylabel("Proportion of\ndrydown events (%)")
         ax.set_ylim([0, 50])
 
+    # Set the second x-ticks
     # Replicate the z_var labels for the number of x_column_to_plot labels
     z_labels = np.tile(z_unique, len(x_unique))
 
@@ -2127,13 +2117,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     ax2 = ax.twiny()
     ax2.set_xlim(ax.get_xlim())
     ax2.set_xticks(new_tick_positions)
-
     ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-
-    # # Move the original x-axis label to the bottom
-    # ax.xaxis.set_label_position('bottom')
-    # ax.xaxis.set_ticks_position('bottom')
-    # ax.spines['bottom'].set_position(('outward', 40))
 
     # Adjust the secondary x-axis to appear below the primary x-axis
     ax2.spines['top'].set_visible(False)
@@ -2141,16 +2125,10 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     ax2.xaxis.set_label_position('bottom')
     ax2.spines['bottom'].set_position(('outward', 60))
     ax2.tick_params(axis='x', which='both', length=0)
-
     ax2.set_xticklabels(z_labels, rotation=45)
 
-
-    # Set the y-axis label
-    if weighted:
-        ax.set_ylabel("Weighted proportion of drydown events (%)")
-    else:
-        ax.set_ylabel("Proportion of drydown events (%)")
-
+    # Set plot title and legend
+    ax.set_title(title_name)
 
 plt.rcParams.update({"font.size": 11})
 fig, ax = plt.subplots(figsize=(6, 4))
@@ -2177,17 +2155,45 @@ plot_grouped_stacked_bar(
 )
 plt.tight_layout()
 
-# %%
-# Get the Barren + Litter + Other percentage
 
+# %%
+# ##########################################################
+# # Similar plot but in scatter plot format
+# ##########################################################
+
+# Get unique AI_binned2 values and assign colors
+cmap = plt.get_cmap('RdBu')
+ai_bins_list = percentage_df['AI_binned2'].unique()
+colors = cmap(np.linspace(0, 1, len(ai_bins_list)))
+color_map = dict(zip(ai_bins_list, colors))
+
+plt.rcParams.update({"font.size": 16})
+fig, ax = plt.subplots(figsize=(8, 5))
+# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+#     ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
+for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
+    ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
+
+ax.set_xlabel('Fractional Wood Coverage (%)')
+ax.set_ylabel('Proportion of events with\n'+r'$q>1$'+'(convex non-linearity) (%)')
+ax.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+ax.set_ylim([60, 100])  # Adjusting y-axis limits to 0-100% for percentage
+plt.xticks(rotation=45)
+fig.tight_layout()
+
+
+# %%
+#############################################################
+# Get the Barren + Litter + Other percentage
+#############################################################
 # plt_idx= ~pd.isna(df_filt_q_conus["barren_percent"])
+# Get Barren percent
 df_filt_q_conus["nonveg_percent"] = df_filt_q_conus["barren_percent"] + (
     100 - df_filt_q_conus["totalrangeland_percent"]
 )
-
-# %%
 percentage_df2 = get_df_percentage_q(df_filt_q_conus, "barren_percent")
 
+# %% Barren plot of q>1 vs q<1 by vegetation and aridity, for "other" land-uses
 fig = plt.figure(figsize=(8, 4))
 
 plt.rcParams.update({"font.size": 12})
@@ -2217,6 +2223,7 @@ plt.savefig(
 )
 
 # %%
+# Get "other" land-use percent in vegetated area
 percentage_df3 = get_df_percentage_q(
     df_filt_q_conus[df_filt_q_conus["nonveg_percent"] < 20],
     "nonveg_percent",
@@ -2225,6 +2232,7 @@ percentage_df3 = get_df_percentage_q(
 )
 percentage_df3
 # %%
+# Statistics of q>1 vs q<1 by vegetation and aridity, for "other" land-uses
 fig = plt.figure(figsize=(8, 4))
 
 plt.rcParams.update({"font.size": 12})
@@ -2254,35 +2262,12 @@ plt.savefig(
     dpi=1200,
     bbox_inches="tight",
 )
-# %%
-# ##########################################################
-# # Scatter plots
-# ##########################################################
-
-# # Plotting the scatter plot
-
-# Get unique AI_binned2 values and assign colors
-cmap = plt.get_cmap('RdBu')
-ai_bins_list = percentage_df['AI_binned2'].unique()
-colors = cmap(np.linspace(0, 1, len(ai_bins_list)))
-color_map = dict(zip(ai_bins_list, colors))
-
-plt.rcParams.update({"font.size": 16})
-fig, ax = plt.subplots(figsize=(8, 5))
-# for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-#     ax.plot(group['fractional_wood_pct'], group['percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
-for (ai_bin, group) in percentage_df.groupby('AI_binned2'):
-    ax.plot(group['fractional_wood_pct'], group['weighted_percentage_q_gt_1'], label=ai_bin, alpha=0.7, marker='o', color=color_map[ai_bin])
-
-ax.set_xlabel('Fractional Wood Coverage (%)')
-ax.set_ylabel(r'Weighted proportion of events with $q>1$'+'\n(convex non-linearity) (%)')
-ax.legend(title='Aridity Index\n[MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-ax.set_ylim([80, 100])  # Adjusting y-axis limits to 0-100% for percentage
-plt.xticks(rotation=45)
-fig.tight_layout()
 
 
-# %% Relationship between q and the length of the drydown events
+# %% 
+# #################################################################
+# Relationship between q and the length of the drydown events
+#################################################################
 # Calculate the number of bins
 
 def plot_eventlength_hist(df):
@@ -2310,137 +2295,137 @@ def plot_eventlength_vs_q(df):
 # plot_eventlength_vs_q(df_filt_q)
 plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
 
-# %%
-longest_events = df_filt_q_conus.sort_values(by='event_length', ascending=False).groupby(['EASE_row_index', 'EASE_column_index']).first().reset_index()
-group_sizes = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).size().reset_index(name='size')
-filtered_groups = group_sizes[group_sizes['size'] >= 5]
+# # %%
+# longest_events = df_filt_q_conus.sort_values(by='event_length', ascending=False).groupby(['EASE_row_index', 'EASE_column_index']).first().reset_index()
+# group_sizes = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).size().reset_index(name='size')
+# filtered_groups = group_sizes[group_sizes['size'] >= 5]
 
-# Now, only keep rows from longest_events that have groups with size >= 5
-longest_events_filtered = longest_events[longest_events.set_index(['EASE_row_index', 'EASE_column_index']).index.isin(filtered_groups.set_index(['EASE_row_index', 'EASE_column_index']).index)]
+# # Now, only keep rows from longest_events that have groups with size >= 5
+# longest_events_filtered = longest_events[longest_events.set_index(['EASE_row_index', 'EASE_column_index']).index.isin(filtered_groups.set_index(['EASE_row_index', 'EASE_column_index']).index)]
 
-# %%
-percentage_df_longest_event = get_df_percentage_q(longest_events, "fractional_wood")
-fig, ax = plt.subplots(figsize=(6, 4))
+# # %%
+# percentage_df_longest_event = get_df_percentage_q(longest_events, "fractional_wood")
+# fig, ax = plt.subplots(figsize=(6, 4))
 
-plt.rcParams.update({"font.size": 11})
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df_longest_event,
-    x_column_to_plot="AI_binned2",
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=True
-)
-plt.tight_layout()
+# plt.rcParams.update({"font.size": 11})
+# plot_grouped_stacked_bar(
+#     ax=ax,
+#     df=percentage_df_longest_event,
+#     x_column_to_plot="AI_binned2",
+#     z_var="fractional_wood_pct",
+#     var_name="rangeland_wood",
+#     title_name="",
+#     weighted=True
+# )
+# plt.tight_layout()
 
-# %%
-percentage_df_longest_event = get_df_percentage_q(longest_events_filtered, "fractional_wood")
-fig, ax = plt.subplots(figsize=(6, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df_longest_event,
-    x_column_to_plot="AI_binned2",
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=False
-)
-plt.tight_layout()
+# # %%
+# percentage_df_longest_event = get_df_percentage_q(longest_events_filtered, "fractional_wood")
+# fig, ax = plt.subplots(figsize=(6, 4))
+# plot_grouped_stacked_bar(
+#     ax=ax,
+#     df=percentage_df_longest_event,
+#     x_column_to_plot="AI_binned2",
+#     z_var="fractional_wood_pct",
+#     var_name="rangeland_wood",
+#     title_name="",
+#     weighted=False
+# )
+# plt.tight_layout()
 
 
-# %%
+# # %%
 
-def plot_q_ai_wood_scatter(df):
-    fig, ax = plt.subplots(figsize=(6, 4))
-    sc=ax.scatter(df["fractional_wood"], df["q_q"], c=df["AI"], cmap="RdBu", alpha=0.3)
-    ax.set_ylim(0,10)
-    ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
-    ax.set_ylabel(var_dict["q_q"]["label"]+" "+var_dict["q_q"]["symbol"])
-    # Create a colorbar with the scatter plot's color mapping
-    cbar = plt.colorbar(sc, ax=ax)
-    cbar.set_label('Aridity Index (MAP/MAE')
+# def plot_q_ai_wood_scatter(df):
+#     fig, ax = plt.subplots(figsize=(6, 4))
+#     sc=ax.scatter(df["fractional_wood"], df["q_q"], c=df["AI"], cmap="RdBu", alpha=0.3)
+#     ax.set_ylim(0,10)
+#     ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
+#     ax.set_ylabel(var_dict["q_q"]["label"]+" "+var_dict["q_q"]["symbol"])
+#     # Create a colorbar with the scatter plot's color mapping
+#     cbar = plt.colorbar(sc, ax=ax)
+#     cbar.set_label('Aridity Index (MAP/MAE')
 
-plot_q_ai_wood_scatter(longest_events_filtered)
-# %%
-# Assuming df is the DataFrame with the relevant data and it contains a column named 'data'
-# for which we want to calculate the coefficient of variation.
-# Group by 'EASE_row_index' and 'EASE_column_index' and filter groups with count 16
+# plot_q_ai_wood_scatter(longest_events_filtered)
+# # %%
+# # Assuming df is the DataFrame with the relevant data and it contains a column named 'data'
+# # for which we want to calculate the coefficient of variation.
+# # Group by 'EASE_row_index' and 'EASE_column_index' and filter groups with count 16
 
-# First, group by the indices and filter out the groups with exactly 16 observations
-long_events = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).filter(lambda x: len(x) >=16)
+# # First, group by the indices and filter out the groups with exactly 16 observations
+# long_events = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).filter(lambda x: len(x) >=16)
 
-# Now, calculate the coefficient of variation for each group
-def coefficient_of_variation(x):
-    return x.std() / x.mean()
+# # Now, calculate the coefficient of variation for each group
+# def coefficient_of_variation(x):
+#     return x.std() / x.mean()
 
-stat = long_events.groupby(['EASE_row_index', 'EASE_column_index']).agg(fractional_wood=("fractional_wood", "median"), AI=("AI", "median"))
-stat["q_cv"] = long_events.groupby(['EASE_row_index', 'EASE_column_index'])["q_q"].agg(coefficient_of_variation)
+# stat = long_events.groupby(['EASE_row_index', 'EASE_column_index']).agg(fractional_wood=("fractional_wood", "median"), AI=("AI", "median"))
+# stat["q_cv"] = long_events.groupby(['EASE_row_index', 'EASE_column_index'])["q_q"].agg(coefficient_of_variation)
 
-# %%
-fig, ax = plt.subplots(figsize=(6, 4))
-sc=ax.scatter(stat["fractional_wood"], stat["q_cv"], c=stat["AI"], cmap="RdBu", alpha=0.4)
-ax.set_ylim(0,4)
-ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
-ax.set_ylabel("Coefficient of variation of" +var_dict["q_q"]["symbol"])
-# Create a colorbar with the scatter plot's color mapping
-cbar = plt.colorbar(sc, ax=ax)
-cbar.set_label('Aridity Index (MAP/MAE')
-# %%
-from pylab import *
-def plot_rangeland_map(ax, df, var_item, cmap):
-    plt.rcParams.update({"font.size": 12})
+# # %%
+# fig, ax = plt.subplots(figsize=(6, 4))
+# sc=ax.scatter(stat["fractional_wood"], stat["q_cv"], c=stat["AI"], cmap="RdBu", alpha=0.4)
+# ax.set_ylim(0,4)
+# ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
+# ax.set_ylabel("Coefficient of variation of" +var_dict["q_q"]["symbol"])
+# # Create a colorbar with the scatter plot's color mapping
+# cbar = plt.colorbar(sc, ax=ax)
+# cbar.set_label('Aridity Index (MAP/MAE')
+# # %%
+# from pylab import *
+# def plot_rangeland_map(ax, df, var_item, cmap):
+#     plt.rcParams.update({"font.size": 12})
 
-    df = df.drop_duplicates(subset=['latitude', 'longitude'])
-    pivot_array = df.pivot(
-        index="latitude", columns="longitude", values=var_item
-    ) 
-    pivot_array[pivot_array.index > -60]
+#     df = df.drop_duplicates(subset=['latitude', 'longitude'])
+#     pivot_array = df.pivot(
+#         index="latitude", columns="longitude", values=var_item
+#     ) 
+#     pivot_array[pivot_array.index > -60]
 
-    # Get lat and lon
-    lons = pivot_array.columns.values
-    lats = pivot_array.index.values
+#     # Get lat and lon
+#     lons = pivot_array.columns.values
+#     lats = pivot_array.index.values
 
-    # Plot in the map
-    custom_cmap = cm.get_cmap(cmap, 5)
+#     # Plot in the map
+#     custom_cmap = cm.get_cmap(cmap, 5)
 
-    im = ax.pcolormesh(
-        lons, lats, pivot_array, cmap=custom_cmap, transform=ccrs.PlateCarree()
-    )
+#     im = ax.pcolormesh(
+#         lons, lats, pivot_array, cmap=custom_cmap, transform=ccrs.PlateCarree()
+#     )
     
-    ax.set_extent([-160, 170, -60, 90], crs=ccrs.PlateCarree())
-    ax.coastlines()
-    ax.set_extent([-125, -66.93457, 24.396308, 49.384358], crs=ccrs.PlateCarree())
+#     ax.set_extent([-160, 170, -60, 90], crs=ccrs.PlateCarree())
+#     ax.coastlines()
+#     ax.set_extent([-125, -66.93457, 24.396308, 49.384358], crs=ccrs.PlateCarree())
 
-    # Add colorbar
-    plt.colorbar(
-        im,
-        ax=ax,
-        orientation="vertical",
-        shrink=0.35,
-        pad=0.02,
-    )
+#     # Add colorbar
+#     plt.colorbar(
+#         im,
+#         ax=ax,
+#         orientation="vertical",
+#         shrink=0.35,
+#         pad=0.02,
+#     )
 
-    ax.set_xlabel("Longitude")
-    ax.set_ylabel("Latitude")
-    ax.set_title(var_item)
+#     ax.set_xlabel("Longitude")
+#     ax.set_ylabel("Latitude")
+#     ax.set_title(var_item)
 
-fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
-plot_rangeland_map(ax, rangeland_info2, "fractional_wood", cmap="BuGn")
+# fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+# plot_rangeland_map(ax, rangeland_info2, "fractional_wood", cmap="BuGn")
 
-fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
-plot_rangeland_map(ax, rangeland_info2, "fractional_herb", cmap="BuGn")
+# fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
+# plot_rangeland_map(ax, rangeland_info2, "fractional_herb", cmap="BuGn")
 
-#%%
-# Assuming rangeland_info2 is your DataFrame
-# This will mark all rows that are duplicates as True, keeping the first occurrence as False (not a duplicate by default)
-duplicates = rangeland_info2.duplicated(keep=False)
+# #%%
+# # Assuming rangeland_info2 is your DataFrame
+# # This will mark all rows that are duplicates as True, keeping the first occurrence as False (not a duplicate by default)
+# duplicates = rangeland_info2.duplicated(keep=False)
 
-# To show the duplicate rows
-duplicate_rows = rangeland_info2[duplicates]
+# # To show the duplicate rows
+# duplicate_rows = rangeland_info2[duplicates]
 
-duplicate_rows
-# %%
+# duplicate_rows
+# # %%
 
 
 # # Plotting the first set of bars (percentage_q_gt_1)
