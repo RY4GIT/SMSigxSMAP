@@ -1954,20 +1954,16 @@ fig_ridge_veg.savefig(
 ############################################################################################################################################
 ############################################################################################################################################
 
-# Read continuous rangeland landcover information
-rangeland_info = pd.read_csv(
-    os.path.join(data_dir, datarod_dir, anc_rangeland_file)
-).drop(["Unnamed: 0"], axis=1)
-
-_rangeland_info2 = pd.read_csv(
+_rangeland_info = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
 ).drop(["Unnamed: 0"], axis=1)
 
-rangeland_info2 = _rangeland_info2.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
+rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
 
+# %%
 # Merge with existing dataframes 
 df_filt_q_conus = df_filt_q.merge(
-    rangeland_info2, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
+    rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
 )
 
 # Bin AI values
@@ -2476,18 +2472,18 @@ plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"]
 #     ax.set_title(var_item)
 
 # fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
-# plot_rangeland_map(ax, rangeland_info2, "fractional_wood", cmap="BuGn")
+# plot_rangeland_map(ax, rangeland_info, "fractional_wood", cmap="BuGn")
 
 # fig, ax = plt.subplots(figsize=(10, 5), subplot_kw={'projection': ccrs.PlateCarree()})
-# plot_rangeland_map(ax, rangeland_info2, "fractional_herb", cmap="BuGn")
+# plot_rangeland_map(ax, rangeland_info, "fractional_herb", cmap="BuGn")
 
 # #%%
-# # Assuming rangeland_info2 is your DataFrame
+# # Assuming rangeland_info is your DataFrame
 # # This will mark all rows that are duplicates as True, keeping the first occurrence as False (not a duplicate by default)
-# duplicates = rangeland_info2.duplicated(keep=False)
+# duplicates = rangeland_info.duplicated(keep=False)
 
 # # To show the duplicate rows
-# duplicate_rows = rangeland_info2[duplicates]
+# duplicate_rows = rangeland_info[duplicates]
 
 # duplicate_rows
 # # %%
