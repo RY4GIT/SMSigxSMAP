@@ -20,6 +20,7 @@ from functions import loss_model
 from matplotlib.colors import LinearSegmentedColormap
 !pip install mpl-scatter-density
 import mpl_scatter_density
+import matplotlib.colors as mcolors
 
 # %%
 # Ryoko do not have this font on my system
@@ -2041,22 +2042,35 @@ percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood")
 
 #%%
 # Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
+
+def darken_hex_color(hex_color, darken_factor=0.7):
+    # Convert hex to RGB
+    rgb_color = mcolors.hex2color(hex_color)
+    # Convert RGB to HSV
+    hsv_color = mcolors.rgb_to_hsv(rgb_color)
+    # Darken the color by reducing its V (Value) component
+    hsv_color[2] *= darken_factor
+    # Convert back to RGB, then to hex
+    darkened_rgb_color = mcolors.hsv_to_rgb(hsv_color)
+    return mcolors.to_hex(darkened_rgb_color)
+    
 def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
 
     # Determine unique groups and categories
     # Define the width of the bars and the space between groups
     bar_width = 0.2
     space_between_bars  = 0.025
-    space_between_groups = 0.1
+    space_between_groups = 0.2
     
     # Determine unique values for grouping
     x_unique = df[x_column_to_plot].unique()
     z_unique = df[z_var].unique()
     n_groups = len(z_unique)
     
-    # Define colors for the stacked elements
-    colors = ['#FFE268', '#22BBA9'] # (q<1, q>1)
-    
+    # Define original colors
+    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
+    min_darken_factor = 0.85
+
     # Setup for weighted or unweighted percentages
     if weighted:
         y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
@@ -2067,6 +2081,10 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     for z_i, z in enumerate(z_unique):
         for x_i, x in enumerate(x_unique):
 
+            # Darken colors for this group
+            darken_factor = max(np.sqrt(np.sqrt(np.sqrt(1 - (x_i / len(x_unique))))), min_darken_factor)
+            colors = [darken_hex_color(color, darken_factor) for color in base_colors]
+    
             # Calculate the x position for each group
             group_offset = (bar_width + space_between_bars) * n_groups
             x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
@@ -2193,6 +2211,53 @@ df_filt_q_conus["nonveg_percent"] = df_filt_q_conus["barren_percent"] + (
 )
 percentage_df2 = get_df_percentage_q(df_filt_q_conus, "barren_percent")
 
+# # Plotting the first set of bars (percentage_q_gt_1)
+def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=False):
+
+    if weighted:
+        y_var_q_le_1 = "weighted_percentage_q_le_1"
+        y_var_q_gt_1 = "weighted_percentage_q_gt_1"
+    else:
+        y_var_q_le_1 = "percentage_q_le_1"
+        y_var_q_gt_1 = "percentage_q_gt_1"
+
+    sns.barplot(
+        x=x_column_to_plot,
+        y=y_var_q_le_1,
+        data=df,
+        color="#FFE268",
+        label=y_var_q_le_1,
+        ax=ax,
+        width=0.98,
+        edgecolor="white",
+        linewidth=3,
+    )
+
+    sns.barplot(
+        x=x_column_to_plot,
+        y=y_var_q_gt_1,
+        data=df,
+        color="#22BBA9",
+        label=y_var_q_gt_1,
+        ax=ax,
+        width=0.98,
+        edgecolor="white",
+        linewidth=3,
+        bottom=df[y_var_q_le_1],
+    )
+
+    ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+    ax.set_ylabel("Proportion of drydown events (%)")
+    # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
+    if weighted:
+        ymax=20
+    else:
+        ymax=50
+    ax.set_ylim([0, ymax])
+    plt.xticks(rotation=45)
+    ax.set_title(title_name, loc="left")
+
+    ax.legend_ = None
 # %% Barren plot of q>1 vs q<1 by vegetation and aridity, for "other" land-uses
 fig = plt.figure(figsize=(8, 4))
 
@@ -2428,53 +2493,7 @@ plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"]
 # # %%
 
 
-# # Plotting the first set of bars (percentage_q_gt_1)
-# def plot_fracq_by_pct(ax, df, x_column_to_plot, var_name, title_name, weighted=False):
 
-#     if weighted:
-#         y_var_q_le_1 = "weighted_percentage_q_le_1"
-#         y_var_q_gt_1 = "weighted_percentage_q_gt_1"
-#     else:
-#         y_var_q_le_1 = "percentage_q_le_1"
-#         y_var_q_gt_1 = "percentage_q_gt_1"
-
-#     sns.barplot(
-#         x=x_column_to_plot,
-#         y=y_var_q_le_1,
-#         data=df,
-#         color="#FFE268",
-#         label=y_var_q_le_1,
-#         ax=ax,
-#         width=0.98,
-#         edgecolor="white",
-#         linewidth=3,
-#     )
-
-#     sns.barplot(
-#         x=x_column_to_plot,
-#         y=y_var_q_gt_1,
-#         data=df,
-#         color="#22BBA9",
-#         label=y_var_q_gt_1,
-#         ax=ax,
-#         width=0.98,
-#         edgecolor="white",
-#         linewidth=3,
-#         bottom=df[y_var_q_le_1],
-#     )
-
-#     ax.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-#     ax.set_ylabel("Proportion of drydown events (%)")
-#     # plt.legend(title='Aridity Index [MAP/MAE]', bbox_to_anchor=(1.05, 1), loc='upper left', fontsize='small')
-#     if weighted:
-#         ymax=20
-#     else:
-#         ymax=50
-#     ax.set_ylim([0, ymax])
-#     plt.xticks(rotation=45)
-#     ax.set_title(title_name, loc="left")
-
-#     ax.legend_ = None
 
 # fig = plt.figure(figsize=(8, 4))
 
@@ -2503,3 +2522,4 @@ plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"]
 # plt.savefig(
 #     os.path.join(fig_dir, f"fracq_fracwood_ai.pdf"), dpi=1200, bbox_inches="tight"
 # )
+# %%
