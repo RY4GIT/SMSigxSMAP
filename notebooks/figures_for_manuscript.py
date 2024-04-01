@@ -182,6 +182,48 @@ var_dict = {
         "unit": "",
         "lim": [0, 100],
     },
+    "event_length": {
+        "column_name": "event_length",
+        "symbol": r"",
+        "label": r"Drydown event length",
+        "unit": "(days)",
+        "lim": [0, 100],
+    },
+    "theta_w": {
+        "column_name": "min_sm",
+        "symbol": r"",
+        "label": r"\theta_w",
+        "unit": r"(m^3 m^{-3})",
+        "lim": [0, 100],
+    },
+    "event_length": {
+        "column_name": "event_length",
+        "symbol": r"",
+        "label": r"Drydown event length",
+        "unit": "(days)",
+        "lim": [0, 100],
+    },
+    "sm_range": {
+        "column_name": "sm_range",
+        "symbol": r"",
+        "label": r"Fraction of soil moisture range covered",
+        "unit": r"(-)",
+        "lim": [0, 100],
+    },
+    "sm_range_abs": {
+        "column_name": "sm_range_abs",
+        "symbol": r"",
+        "label": r"Soil moisture range covered",
+        "unit": r"(m^3 m^{-3})",
+        "lim": [0, 100],
+    },
+    "q_delta_theta": {
+        "column_name": "q_delta_theta",
+        "symbol": r"",
+        "label": r"\theta_0 - \theta_w",
+        "unit": r"(m^3 m^{-3})",
+        "lim": [0, 100],
+    },
 }
 
 
@@ -302,9 +344,34 @@ def calculate_sm_range(row):
     )
     return sm_range
 
+def calculate_sm_range_abs(row):
+    input_string = row.sm
+
+    # Processing the string
+    input_string = input_string.replace("\n", " np.nan")
+    input_string = input_string.replace(" nan", " np.nan")
+    input_string = input_string.strip("[]")
+
+    # Converting to numpy array and handling np.nan
+    sm = np.array(
+        [
+            float(value) if value != "np.nan" else np.nan
+            for value in input_string.split()
+        ]
+    )
+
+    # Calculating sm_range
+    sm_range_abs = (
+        (np.nanmax(sm) - np.nanmin(sm))
+        if row.max_sm != row.min_sm
+        else np.nan
+    )
+    return sm_range_abs
+
 
 # Applying the function to each row and creating a new column 'sm_range'
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
+df["sm_range_abs"] = df.apply(calculate_sm_range_abs, axis=1)
 
 
 # %%
@@ -1989,6 +2056,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 def get_df_percentage_q(
     df,
     var_name,
+    weight_by, 
     bins=[0, 20, 40, 60, 80, 100],
     labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
 ):
@@ -2002,7 +2070,7 @@ def get_df_percentage_q(
         .groupby(["AI_binned2", new_varname])
         .agg(
             count_greater_1=('q_q', 'size'),  # Count the occurrences
-            sum_event_length_q_gt_1=('event_length', 'sum')  # Sum the event_length
+            sum_weightfact_q_gt_1=(weight_by, 'sum')  # Sum the event_length
         )
         .reset_index()
     )
@@ -2010,7 +2078,7 @@ def get_df_percentage_q(
     total_counts = (
         df.groupby(["AI_binned2", new_varname]).agg(
             total_count=('q_q', 'size'),  # Count the occurrences
-            sum_event_length_total=('event_length', 'sum')  # Sum the event_length
+            sum_weightfact_total=(weight_by, 'sum')  # Sum the event_length
         )
         .reset_index()
     )
@@ -2028,13 +2096,13 @@ def get_df_percentage_q(
     # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
 
     # Percentage of count * days
-    percentage_df["count_x_event_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_event_length_q_gt_1"]
-    percentage_df["count_x_event_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])
-    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_event_q_gt_1"] / (percentage_df["count_x_event_q_gt_1"]  + percentage_df["count_x_event_q_le_1"]) * 100
-    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_event_q_le_1"] / (percentage_df["count_x_event_q_gt_1"]  + percentage_df["count_x_event_q_le_1"]) * 100
+    percentage_df["count_x_weight_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_weightfact_q_gt_1"]
+    percentage_df["count_x_weight_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_weightfact_total"]-percentage_df["sum_weightfact_q_gt_1"])
+    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
     return percentage_df
 
-percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood")
+percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "sm_range_abs")
 
 #%%
 # Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
@@ -2356,6 +2424,114 @@ def plot_eventlength_vs_q(df):
 # plot_eventlength_vs_q(df_filt_q)
 plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
 
+
+
+#%%
+from matplotlib.cm import get_cmap
+
+def sort_percentages(labels):
+    return sorted(labels, key=lambda x: int(x.split('-')[0]))
+
+
+def plot_bars(ax, df, x_var, y_var, z_var, title):
+
+    # Determine unique groups and categories
+    # Define the width of the bars and the space between groups
+    bar_width = 0.2
+    space_between_bars  = 0.025
+    space_between_groups = 0.2
+    
+    # Determine unique values for grouping
+    x_unique = df[x_var].unique()
+    z_unique = sort_percentages(df[z_var].unique())
+    n_groups = len(z_unique)
+
+    # Generate a green colormap
+    colormap = get_cmap('Greens')
+    color_list = [colormap(i / n_groups) for i in range(n_groups)]
+    
+    # Create the grouped and stacked bars
+    for z_i, z in enumerate(z_unique):
+        for x_i, x in enumerate(x_unique):
+    
+            # Calculate the x position for each group
+            group_offset = (bar_width + space_between_bars) * n_groups
+            x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
+            
+            # Get the subset of data for this group
+            subset = df[(df[x_var] == x) & (df[z_var] == z)]
+            
+            # Get bottom values for stacked bars
+            ax.bar(
+                x_pos,
+                subset[y_var["column_name"]].median(),
+                bar_width,
+                edgecolor='white',
+                color=color_list[z_i],
+            )
+    
+    # Set the x-ticks to the middle of the groups
+    ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
+    ax.set_xticklabels(x_unique, rotation=45)
+    ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
+    ax.set_ylabel(f"{y_var['label']} {y_var['unit']}, Median")
+    ax.set_title(title)
+
+    # Set the second x-ticks
+    # Replicate the z_var labels for the number of x_column_to_plot labels
+    z_labels = np.tile(z_unique, len(x_unique))
+
+    # Adjust the tick positions for the replicated z_var labels
+    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
+
+    # Hide the original x-axis ticks and labels
+    ax.tick_params(axis='x', which='both', length=0)
+
+    # Create a secondary x-axis for the new labels
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(new_tick_positions)
+
+    # Adjust the secondary x-axis to appear below the primary x-axis
+    ax2.spines['top'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.xaxis.set_label_position('bottom')
+    ax2.spines['bottom'].set_position(('outward', 60))
+    ax2.tick_params(axis='x', which='both', length=0)
+    ax2.set_xticklabels(z_labels, rotation=45)
+
+plt.rcParams.update({"font.size": 11})
+
+var_to_test = ["event_length", "q_ETmax", "theta_star", "theta_w", "sm_range", "q_q", "q_delta_theta", "sm_range_abs"]
+
+for var_name in var_to_test:
+    for i, condition in enumerate(["q>1", "q<1"]):
+        fig, ax = plt.subplots(figsize=(6, 3))
+        if condition == "q<1":
+            subset = df_filt_q_conus[(df_filt_q_conus["q_q"]<1)&~pd.isna(df_filt_q_conus["fractional_wood"])]
+            title = r"$q < 1$"
+        elif condition == "q>1":
+            subset = df_filt_q_conus[(df_filt_q_conus["q_q"]>1)&~pd.isna(df_filt_q_conus["fractional_wood"])]
+            title = r"$q > 1$"
+        bins=[0, 20, 40, 60, 80, 100]
+        labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"]
+        subset["fractional_wood_pct"] = pd.cut(subset["fractional_wood"], bins=bins, labels=labels)
+        plot_bars(
+            ax=ax,
+            df=subset,
+            y_var=var_dict[var_name],
+            x_var="AI_binned2",
+            z_var="fractional_wood_pct",
+            title=title
+        )
+
+#%%
+subset.head()
+
+# %%
+df_filt_q_conus.columns
+
+# %%
 # # %%
 # longest_events = df_filt_q_conus.sort_values(by='event_length', ascending=False).groupby(['EASE_row_index', 'EASE_column_index']).first().reset_index()
 # group_sizes = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).size().reset_index(name='size')
