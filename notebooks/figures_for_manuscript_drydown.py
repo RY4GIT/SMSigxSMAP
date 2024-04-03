@@ -392,6 +392,7 @@ lon_min, lon_max = -125.000000, -66.934570
 df_filt = df[
     ((df["n_days"] / df["event_length"]) > 0.33)
     & (df["q_r_squared"] >= success_modelfit_thresh)
+    & (df["event_length"] > 15)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
     & (df["q_q"] < 1)
