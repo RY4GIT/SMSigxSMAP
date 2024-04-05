@@ -120,38 +120,41 @@ pool.close()
 pool.join()
 
 
-data = [out[0] for out in output]
-results = [out[1] for out in output]
+data = [out[0] for out in output if out]
+results = pd.concat([out[1] for out in output if out], ignore_index=True)
 
 
 #%% TESTING ON A SINGLE TOWER
 
 dd_file = os.path.join(cfg.get('PATHS', 'data_dir'), agent._filenames[0])
 
-tower = fluxtower.FluxNetTower(dd_file)
+# tower = fluxtower.FluxNetTower(dd_file)
 
-tower = agent._init_tower('BE-Lon')
+tower = agent._init_tower('AU-Dry')
 
 cols, col_dict = toweragent.get_cols(tower)
 sm_cols = col_dict['SWC']['var_cols']
 grps = toweragent.get_grps(tower, sm_cols)
 
-data_list = [SoilSensorData(agent.cfg, tower, grp) for grp in grps]
+# data_list = [SoilSensorData(agent.cfg, tower, grp) for grp in grps]
 
+# data = data_list[0]
 
-# for col in sm_cols:
-for data in data_list:
-    # data = SoilSensorData(agent.cfg, tower, col)
-    data.separate_events()
+# # for col in sm_cols:
+# for data in data_list:
+#     # data = SoilSensorData(agent.cfg, tower, col)
+#     data.separate_events()
 
 data = []
 results = []
-for col in sm_cols:
-    out = agent.run_sensor(tower, sm_cols[0], return_data=True)
+for grp in grps:
+    out = agent.run_sensor(tower, grp, return_data=True)
     data.append(out[0])
     results.append(out[1])
 
-agent.run(tower.id, return_data=True)
+out = agent.run(tower.id, return_data=True)
+# data = out[0][0]
+results = out[1]
 
 #%%
 
@@ -191,5 +194,16 @@ fig, ax = plt.subplots(1, 1, figsize=(8.0,2.0))
 plot_sm_precip(ax, tower.data, sm_cols, p_col, swc_labels)
 
 
+ed = data.events_df
+
+# Plot vertical line at start of drydown event
+for s in ed.start_date:
+    ax.axvline(s, color='k', linestyle='--', alpha=0.5)
+
+for e in ed.end_date:
+    ax.axvline(e, color='g', linestyle='--', alpha=0.5)
+
 
 # CASE 1 (Example: 'ZM-Mon'). Lots of bad data. But still can use good data.
+
+# %%
