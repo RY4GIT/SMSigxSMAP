@@ -7,6 +7,13 @@ from MyLogger import getLogger
 # Create a logger
 log = getLogger(__name__)
 
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
+
 
 class Event:
     def __init__(self, index, event_dict):

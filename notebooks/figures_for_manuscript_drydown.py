@@ -11,7 +11,7 @@ import matplotlib.gridspec as gridspec
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-02-02"
+dir_name = f"raraki_2024-04-10"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -88,7 +88,7 @@ print(f"Total number of drydown event: {len(df)}")
 # %% Create output directory
 fig_dir = os.path.join(output_dir, dir_name, "figs", "events")
 if not os.path.exists(fig_dir):
-    os.mkdir(fig_dir)
+    os.makedirs(fig_dir)
     print(f"Created dir: {fig_dir}")
 else:
     print(f"Already exists: {fig_dir}")
@@ -372,7 +372,7 @@ def plot_drydown(event_id, ax=None, save=False):
 # %%
 ################################################
 
-event_id = 238922
+event_id = 1
 ################################################
 plot_drydown(event_id=event_id)
 

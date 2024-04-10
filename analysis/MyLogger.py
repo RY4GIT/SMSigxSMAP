@@ -1,5 +1,12 @@
 import logging
 
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
+
 
 def getLogger(name):
     # Create a logger

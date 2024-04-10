@@ -7,6 +7,14 @@ import warnings
 import threading
 from MyLogger import getLogger, modifyLogger
 import logging
+from utils import is_true
+
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
 
 # Create a logger
 log = getLogger(__name__)
@@ -26,6 +34,17 @@ class EventSeparator:
     def __init__(self, cfg, Data):
         self.cfg = cfg
         self.verbose = cfg["MODEL"]["verbose"].lower() in ["true", "yes", "1"]
+        self.use_rainfall = cfg["MODEL"]["use_rainfall"].lower() in [
+            "true",
+            "yes",
+            "1",
+        ]  # is_true(cfg["MODEL"]["use_rainfall"])
+        self.plot = cfg["MODEL"]["plot_results"].lower() in [
+            "true",
+            "yes",
+            "1",
+        ]  # is_true(cfg["MODEL"]["plot_results"])
+
         self.data = Data
         self.init_params()
 
@@ -49,16 +68,28 @@ class EventSeparator:
         self.minimium_consective_days = self.cfg.getint(
             "EVENT_SEPARATION", "minimium_consective_days"
         )
-        self.plot = self.cfg["MODEL"]["plot_results"].lower() in ["true", "yes", "1"]
+        self.minimum_nodata_days = self.cfg.getint(
+            "EVENT_SEPARATION", "minimum_nodata_days"
+        )
+        self.initial_consective_data_days = self.cfg.getint(
+            "EVENT_SEPARATION", "initial_consective_data_days"
+        )
 
     def separate_events(self, output_dir):
         """Separate soil moisture timeseries into events"""
         self.output_dir = output_dir
 
         self.identify_event_starts()
-        self.adjust_event_starts_1()
-        self.adjust_event_starts_2()
-        self.identify_event_ends()
+
+        if self.use_rainfall:
+            self.adjust_event_starts_a()
+            self.adjust_event_starts_b()
+            self.identify_event_ends_a()
+        else:
+            self.adjust_event_starts_c()
+            self.adjust_event_starts_d()
+            self.identify_event_ends_b()
+
         self.events_df = self.create_event_dataframe()
         if self.events_df.empty:
             return None
@@ -66,8 +97,8 @@ class EventSeparator:
         self.filter_events(self.minimium_consective_days)
         self.events = self.create_event_instances(self.events_df)
 
-        # if self.plot:
-        #     self.plot_events()
+        if self.plot:
+            self.plot_events()
 
         return self.events
 
@@ -80,7 +111,7 @@ class EventSeparator:
             ([False], positive_increments[:-1])
         )
 
-    def adjust_event_starts_1(self):
+    def adjust_event_starts_a(self):
         """In case the soil moisture data is nan on the initial event_start dates, look for data in the previous timesteps"""
 
         # Get the event start dates
@@ -89,7 +120,7 @@ class EventSeparator:
         # Loop for event start dates
         for i, event_start_date in enumerate(event_start_idx):
             for j in range(
-                0, 6
+                0, self.minimum_nodata_days
             ):  # Look back up to 6 timesteps to seek for sm value which is not nan
                 current_date = event_start_date - pd.Timedelta(days=j)
 
@@ -127,7 +158,7 @@ class EventSeparator:
             self.data.df.loc[event_start_date, "event_start"] = False
             self.data.df.loc[update_date, "event_start"] = True
 
-    def adjust_event_starts_2(self):
+    def adjust_event_starts_b(self):
         """In case the soil moisture data is nan on the initial event_start dates, look for data in the later timesteps"""
 
         # Get the event start dates
@@ -140,7 +171,7 @@ class EventSeparator:
         for i, event_start_date in enumerate(event_start_idx_2):
             update_date = event_start_date
             for j in range(
-                0, 6
+                0, self.minimum_nodata_days
             ):  # Look ahead up to 6 timesteps to seek for sm value which is not nan, or start of the precip event
                 current_date = event_start_date + pd.Timedelta(days=j)
                 # If Non-nan SM value is detected, update start date value to this timstep
@@ -157,7 +188,51 @@ class EventSeparator:
             self.data.df.loc[event_start_date, "event_start"] = False
             self.data.df.loc[update_date, "event_start"] = True
 
-    def identify_event_ends(self):
+    def adjust_event_starts_c(self):
+        event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
+        for _, event_start_date in enumerate(event_start_idx):
+
+            for j in range(
+                0, self.minimum_nodata_days + 1
+            ):  # Look back up to self.minimum_nodata_days timesteps to seek for sm value which is not nan, or start of the precip event
+                current_date = event_start_date - pd.Timedelta(days=j)
+
+                # If dS > 0, stop there
+                if self.data.df.loc[current_date].dSdt > 0:
+                    break
+
+                # SM value is not NaN, update to that value
+                if not np.isnan(self.data.df.loc[current_date].soil_moisture_daily):
+                    break
+
+            self.data.df.loc[event_start_date, "event_start"] = False
+            self.data.df.loc[current_date, "event_start"] = True
+
+    def adjust_event_starts_d(self):
+        event_start_idx_2 = pd.isna(
+            self.data.df["soil_moisture_daily_before_masking"][
+                self.data.df["event_start"]
+            ]
+        ).index
+
+        for i, event_start_date in enumerate(event_start_idx_2):
+            update_date = event_start_date
+            for j in range(
+                0, self.minimum_nodata_days
+            ):  # Look back up to 5 timesteps to seek for sm value which is not nan, or start of the precip event
+                current_date = event_start_date + pd.Timedelta(days=j)
+                # If rainfall exceeds threshold, stop there
+                # SM value is not NaN, update to that value
+                if ((i + j) >= len(self.data.df)) or (
+                    not pd.isna(self.data.df.loc[current_date].soil_moisture_daily)
+                ):
+                    update_date = current_date
+                    break
+
+            self.data.df.loc[event_start_date, "event_start"] = False
+            self.data.df.loc[update_date, "event_start"] = True
+
+    def identify_event_ends_a(self):
         """Detect the end of a storm event"""
 
         # Initialize
@@ -184,7 +259,54 @@ class EventSeparator:
                     self.data.df.loc[current_date, "event_end"] = True
                     break
                 else:
-                    continue
+                    None
+
+        # create a new column for event_end
+        self.data.df["dSdt(t-1)"] = self.data.df.dSdt.shift(+1)
+
+    def identify_event_ends_b(self):
+        self.data.df["event_end"] = np.zeros(len(self.data.df), dtype=bool)
+        event_start_idx = self.data.df["event_start"][
+            self.data.df["event_start"]
+        ].index[:-1]
+        record_last_date = self.data.df.index.values[-1]
+        record_start_date = self.data.df.index.values[0]
+
+        for _, event_start_date in enumerate(event_start_idx):
+
+            remaining_records = record_last_date - event_start_date
+            previous_records = event_start_date - record_start_date
+
+            for j in range(1, remaining_records.days):
+                current_date = event_start_date + pd.Timedelta(days=j)
+
+                if (j > 1) & (self.data.df.loc[current_date].event_start):
+                    update_date = current_date - pd.Timedelta(days=1)
+                    self.data.df.loc[update_date, "event_end"] = True
+                    break
+
+                if self.data.df.loc[current_date].dSdt >= self.noise_thresh:
+                    # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
+                    for k in range(0, previous_records.days):
+                        update_date = current_date - pd.Timedelta(days=k)
+                        if np.isnan(self.data.df.loc[update_date].soil_moisture_daily):
+                            None
+                        else:
+                            self.data.df.loc[update_date, "event_end"] = True
+                            break
+                    break
+                else:
+                    None
+
+                if pd.isna(self.data.df.loc[current_date].dSdt):
+                    # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
+                    self.data.df.loc[
+                        current_date - pd.Timedelta(days=1), "event_end"
+                    ] = True
+                    print(f"end reached at {current_date}")
+                    break
+                else:
+                    None
 
         # create a new column for event_end
         self.data.df["dSdt(t-1)"] = self.data.df.dSdt.shift(+1)
@@ -229,6 +351,16 @@ class EventSeparator:
             >= min_consecutive_days
         ].copy()
         self.events_df.reset_index(drop=True, inplace=True)
+
+        # Do this filtering after all analysis are done
+        # self.events_df = self.events_df[
+        #     self.events_df["soil_moisture_daily"].apply(
+        #         lambda x: pd.Series(x[: self.initial_consective_data_days])
+        #         .notna()
+        #         .all()
+        #     )
+        # ].copy()
+        # self.events_df = self.events_df.reset_index(drop=True)
 
     def create_event_instances(self, events_df):
         """Create a list of Event instances for easier handling of data for DrydownModel class"""

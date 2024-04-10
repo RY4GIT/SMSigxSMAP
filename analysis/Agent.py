@@ -10,6 +10,13 @@ import pandas as pd
 import logging
 from MyLogger import getLogger
 
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
+
 # Create a logger
 log = getLogger(__name__)
 

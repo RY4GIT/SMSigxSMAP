@@ -6,6 +6,13 @@ import os
 import warnings
 from MyLogger import getLogger
 
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
+
 # Create a logger
 log = getLogger(__name__)
 
@@ -31,6 +38,10 @@ class Data:
 
         # Read inputs
         self.cfg = cfg
+        self.minimum_nodata_days = self.cfg.getint(
+            "EVENT_SEPARATION", "minimum_nodata_days"
+        )
+
         self.EASE_row_index = EASEindex[0]
         self.EASE_column_index = EASEindex[1]
 
@@ -123,10 +134,7 @@ class Data:
         self.min_sm = df.soil_moisture_daily.min(skipna=True)
         # Instead of actual max values, take the 95% percentile as max_sm # df.soil_moisture_daily.max(skipna=True)
         self.max_sm = df.soil_moisture_daily.quantile(0.95)
-        # df.soil_moisture_daily.max(skipna=True)
-        # self.s_thresh = df.soil_moisture_daily.quantile(
-        #     0.95
-        # )
+
         df["soil_moisture_daily_before_masking"] = df["soil_moisture_daily"].copy()
         # Mask out the timeseries when sm is larger than 90% percentile value
         df.loc[df["soil_moisture_daily"] > self.max_sm, "soil_moisture_daily"] = np.nan
@@ -174,7 +182,7 @@ class Data:
         # Calculate dS
         df["dS"] = (
             df["sm_for_dS_calc"]
-            .bfill(limit=5)
+            .bfill(limit=self.minimum_nodata_days)
             .diff()
             .where(df["sm_for_dS_calc"].notnull().shift(periods=+1))
         )
@@ -193,9 +201,9 @@ class Data:
         df["dSdt"] = df["dS"] / df["dt"]
         df["dSdt"] = df["dSdt"].shift(periods=-1)
 
-        df.loc[
-            df["soil_moisture_daily_before_masking"].shift(-1).isna(), "dSdt"
-        ] = np.nan
-        df["dSdt"] = df["dSdt"].ffill(limit=5)
+        df.loc[df["soil_moisture_daily_before_masking"].shift(-1).isna(), "dSdt"] = (
+            np.nan
+        )
+        df["dSdt"] = df["dSdt"].ffill(limit=self.minimum_nodata_days)
 
         return df
