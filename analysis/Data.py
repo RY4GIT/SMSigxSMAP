@@ -200,7 +200,6 @@ class Data:
 
         # Calculate dS/dt
         df["dSdt"] = df["dS"] / df["dt"]
-        df["dSdt"] = df["dSdt"]
         df.loc[df["soil_moisture_daily_before_masking"].isna(), "dSdt"] = np.nan
         df["dSdt"] = (
             df["dSdt"].ffill(limit=self.max_nodata_days).infer_objects(copy=False)

@@ -127,7 +127,7 @@ class EventSeparator:
 
                 # If dS > 0 and SM value is not nan, use that
                 if (self.data.df.loc[current_date].dSdt > self.dS_thresh) & ~np.isnan(
-                    self.data.df.loc[current_date].soil_moisture_daily
+                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
                 ):
                     self.data.df.loc[event_start_date, "event_start"] = False
                     self.data.df.loc[current_date, "event_start"] = True
@@ -151,7 +151,9 @@ class EventSeparator:
             for j in range(1, remaining_records.days):
                 current_date = event_start_date + pd.Timedelta(days=j)
 
-                if np.isnan(self.data.df.loc[current_date].soil_moisture_daily):
+                if np.isnan(
+                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
+                ):
                     count_nan_days += 1
                 else:
                     count_nan_days = 0
@@ -161,7 +163,11 @@ class EventSeparator:
                     break
 
                 if (self.data.df.loc[current_date].dS >= self.noise_thresh) & (
-                    ~np.isnan(self.data.df.loc[current_date].soil_moisture_daily)
+                    ~np.isnan(
+                        self.data.df.loc[
+                            current_date
+                        ].soil_moisture_daily_before_masking
+                    )
                 ):
                     # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
                     update_date = current_date - pd.Timedelta(days=1)
@@ -213,7 +219,9 @@ class EventSeparator:
 
     def filter_events(self, min_consecutive_days=5):
         self.events_df = self.events_df[
-            self.events_df["soil_moisture_daily"].apply(lambda x: pd.notna(x).sum())
+            self.events_df["soil_moisture_daily_before_masking"].apply(
+                lambda x: pd.notna(x).sum()
+            )
             >= min_consecutive_days
         ].copy()
         self.events_df.reset_index(drop=True, inplace=True)
