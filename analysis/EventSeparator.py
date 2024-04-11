@@ -104,10 +104,8 @@ class EventSeparator:
     def identify_event_starts(self):
         """Identify the start date of the event"""
         # The event starts where negative increament of soil mositure follows the positive increment of soil moisture
-        negative_increments = self.data.df.dSdt < 0
-        positive_increments = (
-            self.data.df.dS > self.dS_thresh
-        )  # Sometimes nan data precedes positive increment, so just use dS
+        negative_increments = (self.data.df.dSdt < 0) | (np.isnan(self.data.df.dS))
+        positive_increments = self.data.df.dSdt > self.dS_thresh
         self.data.df["event_start"] = negative_increments.shift(-1).fillna(
             False
         ).infer_objects(copy=False).astype(bool) & positive_increments.fillna(
@@ -128,7 +126,7 @@ class EventSeparator:
                 current_date = event_start_date - pd.Timedelta(days=j)
 
                 # If dS > 0 and SM value is not nan, use that
-                if (self.data.df.loc[current_date].dS > 0) & ~np.isnan(
+                if (self.data.df.loc[current_date].dSdt > self.dS_thresh) & ~np.isnan(
                     self.data.df.loc[current_date].soil_moisture_daily
                 ):
                     self.data.df.loc[event_start_date, "event_start"] = False
@@ -142,13 +140,10 @@ class EventSeparator:
 
     def identify_event_ends(self):
         self.data.df["event_end"] = np.zeros(len(self.data.df), dtype=bool)
-        event_start_idx = self.data.df["event_start"][
-            self.data.df["event_start"]
-        ].index[:-1]
+        event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
         record_last_date = self.data.df.index.values[-1]
-        record_start_date = self.data.df.index.values[0]
 
-        for i, event_start_date in enumerate(event_start_idx):
+        for _, event_start_date in enumerate(event_start_idx):
             remaining_records = record_last_date - event_start_date
 
             count_nan_days = 0
