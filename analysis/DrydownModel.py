@@ -301,7 +301,7 @@ class DrydownModel:
         ini_k = event.pet / 50
 
         ### q ###
-        min_q = 0.0
+        min_q = -np.inf
         max_q = np.inf
         ini_q = 1.0 + 1.0e-03
 
