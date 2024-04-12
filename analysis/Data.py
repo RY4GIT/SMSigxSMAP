@@ -175,7 +175,9 @@ class Data:
         """Calculate d(Soil Moisture)/dt"""
 
         # Allow detecting soil moisture increment even if there is no SM data in between before/after rainfall event
-        df["sm_for_dS_calc"] = df["soil_moisture_daily_before_masking"].ffill()
+        df["sm_for_dS_calc"] = (
+            df["soil_moisture_daily_before_masking"].ffill().infer_objects(copy=False)
+        )
 
         # Calculate dS
         df["dS"] = (
