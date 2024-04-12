@@ -9,6 +9,13 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import minimize
 from utils import is_true
 
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
+
 # Create a logger
 log = getLogger(__name__)
 
@@ -294,7 +301,7 @@ class DrydownModel:
         ini_k = event.pet / 50
 
         ### q ###
-        min_q = 0.0
+        min_q = -np.inf
         max_q = np.inf
         ini_q = 1.0 + 1.0e-03
 

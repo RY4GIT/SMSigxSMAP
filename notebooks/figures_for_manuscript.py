@@ -38,8 +38,8 @@ import matplotlib.colors as mcolors
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
-###########################################################################
+dir_name = "raraki_2024-02-02_global_eventsep_using_rainfall" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+############################|###############################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
 
@@ -299,7 +299,7 @@ df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 # cmap for sand
 sand_bin_list = [i * 0.1 for i in range(11)]
 sand_bin_list = sand_bin_list[1:]
-sand_cmap = "r_Oranges"
+sand_cmap = "Oranges_r"
 
 # cmap for ai
 ai_bin_list = [i * 0.25 for i in range(7)]
@@ -403,6 +403,31 @@ df["event_length"] = (
 ).dt.days
 
 
+#%%
+def filter_by_data_availability(df):
+    # Define a helper function to convert string to list
+    def str_to_list(s):
+        return list(map(int, s.strip('[]').split()))
+
+    # Convert the 'time' column from string of lists to actual lists
+    df['time_list'] = df['time'].apply(str_to_list)
+
+    # Filter condition 1: Check if first three items are [0, 1, 2]
+    # condition = df['time_list'].apply(lambda x: x[:3] == [0, 1, 2])
+
+    condition = df['time_list'].apply(
+        lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
+    )
+
+    # Apply the first filter
+    filtered_df = df[condition]
+
+    return filtered_df
+
+print(len(df))
+df = filter_by_data_availability(df)
+print(len(df))
+
 # %% Exclude model fits failure
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
@@ -419,8 +444,6 @@ count_median_number_of_events_perGrid(df)
 q_thresh = 1e-03
 R2_thresh = 0.7
 sm_range_thresh = 0.1
-event_length_thresh = 30
-obs_freq_thresh = 0.33333
 ###################################################
 
 # Runs where q model performed reasonablly well
@@ -428,7 +451,6 @@ df_filt_q = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
 
 print(
@@ -440,7 +462,6 @@ count_median_number_of_events_perGrid(df_filt_q)
 df_filt_allq = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
 
 print(
@@ -452,7 +473,6 @@ count_median_number_of_events_perGrid(df_filt_allq)
 df_filt_exp = df[
     (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
@@ -466,7 +486,6 @@ df_filt_q_or_exp = df[
         | (df["exp_r_squared"] >= R2_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
-    & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
@@ -477,7 +496,6 @@ df_filt_q_and_exp = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & ((df["n_days"] / df["event_length"]) > obs_freq_thresh)
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
@@ -854,9 +872,9 @@ def plot_hist(df, var_key):
 
     # Add median and mean as vertical lines
     ax.axvline(
-        median_value, color="#2c7fb8", linestyle="-", linewidth=3, label=f"Median"
+        median_value, color="tab:grey", linestyle="--", linewidth=3, label=f"Median"
     )
-    ax.axvline(mean_value, color="#2c7fb8", linestyle=":", linewidth=3, label=f"Mean")
+    ax.axvline(mean_value, color="tab:grey", linestyle=":", linewidth=3, label=f"Mean")
 
     # Setting the x limit
     ax.set_xlim(0, 10)
@@ -1877,9 +1895,9 @@ def plot_hist_diffR2(df, var_key):
 
 plot_hist_diffR2(df=df_filt_q_and_exp, var_key="diff_R2")
 
-fig_thetastar_vs_et_ai.savefig(
-    os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
-)
+# fig_thetastar_vs_et_ai.savefig(
+#     os.path.join(fig_dir, f"thetastar_vs_et_ai.png"), dpi=600, bbox_inches="tight"
+# )
 
 
 # %%
@@ -2014,21 +2032,27 @@ fig_ridge_veg.savefig(
 ############################################################################################################################################
 ############################################################################################################################################
 ############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
 #
 # Rangeland analysis
 #
 ############################################################################################################################################
 ############################################################################################################################################
 ############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
 
+# Read data 
 _rangeland_info = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
 ).drop(["Unnamed: 0"], axis=1)
 
 rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
 
-# %%
-# Merge with existing dataframes 
+# merge with results dataframe
 df_filt_q_conus = df_filt_q.merge(
     rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
 )
@@ -2050,6 +2074,8 @@ print(
     f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
 )
 print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
+#%%
+df_filt_q_conus.head(100)
 
 # %%
 # Get the statistics on the proportion of q>1 and q<1 events 
@@ -2180,10 +2206,10 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     # Set the y-axis
     if weighted:
         ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
-        ax.set_ylim([0, 20])
+        ax.set_ylim([0, 50])
     else:
         ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 50])
+        ax.set_ylim([0, 60])
 
     # Set the second x-ticks
     # Replicate the z_var labels for the number of x_column_to_plot labels
@@ -2237,8 +2263,23 @@ plot_grouped_stacked_bar(
 )
 plt.tight_layout()
 
+# %%
+
 
 # %%
+def plot_q_ai_wood_scatter(df):
+    fig, ax = plt.subplots(figsize=(6, 4))
+    sc=ax.scatter(df["fractional_wood"], df["q_q"], c=df["AI"], cmap="RdBu", alpha=0.3)
+    ax.set_ylim(0,20)
+    ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
+    ax.set_ylabel(var_dict["q_q"]["label"]+" "+var_dict["q_q"]["symbol"])
+    # Create a colorbar with the scatter plot's color mapping
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label('Aridity Index (MAP/MAE')
+
+plot_q_ai_wood_scatter(df_filt_q_conus)
+
+    # %%
 # ##########################################################
 # # Similar plot but in scatter plot format
 # ##########################################################

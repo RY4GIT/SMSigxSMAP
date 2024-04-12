@@ -7,6 +7,14 @@ import warnings
 import threading
 from MyLogger import getLogger, modifyLogger
 import logging
+from utils import is_true
+
+__author__ = "Ryoko Araki"
+__contact__ = "raraki@ucsb.edu"
+__copyright__ = "Copyright 2024, SMAP-drydown project, @RY4GIT"
+__license__ = "MIT"
+__status__ = "Dev"
+__url__ = ""
 
 # Create a logger
 log = getLogger(__name__)
@@ -26,6 +34,17 @@ class EventSeparator:
     def __init__(self, cfg, Data):
         self.cfg = cfg
         self.verbose = cfg["MODEL"]["verbose"].lower() in ["true", "yes", "1"]
+        self.use_rainfall = cfg["MODEL"]["use_rainfall"].lower() in [
+            "true",
+            "yes",
+            "1",
+        ]  # is_true(cfg["MODEL"]["use_rainfall"])
+        self.plot = cfg["MODEL"]["plot_results"].lower() in [
+            "true",
+            "yes",
+            "1",
+        ]  # is_true(cfg["MODEL"]["plot_results"])
+
         self.data = Data
         self.init_params()
 
@@ -46,10 +65,11 @@ class EventSeparator:
             "EVENT_SEPARATION", "increment_thresh_fraction"
         )
         self.noise_thresh = np.minimum(_noise_thresh, self.target_rmsd * 2)
+        self.dS_thresh = self.target_rmsd * 2
         self.minimium_consective_days = self.cfg.getint(
             "EVENT_SEPARATION", "minimium_consective_days"
         )
-        self.plot = self.cfg["MODEL"]["plot_results"].lower() in ["true", "yes", "1"]
+        self.max_nodata_days = self.cfg.getint("EVENT_SEPARATION", "max_nodata_days")
 
     def separate_events(self, output_dir):
         """Separate soil moisture timeseries into events"""
@@ -59,6 +79,7 @@ class EventSeparator:
         self.adjust_event_starts_1()
         self.adjust_event_starts_2()
         self.identify_event_ends()
+
         self.events_df = self.create_event_dataframe()
         if self.events_df.empty:
             return None
@@ -66,125 +87,168 @@ class EventSeparator:
         self.filter_events(self.minimium_consective_days)
         self.events = self.create_event_instances(self.events_df)
 
-        # if self.plot:
-        #     self.plot_events()
+        if self.plot:
+            self.plot_events()
 
         return self.events
 
     def identify_event_starts(self):
         """Identify the start date of the event"""
         # The event starts where negative increament of soil mositure follows the positive increment of soil moisture
-        negative_increments = self.data.df.dSdt < 0
-        positive_increments = self.data.df.dSdt > (self.target_rmsd * 2)
-        self.data.df["event_start"] = negative_increments.values & np.concatenate(
-            ([False], positive_increments[:-1])
+        negative_increments = (self.data.df.dSdt < 0) | (np.isnan(self.data.df.dS))
+        positive_increments = self.data.df.dSdt > self.dS_thresh
+        self.data.df["event_start"] = negative_increments.shift(-1).fillna(
+            False
+        ).infer_objects(copy=False).astype(bool) & positive_increments.fillna(
+            False
+        ).infer_objects(
+            copy=False
+        ).astype(
+            bool
         )
 
     def adjust_event_starts_1(self):
-        """In case the soil moisture data is nan on the initial event_start dates, look for data in the previous timesteps"""
-
-        # Get the event start dates
         event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
+        for _, event_start_date in enumerate(event_start_idx):
 
-        # Loop for event start dates
-        for i, event_start_date in enumerate(event_start_idx):
+            should_break = False
             for j in range(
-                0, 6
-            ):  # Look back up to 6 timesteps to seek for sm value which is not nan
+                0, self.max_nodata_days + 1
+            ):  # Look back up to 3 timesteps to seek for sm value which is not nan, or start of the precip event
                 current_date = event_start_date - pd.Timedelta(days=j)
 
-                # If rainfall exceeds threshold, stop there
-                if self.data.df.loc[current_date].precip > self.precip_thresh:
-                    # If SM value IS NOT nap.nan, update the event start date value to this timestep
-                    if not np.isnan(
-                        self.data.df.loc[
-                            current_date
-                        ].soil_moisture_daily_before_masking
-                    ):
-                        update_date = current_date
-                    # If SM value IS nap.nan, don't update the event start date value
-                    else:
-                        update_date = event_start_date
+                if self.use_rainfall:
+                    if self.data.df.loc[current_date].precip > self.precip_thresh:
+                        if not np.isnan(
+                            self.data.df.loc[
+                                current_date
+                            ].soil_moisture_daily_before_masking
+                        ):
+                            self.data.df.loc[event_start_date, "event_start"] = False
+                            self.data.df.loc[current_date, "event_start"] = True
+                        should_break = True
+                if should_break:
                     break
 
-                # If dS > 0, stop there
-                if self.data.df.loc[current_date].dS > 0:
-                    update_date = event_start_date
+                # If dS > 0 and SM value is not nan, use that
+                if (self.data.df.loc[current_date].dSdt > self.dS_thresh) & ~np.isnan(
+                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
+                ):
+                    self.data.df.loc[event_start_date, "event_start"] = False
+                    self.data.df.loc[current_date, "event_start"] = True
                     break
 
-                # If reached to the NON-nan SM value, update start date value to this timestep
-                if ((i - j) >= 0) or (
-                    not np.isnan(
+                if (np.isnan(self.data.df.loc[current_date].dSdt)) or (
+                    self.data.df.loc[current_date].dSdt < -1 * self.noise_thresh
+                ):
+                    break
+
+    def adjust_event_starts_2(self):
+
+        event_start_idx_2 = pd.isna(
+            self.data.df["event_start"][self.data.df["event_start"]]
+        ).index
+
+        for _, event_start_date in enumerate(event_start_idx_2):
+
+            if (
+                self.data.df.loc[event_start_date].soil_moisture_daily_before_masking
+                > self.data.max_sm
+            ) | (
+                np.isnan(
+                    self.data.df.loc[
+                        event_start_date
+                    ].soil_moisture_daily_before_masking
+                )
+            ):
+                current_date = event_start_date + pd.Timedelta(days=1)
+                self.data.df.loc[event_start_date, "event_start"] = False
+                self.data.df.loc[current_date, "event_start"] = True
+
+                if (
+                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
+                    > self.data.max_sm
+                ) | (
+                    np.isnan(
                         self.data.df.loc[
                             current_date
                         ].soil_moisture_daily_before_masking
                     )
                 ):
-                    update_date = current_date
-                    break
-
-            # Update the startdate timestep
-            self.data.df.loc[event_start_date, "event_start"] = False
-            self.data.df.loc[update_date, "event_start"] = True
-
-    def adjust_event_starts_2(self):
-        """In case the soil moisture data is nan on the initial event_start dates, look for data in the later timesteps"""
-
-        # Get the event start dates
-        event_start_idx_2 = pd.isna(
-            self.data.df["soil_moisture_daily_before_masking"][
-                self.data.df["event_start"]
-            ]
-        ).index
-
-        for i, event_start_date in enumerate(event_start_idx_2):
-            update_date = event_start_date
-            for j in range(
-                0, 6
-            ):  # Look ahead up to 6 timesteps to seek for sm value which is not nan, or start of the precip event
-                current_date = event_start_date + pd.Timedelta(days=j)
-                # If Non-nan SM value is detected, update start date value to this timstep
-                if current_date > self.data.end_date:
-                    update_date = current_date
-                    break
-
-                if not pd.isna(
-                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
-                ):
-                    update_date = current_date
-                    break
-
-            self.data.df.loc[event_start_date, "event_start"] = False
-            self.data.df.loc[update_date, "event_start"] = True
+                    current_date += pd.Timedelta(days=1)
+                    self.data.df.loc[
+                        current_date - pd.Timedelta(days=1), "event_start"
+                    ] = False
+                    self.data.df.loc[current_date, "event_start"] = True
+                    if (
+                        self.data.df.loc[
+                            current_date
+                        ].soil_moisture_daily_before_masking
+                        > self.data.max_sm
+                    ) | (
+                        np.isnan(
+                            self.data.df.loc[
+                                current_date
+                            ].soil_moisture_daily_before_masking
+                        )
+                    ):
+                        self.data.df.loc[
+                            current_date - pd.Timedelta(days=1), "event_start"
+                        ] = False
+                        self.data.df.loc[current_date, "event_start"] = True
+                break
 
     def identify_event_ends(self):
-        """Detect the end of a storm event"""
-
-        # Initialize
-        num_events = self.data.df.shape[0]
         self.data.df["event_end"] = np.zeros(len(self.data.df), dtype=bool)
         event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
-        for i, event_start_date in enumerate(event_start_idx):
-            for j in range(1, len(self.data.df)):
-                current_date = event_start_date + pd.Timedelta(days=j)
+        record_last_date = self.data.df.index.values[-1]
 
-                if current_date > self.data.end_date:
-                    break
+        for _, event_start_date in enumerate(event_start_idx):
+            remaining_records = record_last_date - event_start_date
+
+            count_nan_days = 0
+            should_break = False
+
+            for j in range(1, remaining_records.days):
+                current_date = event_start_date + pd.Timedelta(days=j)
 
                 if np.isnan(
                     self.data.df.loc[current_date].soil_moisture_daily_before_masking
                 ):
-                    continue
+                    count_nan_days += 1
+                else:
+                    count_nan_days = 0
 
-                if (
-                    (self.data.df.loc[current_date].dSdt >= self.noise_thresh)
-                    or (self.data.df.loc[current_date].precip > self.precip_thresh)
-                ) or self.data.df.loc[current_date].event_start:
-                    # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
+                if count_nan_days > self.max_nodata_days:
                     self.data.df.loc[current_date, "event_end"] = True
                     break
-                else:
-                    continue
+
+                if self.use_rainfall:
+                    if self.data.df.loc[current_date].precip >= self.precip_thresh:
+                        self.data.df.loc[
+                            current_date - pd.Timedelta(days=1), "event_end"
+                        ] = True
+                        should_break = True
+                if should_break:
+                    break
+
+                if (self.data.df.loc[current_date].dS >= self.noise_thresh) & (
+                    ~np.isnan(
+                        self.data.df.loc[
+                            current_date
+                        ].soil_moisture_daily_before_masking
+                    )
+                ):
+                    # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
+                    update_date = current_date - pd.Timedelta(days=1)
+                    self.data.df.loc[update_date, "event_end"] = True
+                    break
+
+                if pd.isna(self.data.df.loc[current_date].dSdt):
+                    # When max number of no data days are reached, dSdt is nan
+                    update_date = current_date - pd.Timedelta(days=1)
+                    self.data.df.loc[update_date, "event_end"] = True
+                    break
 
         # create a new column for event_end
         self.data.df["dSdt(t-1)"] = self.data.df.dSdt.shift(+1)
@@ -225,7 +289,9 @@ class EventSeparator:
 
     def filter_events(self, min_consecutive_days=5):
         self.events_df = self.events_df[
-            self.events_df["soil_moisture_daily"].apply(lambda x: pd.notna(x).sum())
+            self.events_df["soil_moisture_daily_before_masking"].apply(
+                lambda x: pd.notna(x).sum()
+            )
             >= min_consecutive_days
         ].copy()
         self.events_df.reset_index(drop=True, inplace=True)
@@ -276,3 +342,112 @@ class EventSeparator:
 
         fig.savefig(os.path.join(output_dir2, filename))
         plt.close()
+
+    # def adjust_event_starts_a(self):
+    #     """In case the soil moisture data is nan on the initial event_start dates, look for data in the previous timesteps"""
+
+    #     # Get the event start dates
+    #     event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
+
+    #     # Loop for event start dates
+    #     for i, event_start_date in enumerate(event_start_idx):
+    #         for j in range(
+    #             0, self.minimum_nodata_days
+    #         ):  # Look back up to 6 timesteps to seek for sm value which is not nan
+    #             current_date = event_start_date - pd.Timedelta(days=j)
+
+    #             # If rainfall exceeds threshold, stop there
+    #             if self.data.df.loc[current_date].precip > self.precip_thresh:
+    #                 # If SM value IS NOT nap.nan, update the event start date value to this timestep
+    #                 if not np.isnan(
+    #                     self.data.df.loc[
+    #                         current_date
+    #                     ].soil_moisture_daily_before_masking
+    #                 ):
+    #                     update_date = current_date
+    #                 # If SM value IS nap.nan, don't update the event start date value
+    #                 else:
+    #                     update_date = event_start_date
+    #                 break
+
+    #             # If dS > 0, stop there
+    #             if self.data.df.loc[current_date].dS > 0:
+    #                 update_date = event_start_date
+    #                 break
+
+    #             # If reached to the NON-nan SM value, update start date value to this timestep
+    #             if ((i - j) >= 0) or (
+    #                 not np.isnan(
+    #                     self.data.df.loc[
+    #                         current_date
+    #                     ].soil_moisture_daily_before_masking
+    #                 )
+    #             ):
+    #                 update_date = current_date
+    #                 break
+
+    #         # Update the startdate timestep
+    #         self.data.df.loc[event_start_date, "event_start"] = False
+    #         self.data.df.loc[update_date, "event_start"] = True
+
+    # def adjust_event_starts_b(self):
+    #     """In case the soil moisture data is nan on the initial event_start dates, look for data in the later timesteps"""
+
+    #     # Get the event start dates
+    #     event_start_idx_2 = pd.isna(
+    #         self.data.df["soil_moisture_daily_before_masking"][
+    #             self.data.df["event_start"]
+    #         ]
+    #     ).index
+
+    #     for i, event_start_date in enumerate(event_start_idx_2):
+    #         update_date = event_start_date
+    #         for j in range(
+    #             0, self.max_nodata_days
+    #         ):  # Look ahead up to 6 timesteps to seek for sm value which is not nan, or start of the precip event
+    #             current_date = event_start_date + pd.Timedelta(days=j)
+    #             # If Non-nan SM value is detected, update start date value to this timstep
+    #             if current_date > self.data.end_date:
+    #                 update_date = current_date
+    #                 break
+
+    #             if not pd.isna(
+    #                 self.data.df.loc[current_date].soil_moisture_daily_before_masking
+    #             ):
+    #                 update_date = current_date
+    #                 break
+
+    #         self.data.df.loc[event_start_date, "event_start"] = False
+    #         self.data.df.loc[update_date, "event_start"] = True
+
+    # def identify_event_ends_a(self):
+    #     """Detect the end of a storm event"""
+
+    #     # Initialize
+    #     num_events = self.data.df.shape[0]
+    #     self.data.df["event_end"] = np.zeros(len(self.data.df), dtype=bool)
+    #     event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
+    #     for i, event_start_date in enumerate(event_start_idx):
+    #         for j in range(1, len(self.data.df)):
+    #             current_date = event_start_date + pd.Timedelta(days=j)
+
+    #             if current_date > self.data.end_date:
+    #                 break
+
+    #             if np.isnan(
+    #                 self.data.df.loc[current_date].soil_moisture_daily_before_masking
+    #             ):
+    #                 continue
+
+    #             if (
+    #                 (self.data.df.loc[current_date].dSdt >= self.noise_thresh)
+    #                 or (self.data.df.loc[current_date].precip > self.precip_thresh)
+    #             ) or self.data.df.loc[current_date].event_start:
+    #                 # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
+    #                 self.data.df.loc[current_date, "event_end"] = True
+    #                 break
+    #             else:
+    #                 None
+
+    #     # create a new column for event_end
+    #     self.data.df["dSdt(t-1)"] = self.data.df.dSdt.shift(+1)

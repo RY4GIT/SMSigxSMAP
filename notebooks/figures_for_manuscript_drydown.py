@@ -11,7 +11,7 @@ import matplotlib.gridspec as gridspec
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-02-02"
+dir_name = f"raraki_2024-04-11_conus_eventsep_wo_rainfall"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -88,7 +88,7 @@ print(f"Total number of drydown event: {len(df)}")
 # %% Create output directory
 fig_dir = os.path.join(output_dir, dir_name, "figs", "events")
 if not os.path.exists(fig_dir):
-    os.mkdir(fig_dir)
+    os.makedirs(fig_dir)
     print(f"Created dir: {fig_dir}")
 else:
     print(f"Already exists: {fig_dir}")
@@ -102,6 +102,32 @@ df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
 # Denormalize k and calculate the estimated ETmax values from k parameter from q model
 df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
 df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
+
+
+def filter_by_data_availability(df):
+    # Define a helper function to convert string to list
+    def str_to_list(s):
+        return list(map(int, s.strip("[]").split()))
+
+    # Convert the 'time' column from string of lists to actual lists
+    df["time_list"] = df["time"].apply(str_to_list)
+
+    # Filter condition 1: Check if first three items are [0, 1, 2]
+    condition = df["time_list"].apply(lambda x: x[:3] == [0, 1, 2])
+
+    # condition = df['time_list'].apply(
+    #     lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
+    # )
+
+    # Apply the first filter
+    filtered_df = df[condition]
+
+    return filtered_df
+
+
+print(len(df))
+df = filter_by_data_availability(df)
+print(len(df))
 
 
 # Soil mositure range covered by the observation
@@ -372,7 +398,7 @@ def plot_drydown(event_id, ax=None, save=False):
 # %%
 ################################################
 
-event_id = 238922
+event_id = 24849
 ################################################
 plot_drydown(event_id=event_id)
 
@@ -380,7 +406,7 @@ plot_drydown(event_id=event_id)
 # Select the events to plot here
 ###################################################
 # Defining thresholds
-q_thresh = 1e-03
+q_thresh = 1
 success_modelfit_thresh = 0.7
 sm_range_thresh = 0.1
 ###################################################
@@ -390,16 +416,14 @@ lat_min, lat_max = 24.396308, 49.384358
 lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    ((df["n_days"] / df["event_length"]) > 0.33)
-    & (df["q_r_squared"] >= success_modelfit_thresh)
-    & (df["event_length"] > 15)
-    & (df["q_q"] > q_thresh)
+    (df["q_r_squared"] >= success_modelfit_thresh)
+    # & (df["event_length"] > 15)
+    & (df["q_q"] < q_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["q_q"] < 1)
-    & (df["latitude"] >= lat_min)
-    & (df["latitude"] <= lat_max)
-    & (df["longitude"] >= lon_min)
-    & (df["longitude"] <= lon_max)
+    # & (df["latitude"] >= lat_min)
+    # & (df["latitude"] <= lat_max)
+    # & (df["longitude"] >= lon_min)
+    # & (df["longitude"] <= lon_max)
 ]
 
 print(df_filt.index)
