@@ -11,7 +11,7 @@ import matplotlib.gridspec as gridspec
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-04-11_conus_eventsep_wo_rainfall"
+dir_name = f"raraki_2024-04-12"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -285,7 +285,7 @@ def get_precipitation(varname="SPL4SMGP", event=None):
 
 
 # %%
-def plot_drydown(event_id, ax=None, save=False):
+def plot_drydown(df, event_id, ax=None, save=False):
 
     # Assuming 'df' is your DataFrame and 'event_id' is defined
     event = df.loc[event_id]
@@ -396,19 +396,12 @@ def plot_drydown(event_id, ax=None, save=False):
 
 
 # %%
-################################################
-
-event_id = 24849
-################################################
-plot_drydown(event_id=event_id)
-
-# %%
 # Select the events to plot here
 ###################################################
 # Defining thresholds
 q_thresh = 1
 success_modelfit_thresh = 0.7
-sm_range_thresh = 0.1
+sm_range_thresh = 0.3
 ###################################################
 
 # CONUS
@@ -417,21 +410,29 @@ lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
     (df["q_r_squared"] >= success_modelfit_thresh)
-    # & (df["event_length"] > 15)
+    # # & (df["event_length"] > 15)
     & (df["q_q"] < q_thresh)
-    & (df["sm_range"] > sm_range_thresh)
-    # & (df["latitude"] >= lat_min)
+    & (df["q_q"] > 0)
+    # & (df["sm_range"] > sm_range_thresh)
+    & (df["AI"] > 1.0)
     # & (df["latitude"] <= lat_max)
     # & (df["longitude"] >= lon_min)
     # & (df["longitude"] <= lon_max)
 ]
 
 print(df_filt.index)
-
-np.random.seed(0)
-random_indices = df_filt.sample(n=10).index
-print(random_indices)
+print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
+################################################
+event_id = 9190
+################################################
+plot_drydown(df=df_filt, event_id=event_id)
+print(f"Next to try: {df_filt.sample(n=1).index}")
+df_filt.loc[event_id]
+# %%
 df.columns
+
+# %%
+df["AI"]
 # %%
