@@ -278,6 +278,7 @@ class EventSeparator:
                 "event_end": end_index,
                 "min_sm": self.data.min_sm,
                 "max_sm": self.data.max_sm,
+                "theta_fc": self.data.theta_fc,
                 "soil_moisture_daily": list(
                     self.data.df.loc[
                         start_index:end_index, "soil_moisture_daily"
@@ -287,9 +288,6 @@ class EventSeparator:
                     self.data.df.loc[
                         start_index:end_index, "soil_moisture_daily_before_masking"
                     ].values
-                ),
-                "normalized_sm": list(
-                    self.data.df.loc[start_index:end_index, "normalized_sm"].values
                 ),
                 "precip": list(
                     self.data.df.loc[start_index:end_index, "precip"].values

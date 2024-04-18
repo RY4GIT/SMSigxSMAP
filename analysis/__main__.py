@@ -48,7 +48,7 @@ def main():
 
     # Run the model
     if run_mode == "serial":
-        results = agent.run(agent.target_EASE_idx[500])
+        results = agent.run([181, 513])  # agent.target_EASE_idx[500])
     elif run_mode == "parallel":
         nprocess = int(cfg["MULTIPROCESSING"]["nprocess"])
         with mp.Pool(nprocess) as pool:

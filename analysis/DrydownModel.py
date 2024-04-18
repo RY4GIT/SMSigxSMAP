@@ -41,7 +41,7 @@ def exponential_model(t, delta_theta, theta_w, tau):
     return delta_theta * np.exp(-t / tau) + theta_w
 
 
-def q_model(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
+def q_model(t, k, q, theta_0, theta_star=1.0, theta_w=0.0):
     """
     Calculate the drydown curve for soil moisture over time using non-linear plant stress model.
 
@@ -49,7 +49,7 @@ def q_model(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
         t (int): Timestep, in day.
         k (float): Product of soil thickness (z) and maximum rate of change in normalized soil moisture (k), equivalent to maximum ET rate (ETmax), in m3/m3/day.
         q (float): Degree of non-linearity in the soil moisture response.
-        delta_theta (float): Shift/increment in soil moisture after precipitation, in m3/m3. It is equal to theta_0 - theta_w.
+        theta_0 (float): Shift/increment in soil moisture after precipitation, in m3/m3
         theta_star (float, optional): Critical soil moisture content, equal to s_star * porosity, in m3/m3. Default is 1.0.
         theta_w (float, optional): Wilting point soil moisture content, equal to s_star * porosity, in m3/m3. Default is 0.0.
 
@@ -57,7 +57,7 @@ def q_model(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
         float: Rate of change in soil moisture (dtheta/dt) for the given timestep, in m3/m3/day.
     """
 
-    b = delta_theta ** (1 - q)
+    b = (theta_0 - theta_w) ** (1 - q)
 
     a = (1 - q) / ((theta_star - theta_w) ** q)
 
@@ -128,6 +128,8 @@ class DrydownModel:
         self.run_exponential_model = is_true(cfg["MODEL"]["exponential_model"])
         self.run_q_model = is_true(cfg["MODEL"]["q_model"])
         self.run_sigmoid_model = is_true(cfg["MODEL"]["sigmoid_model"])
+
+        self.z = 50
 
         if cfg["MODEL"]["run_mode"] == "parallel":
             current_thread = threading.current_thread()
@@ -217,7 +219,9 @@ class DrydownModel:
                 # Use normalized y
                 # It is easier to fit q model with normalized soil moisture timeseries
                 # The parameters will be get de-normalized in the post-analysis
-                y_fit = event.norm_y
+                norm_max = event.theta_fc  # max normalization factor
+                norm_min = event.min_sm
+                y_fit = (event.y - norm_min) / (norm_max - norm_min)
             else:
                 y_fit = event.y
 
@@ -230,7 +234,7 @@ class DrydownModel:
             y_opt = model(event.x, *popt)
 
             if norm:
-                y_opt = y_opt * self.data.range_sm + self.data.min_sm
+                y_opt = y_opt * (norm_max - norm_min) + norm_min
 
             # Calculate the residuals
             residuals = event.y - y_opt
@@ -257,7 +261,7 @@ class DrydownModel:
 
         ### Delta_theta ###
         min_delta_theta = 0
-        max_delta_theta = self.data.range_sm
+        max_delta_theta = self.data.theta_fc - self.data.min_sm
         ini_delta_theta = event.subset_sm_range
 
         ### Theta_w ###
@@ -295,51 +299,39 @@ class DrydownModel:
         # ___________________________________________________________________________________
         # Define the boundary condition for optimizing q_model(t, k, q, delta_theta)
 
-        ### k (should be close to PET/z ###
+        ### k (should be close to PET/(z*(theta_star-theta_0)) ###
         min_k = 0
-        max_k = np.inf
-        ini_k = event.pet / 50
+        if self.force_PET:
+            max_k = event.pet / self.z / (event.max_sm - event.min_sm)
+        else:
+            max_k = np.inf
+        ini_k = max_k * 0.5
 
         ### q ###
         min_q = -np.inf
         max_q = np.inf
         ini_q = 1.0 + 1.0e-03
 
-        ### delta_theta ###
-        min_delta_theta = 0.0
-        max_delta_theta = 1.0  # Equivalent of self.data.range_sm as the input theta values are normalized in this code
-        ini_delta_theta = 0.5  # event.subset_sm_range / self.data.range_sm
+        ### theta_0 ###
+        min_theta_0 = 0.0
+        max_theta_0 = 1.0  # Equivalent of self.data.range_sm as the input theta values are normalized in this code
+        ini_theta_0 = 0.5  # event.subset_sm_range / self.data.range_sm
 
         # ______________________________________________________________________________________
         # Execute the event fit for the normalized timeseries between 0 and 1
 
-        if not self.force_PET:
-            bounds = [(min_k, min_q, min_delta_theta), (max_k, max_q, max_delta_theta)]
-            p0 = [ini_k, ini_q, ini_delta_theta]
+        bounds = [(min_k, min_q, min_theta_0), (max_k, max_q, max_theta_0)]
+        p0 = [ini_k, ini_q, ini_theta_0]
 
-            return self.fit_model(
-                event=event,
-                model=lambda t, k, q, delta_theta: q_model(
-                    t, k, q, delta_theta, 1.0, 0.0
-                ),
-                bounds=bounds,
-                p0=p0,
-                norm=True,
-            )
-
-        if self.force_PET:
-            bounds = [(min_q, min_delta_theta), (max_q, max_delta_theta)]
-            p0 = [ini_q, ini_delta_theta]
-
-            return self.fit_model(
-                event=event,
-                model=lambda t, q, delta_theta: q_model(
-                    t, event.pet, q, delta_theta, 1.0, 0.0
-                ),
-                bounds=bounds,
-                p0=p0,
-                norm=True,
-            )
+        return self.fit_model(
+            event=event,
+            model=lambda t, k, q, delta_theta: q_model(
+                t, k, q, delta_theta, event.theta_fc, 0.0
+            ),
+            bounds=bounds,
+            p0=p0,
+            norm=True,
+        )
 
     def fit_sigmoid_model(self, event):
         """Base function for fitting models
@@ -431,6 +423,7 @@ class DrydownModel:
                     "sm": event.y,
                     "min_sm": event.min_sm,
                     "max_sm": event.max_sm,
+                    "theta_fc": event.theta_fc,
                     "pet": event.pet,
                 }
 
@@ -446,15 +439,11 @@ class DrydownModel:
                     )
 
                 if self.run_q_model:
-                    if not self.force_PET:
-                        q_k = event.q["k"]
-                    else:
-                        q_k = event.pet
                     _results.update(
                         {
-                            "q_k": q_k,
+                            "q_k": event.q["k_norm"],
                             "q_q": event.q["q"],
-                            "q_delta_theta": event.q["delta_theta"],
+                            "q_theta_0": event.q["theta_0"],
                             "q_r_squared": event.q["r_squared"],
                             "q_y_opt": event.q["y_opt"],
                         }
