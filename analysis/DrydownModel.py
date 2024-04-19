@@ -131,6 +131,12 @@ class DrydownModel:
 
         self.z = 50
 
+        # Set normalization factor
+        self.norm_max = (
+            self.data.max_sm * 0.95
+        )  # event.theta_fc  # max normalization factor
+        self.norm_min = self.data.min_sm
+
         if cfg["MODEL"]["run_mode"] == "parallel":
             current_thread = threading.current_thread()
             current_thread.name = (
@@ -219,9 +225,8 @@ class DrydownModel:
                 # Use normalized y
                 # It is easier to fit q model with normalized soil moisture timeseries
                 # The parameters will be get de-normalized in the post-analysis
-                norm_max = event.theta_fc  # max normalization factor
-                norm_min = event.min_sm
-                y_fit = (event.y - norm_min) / (norm_max - norm_min)
+
+                y_fit = (event.y - self.norm_min) / (self.norm_max - self.norm_min)
             else:
                 y_fit = event.y
 
@@ -234,7 +239,7 @@ class DrydownModel:
             y_opt = model(event.x, *popt)
 
             if norm:
-                y_opt = y_opt * (norm_max - norm_min) + norm_min
+                y_opt = y_opt * (self.norm_max - self.norm_min) + self.norm_min
 
             # Calculate the residuals
             residuals = event.y - y_opt
@@ -302,13 +307,13 @@ class DrydownModel:
         ### k (should be close to PET/(z*(theta_star-theta_0)) ###
         min_k = 0
         if self.force_PET:
-            max_k = event.pet / self.z / (event.max_sm - event.min_sm)
+            max_k = event.pet / self.z / (self.norm_max - self.norm_min)
         else:
             max_k = np.inf
         ini_k = max_k * 0.5
 
         ### q ###
-        min_q = -np.inf
+        min_q = 0  # -np.inf
         max_q = np.inf
         ini_q = 1.0 + 1.0e-03
 
@@ -500,7 +505,7 @@ class DrydownModel:
                     alpha=0.7,
                     linestyle="--",
                     color="orange",
-                    label=f"expoential: R^2={event.exponential['r_squared']:.2f}; tau={event.exponential['tau']:.2f}",
+                    label=rf"expoential: $R^2$={event.exponential['r_squared']:.2f}; $\tau$={event.exponential['tau']:.2f}",
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -515,7 +520,7 @@ class DrydownModel:
                     alpha=0.7,
                     linestyle="--",
                     color="green",
-                    label=f"q model: R^2={event.q['r_squared']:.2f}; q={event.q['q']:.2f}; PET={event.pet:.2f}",
+                    label=rf"q model: $R^2$={event.q['r_squared']:.2f}; $q$={event.q['q']:.2f}; $PET$={event.pet:.2f}",
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -550,7 +555,7 @@ class DrydownModel:
             # Plot exponential model
             if self.run_exponential_model:
                 try:
-                    exp_param = f"expoential: R^2={event.exponential['r_squared']:.2f}; tau={event.exponential['tau']:.2f}"
+                    exp_param = rf"expoential: $R^2$={event.exponential['r_squared']:.2f}; $\tau$={event.exponential['tau']:.2f}"
 
                     ax.text(
                         x[0],
@@ -568,9 +573,7 @@ class DrydownModel:
             # Plot q model
             if self.run_q_model:
                 try:
-                    q_param = (
-                        f"q model: R^2={event.q['r_squared']:.2f}; q={event.q['q']:.2f}"
-                    )
+                    q_param = rf"q model: $R^2$={event.q['r_squared']:.2f}; $q$={event.q['q']:.2f}"
                     ax.text(
                         x[0],
                         event.q["y_opt"][0],
@@ -587,7 +590,7 @@ class DrydownModel:
             # Plot sigmoid model
             if self.run_sigmoid_model:
                 try:
-                    sigmoid_param = f"sigmoid model: R^2={event.sigmoid['r_squared']:.2f}; k={event.sigmoid['k']:.2f}"
+                    sigmoid_param = rf"sigmoid model: $R^2$={event.sigmoid['r_squared']:.2f}; $k$={event.sigmoid['k']:.2f}"
                     ax.text(
                         x[0],
                         event.sigmoid["y_opt"][0] - 0.03,
@@ -622,20 +625,29 @@ class DrydownModel:
         years_of_record = max(self.data.df.index.year) - min(self.data.df.index.year)
         fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20 * years_of_record, 5))
 
-        self.data.df.soil_moisture_daily.plot(ax=ax11, alpha=0.5)
+        ax11.scatter(
+            self.data.df.soil_moisture_daily_before_masking.index,
+            self.data.df.soil_moisture_daily_before_masking.values,
+            color="grey",
+            label="SMAP observation",
+            s=1.0,
+        )
         ax11.scatter(
             self.data.df.soil_moisture_daily[self.data.df["event_start"]].index,
-            self.data.df.soil_moisture_daily[self.data.df["event_start"]].values,
-            color="orange",
+            self.data.df.soil_moisture_daily[self.data.df["event_start"]]
+            .bfill()
+            .values,
+            color="grey",
             alpha=0.5,
         )
         ax11.scatter(
             self.data.df.soil_moisture_daily[self.data.df["event_end"]].index,
-            self.data.df.soil_moisture_daily[self.data.df["event_end"]].values,
-            color="orange",
+            self.data.df.soil_moisture_daily[self.data.df["event_end"]].bfill().values,
+            color="grey",
             marker="x",
             alpha=0.5,
         )
+        ax11.axhline(y=self.norm_max, color="tab:grey", linestyle="--", alpha=0.5)
         ax11.set_ylabel("VSWC[m3/m3]")
         self.data.df.precip.plot(ax=ax12, alpha=0.5)
         ax12.set_ylabel("Precipitation[mm/d]")

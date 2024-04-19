@@ -37,7 +37,7 @@ import matplotlib.colors as mcolors
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = "raraki_2024-04-12" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-04-18_conus_fc_as_cutoff" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ############################|###############################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -277,7 +277,7 @@ df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
 print("Loaded ancillary information (land-cover)")
 
-# %% Calculate some metrics for evaluation
+# Calculate some metrics for evaluation
 
 # Difference between R2 values of two models
 df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
@@ -405,22 +405,23 @@ def filter_by_data_availability(df):
     df['time_list'] = df['time'].apply(str_to_list)
 
     # Filter condition 1: Check if first three items are [0, 1, 2]
-    # condition = df['time_list'].apply(lambda x: x[:3] == [0, 1, 2])
+    condition = df['time_list'].apply(lambda x: x[:3] == [0, 1, 2])
 
-    condition = df['time_list'].apply(
-        lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
-    )
+    # condition = df['time_list'].apply(
+    #     lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
+    # )
 
     # Apply the first filter
     filtered_df = df[condition]
 
     return filtered_df
 
-print(len(df))
-df = filter_by_data_availability(df)
-print(len(df))
+# print(len(df))
+# df = filter_by_data_availability(df)
+# print(len(df))
 
 # %% Exclude model fits failure
+
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
         median_diff_R2=("diff_R2", "median"), count=("diff_R2", "count")
@@ -434,8 +435,9 @@ count_median_number_of_events_perGrid(df)
 ###################################################
 # Defining model acceptabiltiy criteria
 q_thresh = 1.0e-03
-R2_thresh = 0.8
-sm_range_thresh = 0.3
+R2_thresh = 0.7
+sm_range_thresh = 0.1
+event_length_thresh = 3
 ###################################################
 
 # Runs where q model performed reasonablly well
@@ -443,6 +445,7 @@ df_filt_q = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(
@@ -454,6 +457,7 @@ count_median_number_of_events_perGrid(df_filt_q)
 df_filt_allq = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(
@@ -465,6 +469,7 @@ count_median_number_of_events_perGrid(df_filt_allq)
 df_filt_exp = df[
     (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
@@ -478,6 +483,7 @@ df_filt_q_or_exp = df[
         | (df["exp_r_squared"] >= R2_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
@@ -488,6 +494,7 @@ df_filt_q_and_exp = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
@@ -500,6 +507,26 @@ n_nonlinear_better_events = sum(
 print(
     f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}"
 )
+# %%
+# Example data
+# df_filt_q["theta_fc_x"].values -> Assuming it's an array of x values
+# df_filt_q["max_sm"].values -> Assuming it's an array of y values
+x = df_filt_q["theta_fc_x"].values
+y = df_filt_q["max_sm"].values
+
+plt.figure(figsize=(8, 6))
+plt.scatter(x, y, label='Data points')
+plt.xlabel("theta_fc")
+plt.ylabel("max theta")
+
+# Adding the 1:1 line for reference
+# Creating a 1:1 line based on the range from 0 to 1
+range_one_to_one = np.arange(0,0.6, 0.01)  # Include 1 in the range
+plt.plot(range_one_to_one, range_one_to_one, color='tab:grey', label='1:1 Line')
+
+plt.legend()
+plt.show()
+
 
 # %%
 ############################################################################################################################################
@@ -630,7 +657,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     
     # Determine unique values for grouping
     # Aridity bins
-    x_unique = df[x_column_to_plot].unique()[:-1]
+    x_unique = df[x_column_to_plot].unique()
     # Vegetation bins
     z_unique = df[z_var].unique()
     n_groups = len(z_unique)
@@ -684,10 +711,10 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     # Set the y-axis
     if weighted:
         ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
-        ax.set_ylim([0, 50])
+        ax.set_ylim([0, 100])
     else:
         ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 60])
+        ax.set_ylim([0, 100])
 
     # Set the second x-ticks
     # Replicate the z_var labels for the number of x_column_to_plot labels
@@ -742,6 +769,37 @@ plot_grouped_stacked_bar(
 plt.tight_layout()
 
 
+# %% 
+# #################################################################
+# Relationship between q and the length of the drydown events
+#################################################################
+# Calculate the number of bins
+
+def plot_eventlength_hist(df):
+    min_value = df['event_length'].min()
+    max_value = df['event_length'].max()
+    bin_width = 1
+    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
+
+    hist = df['event_length'].hist(bins=n_bins)
+    hist.set_xlabel('Length of the event [days]')
+    hist.set_ylabel('Frequency')
+    # hist.set_xlim([0, 20])
+
+# plot_eventlength_hist(df_filt_q)
+plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
+# %%
+
+def plot_eventlength_vs_q(df):
+    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
+    plt.ylabel(r'$q$')
+    plt.xlabel('Length of the event [days]')
+    # plt.xlim([0, 20])
+
+# plot_eventlength_vs_q(df_filt_q)
+plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
 
 # %%
 ##################################################################
@@ -752,6 +810,7 @@ plt.tight_layout()
 ###################################################################
 # Number of samples
 ################################################################
+
 
 # How much percent area (based on SMAP pixels) had better R2
 grouped = df_filt_q_and_exp.groupby(["EASE_row_index", "EASE_column_index"]).agg(
@@ -1090,7 +1149,7 @@ print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
 # Histogram plots
 ###########################################################################
 
-
+save=True
 def plot_hist(df, var_key):
     plt.rcParams.update({"font.size": 30})
     fig, ax = plt.subplots(figsize=(5.5, 5))
@@ -2147,119 +2206,119 @@ plt.hist(
 pixel_counts["count"].median()
 
 
-# %% Ridgeplot for poster
-def plot_ridgeplot(df, x_var, z_var, categories, colors):
-    # # Create a figure
-    # fig, ax = plt.subplots(figsize=(10, 10))
+# # %% Ridgeplot for poster
+# def plot_ridgeplot(df, x_var, z_var, categories, colors):
+#     # # Create a figure
+#     # fig, ax = plt.subplots(figsize=(10, 10))
 
-    # Create a FacetGrid varying by the categorical variable, using the order and palette defined
-    g = sns.FacetGrid(
-        df,
-        row=z_var["column_name"],
-        hue=z_var["column_name"],
-        aspect=2.5,
-        height=1.5,
-        palette=colors,
-        row_order=categories,
-    )
-    # https://stackoverflow.com/questions/45911709/limit-the-range-of-x-in-seaborn-distplot-kde-estimation
+#     # Create a FacetGrid varying by the categorical variable, using the order and palette defined
+#     g = sns.FacetGrid(
+#         df,
+#         row=z_var["column_name"],
+#         hue=z_var["column_name"],
+#         aspect=2.5,
+#         height=1.5,
+#         palette=colors,
+#         row_order=categories,
+#     )
+#     # https://stackoverflow.com/questions/45911709/limit-the-range-of-x-in-seaborn-distplot-kde-estimation
 
-    # Map the kdeplot for the variable of interest across the FacetGrid
-    def plot_kde_and_lines(x, color, label):
-        ax = plt.gca()  # Get current axis
-        sns.kdeplot(
-            x,
-            bw_adjust=0.1,
-            clip_on=False,
-            fill=True,
-            alpha=0.5,
-            clip=[0, 5],
-            linewidth=0,
-            color=color,
-            ax=ax,
-        )
-        sns.kdeplot(
-            x,
-            bw_adjust=0.1,
-            clip_on=False,
-            clip=[0, 5],
-            linewidth=2.5,
-            color="w",
-            ax=ax,
-        )
-        # Median
-        median_value = x.median()
-        ax.axvline(median_value, color=color, linestyle=":", lw=2, label="Median")
-        # Mode (using KDE peak as a proxy)
-        kde = gaussian_kde(x, bw_method=0.1)
-        kde_values = np.linspace(x.min(), x.max(), 1000)
-        mode_value = kde_values[np.argmax(kde(kde_values))]
-        ax.axvline(mode_value, color=color, linestyle="--", lw=2, label="Mode")
+#     # Map the kdeplot for the variable of interest across the FacetGrid
+#     def plot_kde_and_lines(x, color, label):
+#         ax = plt.gca()  # Get current axis
+#         sns.kdeplot(
+#             x,
+#             bw_adjust=0.1,
+#             clip_on=False,
+#             fill=True,
+#             alpha=0.5,
+#             clip=[0, 5],
+#             linewidth=0,
+#             color=color,
+#             ax=ax,
+#         )
+#         sns.kdeplot(
+#             x,
+#             bw_adjust=0.1,
+#             clip_on=False,
+#             clip=[0, 5],
+#             linewidth=2.5,
+#             color="w",
+#             ax=ax,
+#         )
+#         # Median
+#         median_value = x.median()
+#         ax.axvline(median_value, color=color, linestyle=":", lw=2, label="Median")
+#         # Mode (using KDE peak as a proxy)
+#         kde = gaussian_kde(x, bw_method=0.1)
+#         kde_values = np.linspace(x.min(), x.max(), 1000)
+#         mode_value = kde_values[np.argmax(kde(kde_values))]
+#         ax.axvline(mode_value, color=color, linestyle="--", lw=2, label="Mode")
 
-    #
-    g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+#     #
+#     g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
 
-    # Map the custom plotting function
-    g.map(plot_kde_and_lines, x_var["column_name"])
+#     # Map the custom plotting function
+#     g.map(plot_kde_and_lines, x_var["column_name"])
 
-    # Set the subplots to overlap
-    g.fig.subplots_adjust(hspace=-2)
+#     # Set the subplots to overlap
+#     g.fig.subplots_adjust(hspace=-2)
 
-    # Add a horizontal line for each plot
-    g.map(plt.axhline, y=0, lw=2, clip_on=False)
+#     # Add a horizontal line for each plot
+#     g.map(plt.axhline, y=0, lw=2, clip_on=False)
 
-    # Define and use a simple function to label the plot in axes coordinates
-    def label(x, color, label):
-        ax = plt.gca()
-        ax.text(
-            0,
-            0.2,
-            label,
-            fontweight="bold",
-            color=color,
-            ha="left",
-            va="center",
-            transform=ax.transAxes,
-            size=16,
-        )
+#     # Define and use a simple function to label the plot in axes coordinates
+#     def label(x, color, label):
+#         ax = plt.gca()
+#         ax.text(
+#             0,
+#             0.2,
+#             label,
+#             fontweight="bold",
+#             color=color,
+#             ha="left",
+#             va="center",
+#             transform=ax.transAxes,
+#             size=16,
+#         )
 
-    g.map(label, x_var["column_name"])
+#     g.map(label, x_var["column_name"])
 
-    # Remove axes details that don't play well with overlap
-    g.set_titles("")
-    g.set(yticks=[], ylabel="", xlabel=r"$q$ [-]")
-    g.despine(bottom=True, left=True)
+#     # Remove axes details that don't play well with overlap
+#     g.set_titles("")
+#     g.set(yticks=[], ylabel="", xlabel=r"$q$ [-]")
+#     g.despine(bottom=True, left=True)
 
-    # Adjust the layout
-    plt.tight_layout()
-    plt.show()
+#     # Adjust the layout
+#     plt.tight_layout()
+#     plt.show()
 
-    return g
+#     return g
 
 
-vegetation_color_dict_limit = {
-    "Open shrublands": "#C99728",
-    "Grasslands": "#13BFB2",
-    "Savannas": "#92BA31",
-    "Woody savannas": "#4C6903",
-    "Croplands": "#F7C906",
-}
+# vegetation_color_dict_limit = {
+#     "Open shrublands": "#C99728",
+#     "Grasslands": "#13BFB2",
+#     "Savannas": "#92BA31",
+#     "Woody savannas": "#4C6903",
+#     "Croplands": "#F7C906",
+# }
 
-fig_ridge_veg = plot_ridgeplot(
-    df=df_filt_q,
-    x_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict_limit.keys(),
-    colors=list(vegetation_color_dict_limit.values()),
-)
+# fig_ridge_veg = plot_ridgeplot(
+#     df=df_filt_q,
+#     x_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict_limit.keys(),
+#     colors=list(vegetation_color_dict_limit.values()),
+# )
 
-fig_ridge_veg.savefig(
-    os.path.join(fig_dir, f"sup_hist_ridge_veg.pdf"), dpi=1200, bbox_inches="tight"
-)
+# fig_ridge_veg.savefig(
+#     os.path.join(fig_dir, f"sup_hist_ridge_veg.pdf"), dpi=1200, bbox_inches="tight"
+# )
 
-fig_ridge_veg.savefig(
-    os.path.join(fig_dir, f"sup_hist_ridge_veg.png"), dpi=1200, bbox_inches="tight"
-)
+# fig_ridge_veg.savefig(
+#     os.path.join(fig_dir, f"sup_hist_ridge_veg.png"), dpi=1200, bbox_inches="tight"
+# )
 
 
 
@@ -2434,38 +2493,7 @@ plt.savefig(
 )
 
 
-# %% 
-# #################################################################
-# Relationship between q and the length of the drydown events
-#################################################################
-# Calculate the number of bins
-
-def plot_eventlength_hist(df):
-    min_value = df['event_length'].min()
-    max_value = df['event_length'].max()
-    bin_width = 1
-    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
-
-    hist = df['event_length'].hist(bins=n_bins)
-    hist.set_xlabel('Length of the event [days]')
-    hist.set_ylabel('Frequency')
-    # hist.set_xlim([0, 20])
-
-# plot_eventlength_hist(df_filt_q)
-plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
-
-# %%
-
-def plot_eventlength_vs_q(df):
-    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
-    plt.ylabel(r'$q$')
-    plt.xlabel('Length of the event [days]')
-    # plt.xlim([0, 20])
-
-# plot_eventlength_vs_q(df_filt_q)
-plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
-
-
+#
 
 #%%
 from matplotlib.cm import get_cmap

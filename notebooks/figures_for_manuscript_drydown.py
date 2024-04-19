@@ -11,7 +11,7 @@ import matplotlib.gridspec as gridspec
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-04-12"
+dir_name = f"raraki_2024-04-18_conus_fc_as_cutoff"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -312,12 +312,16 @@ def plot_drydown(df, event_id, ax=None, save=False):
     t = np.arange(0, n_days, 1 / 24)
     k = event.q_k
     q = event.q_q
-    delta_theta = event.q_delta_theta
+
     min_sm = event.min_sm
     max_sm = event.max_sm
     exp_delta_theta = event.exp_delta_theta
     theta_w = event.exp_theta_w
     tau = event.exp_tau
+    z = 50
+    delta_theta = event.q_theta_0
+    delta_theta_denorm = (event.q_delta_theta ) * (max_sm - min_sm)+ min_sm
+    ETmax = k * (max_sm - min_sm) * z
     y_nonlinear = (
         q_drydown(t=t, k=k, q=q, delta_theta=delta_theta) * (max_sm - min_sm) + min_sm
     )
@@ -328,8 +332,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
     df_p = get_precipitation(event=event)
 
     # Plotting settings
-    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f})"
-    linear_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $\tau$={tau:.2f})"
+    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f}, $ETmax$={ETmax:.1f}, $\Delta \theta$={delta_theta_denorm:.2f})"
+    linear_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $\tau$={tau:.2f}, $\Delta \theta$={exp_delta_theta:.2f})"
 
     start_date = pd.to_datetime(event.event_start) - pd.Timedelta(7, "D")
     end_date = pd.to_datetime(event.event_end) + pd.Timedelta(7, "D")
@@ -369,6 +373,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
         f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand)"
     )
 
+    ax1.axhline(y=max_sm, color="tab:grey", linestyle="--", alpha=0.5)
     # Plot preciptation
     ax2.bar(
         df_p[start_date:end_date].index,
@@ -399,7 +404,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
 # Select the events to plot here
 ###################################################
 # Defining thresholds
-q_thresh = 1
+q_thresh = 0
 success_modelfit_thresh = 0.7
 sm_range_thresh = 0.3
 ###################################################
@@ -409,13 +414,11 @@ lat_min, lat_max = 24.396308, 49.384358
 lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] >= success_modelfit_thresh)
-    # # & (df["event_length"] > 15)
-    & (df["q_q"] < q_thresh)
-    & (df["q_q"] > 0)
-    # & (df["sm_range"] > sm_range_thresh)
-    & (df["AI"] > 1.0)
-    # & (df["latitude"] <= lat_max)
+    (df["q_r_squared"] > success_modelfit_thresh)
+    & (df["event_length"] > 7)
+    & (df["q_q"] > 10)
+    & (df["sm_range"] > sm_range_thresh)
+    & (df["AI"] > 1)
     # & (df["longitude"] >= lon_min)
     # & (df["longitude"] <= lon_max)
 ]
@@ -425,14 +428,16 @@ print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 9190
+event_id = 392295
 ################################################
 plot_drydown(df=df_filt, event_id=event_id)
+print(df_filt.loc[event_id])
 print(f"Next to try: {df_filt.sample(n=1).index}")
-df_filt.loc[event_id]
 # %%
 df.columns
 
 # %%
 df["AI"]
+# %%
+df.loc[event_id]
 # %%

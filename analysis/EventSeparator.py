@@ -70,6 +70,7 @@ class EventSeparator:
             "EVENT_SEPARATION", "minimium_consective_days"
         )
         self.max_nodata_days = self.cfg.getint("EVENT_SEPARATION", "max_nodata_days")
+        self.max_cutoff_sm = self.data.max_sm * 0.95
 
     def separate_events(self, output_dir):
         """Separate soil moisture timeseries into events"""
@@ -86,9 +87,6 @@ class EventSeparator:
 
         self.filter_events(self.minimium_consective_days)
         self.events = self.create_event_instances(self.events_df)
-
-        if self.plot:
-            self.plot_events()
 
         return self.events
 
@@ -155,7 +153,7 @@ class EventSeparator:
             current_date = event_start_date
             if (
                 self.data.df.loc[event_start_date].soil_moisture_daily_before_masking
-                > self.data.max_sm
+                > self.max_cutoff_sm
             ) | (
                 np.isnan(
                     self.data.df.loc[
@@ -169,7 +167,7 @@ class EventSeparator:
 
                 if (
                     self.data.df.loc[current_date].soil_moisture_daily_before_masking
-                    > self.data.max_sm
+                    > self.max_cutoff_sm
                 ) | (
                     np.isnan(
                         self.data.df.loc[
@@ -187,7 +185,7 @@ class EventSeparator:
                         self.data.df.loc[
                             current_date
                         ].soil_moisture_daily_before_masking
-                        > self.data.max_sm
+                        > self.max_cutoff_sm
                     ) | (
                         np.isnan(
                             self.data.df.loc[
@@ -315,45 +313,45 @@ class EventSeparator:
         ]
         return event_instances
 
-    def plot_events(self):
-        fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20, 5))
+    # def plot_events(self):
+    #     fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20, 5))
 
-        self.data.df.soil_moisture_daily_before_masking.plot(ax=ax11, alpha=0.5)
-        ax11.scatter(
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_start"]
-            ].index,
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_start"]
-            ].values,
-            color="orange",
-            alpha=0.5,
-        )
-        ax11.scatter(
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_end"]
-            ].index,
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_end"]
-            ].values,
-            color="orange",
-            marker="x",
-            alpha=0.5,
-        )
-        self.data.df.precip.plot(ax=ax12, alpha=0.5)
+    #     self.data.df.soil_moisture_daily_before_masking.plot(ax=ax11, alpha=0.5)
+    #     ax11.scatter(
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_start"]
+    #         ].index,
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_start"]
+    #         ].values,
+    #         color="orange",
+    #         alpha=0.5,
+    #     )
+    #     ax11.scatter(
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_end"]
+    #         ].index,
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_end"]
+    #         ].values,
+    #         color="orange",
+    #         marker="x",
+    #         alpha=0.5,
+    #     )
+    #     self.data.df.precip.plot(ax=ax12, alpha=0.5)
 
-        # Save results
-        filename = f"{self.data.EASE_row_index:03d}_{self.data.EASE_column_index:03d}_eventseparation.png"
-        output_dir2 = os.path.join(self.output_dir, "plots")
-        if not os.path.exists(output_dir2):
-            # Use a lock to ensure only one thread creates the directory
-            with threading.Lock():
-                # Check again if the directory was created while waiting
-                if not os.path.exists(output_dir2):
-                    os.makedirs(output_dir2)
+    #     # Save results
+    #     filename = f"{self.data.EASE_row_index:03d}_{self.data.EASE_column_index:03d}_eventseparation.png"
+    #     output_dir2 = os.path.join(self.output_dir, "plots")
+    #     if not os.path.exists(output_dir2):
+    #         # Use a lock to ensure only one thread creates the directory
+    #         with threading.Lock():
+    #             # Check again if the directory was created while waiting
+    #             if not os.path.exists(output_dir2):
+    #                 os.makedirs(output_dir2)
 
-        fig.savefig(os.path.join(output_dir2, filename))
-        plt.close()
+    #     fig.savefig(os.path.join(output_dir2, filename))
+    #     plt.close()
 
     # def adjust_event_starts_a(self):
     #     """In case the soil moisture data is nan on the initial event_start dates, look for data in the previous timesteps"""
