@@ -70,6 +70,7 @@ class EventSeparator:
             "EVENT_SEPARATION", "minimium_consective_days"
         )
         self.max_nodata_days = self.cfg.getint("EVENT_SEPARATION", "max_nodata_days")
+        self.max_cutoff_sm = self.data.max_sm * 0.95
 
     def separate_events(self, output_dir):
         """Separate soil moisture timeseries into events"""
@@ -86,9 +87,6 @@ class EventSeparator:
 
         self.filter_events(self.minimium_consective_days)
         self.events = self.create_event_instances(self.events_df)
-
-        if self.plot:
-            self.plot_events()
 
         return self.events
 
@@ -145,15 +143,17 @@ class EventSeparator:
 
     def adjust_event_starts_2(self):
 
-        event_start_idx_2 = pd.isna(
-            self.data.df["event_start"][self.data.df["event_start"]]
-        ).index
+        # If the soil moisture data at the beginning of the event is no data or exceeds threshold, look for subsequent available data
+        condition_mask = (
+            pd.isna(self.data.df["soil_moisture_daily"]) & self.data.df["event_start"]
+        )
+        event_start_nan_idx = self.data.df.index[condition_mask]
 
-        for _, event_start_date in enumerate(event_start_idx_2):
-
+        for i, event_start_date in enumerate(event_start_nan_idx):
+            current_date = event_start_date
             if (
                 self.data.df.loc[event_start_date].soil_moisture_daily_before_masking
-                > self.data.max_sm
+                > self.max_cutoff_sm
             ) | (
                 np.isnan(
                     self.data.df.loc[
@@ -161,13 +161,13 @@ class EventSeparator:
                     ].soil_moisture_daily_before_masking
                 )
             ):
-                current_date = event_start_date + pd.Timedelta(days=1)
+                current_date += pd.Timedelta(days=1)
                 self.data.df.loc[event_start_date, "event_start"] = False
                 self.data.df.loc[current_date, "event_start"] = True
 
                 if (
                     self.data.df.loc[current_date].soil_moisture_daily_before_masking
-                    > self.data.max_sm
+                    > self.max_cutoff_sm
                 ) | (
                     np.isnan(
                         self.data.df.loc[
@@ -180,11 +180,12 @@ class EventSeparator:
                         current_date - pd.Timedelta(days=1), "event_start"
                     ] = False
                     self.data.df.loc[current_date, "event_start"] = True
+
                     if (
                         self.data.df.loc[
                             current_date
                         ].soil_moisture_daily_before_masking
-                        > self.data.max_sm
+                        > self.max_cutoff_sm
                     ) | (
                         np.isnan(
                             self.data.df.loc[
@@ -196,66 +197,77 @@ class EventSeparator:
                             current_date - pd.Timedelta(days=1), "event_start"
                         ] = False
                         self.data.df.loc[current_date, "event_start"] = True
-                break
+
+        if self.use_rainfall:
+            event_start_idx = self.data.df["event_start"][
+                self.data.df["event_start"]
+            ].index
+            for _, event_start_date in enumerate(event_start_idx):
+                current_date = event_start_date + pd.Timedelta(days=1)
+                if self.data.df.loc[current_date].precip > self.precip_thresh:
+                    current_date += pd.Timedelta(days=1)
+                    self.data.df.loc[event_start_date, "event_start"] = False
+                    self.data.df.loc[
+                        current_date - pd.Timedelta(days=1), "event_start"
+                    ] = False
+                    self.data.df.loc[current_date, "event_start"] = True
+
+                    if self.data.df.loc[current_date].precip > self.precip_thresh:
+                        current_date += pd.Timedelta(days=1)
+                        self.data.df.loc[event_start_date, "event_start"] = False
+                        self.data.df.loc[
+                            current_date - pd.Timedelta(days=1), "event_start"
+                        ] = False
+                        self.data.df.loc[current_date, "event_start"] = True
 
     def identify_event_ends(self):
         self.data.df["event_end"] = np.zeros(len(self.data.df), dtype=bool)
-        event_start_idx = self.data.df["event_start"][self.data.df["event_start"]].index
+        self.event_start_idx = pd.Series(
+            self.data.df["event_start"][self.data.df["event_start"]].index
+        )
+        self.event_end_idx = pd.Series([pd.NaT] * len(self.data.df["event_start"]))
         record_last_date = self.data.df.index.values[-1]
 
-        for _, event_start_date in enumerate(event_start_idx):
+        for i, event_start_date in enumerate(self.event_start_idx):
             remaining_records = record_last_date - event_start_date
-
             count_nan_days = 0
             should_break = False
 
             for j in range(1, remaining_records.days):
                 current_date = event_start_date + pd.Timedelta(days=j)
 
-                if np.isnan(
-                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
-                ):
+                if np.isnan(self.data.df.loc[current_date].soil_moisture_daily):
                     count_nan_days += 1
                 else:
                     count_nan_days = 0
 
-                if count_nan_days > self.max_nodata_days:
-                    self.data.df.loc[current_date, "event_end"] = True
-                    break
+                if self.data.df.loc[current_date].precip >= self.precip_thresh:
+                    update_date = current_date - pd.Timedelta(days=1)
+                    update_arg = "precipitation exceeds threshold"
+                    should_break = True
 
-                if self.use_rainfall:
-                    if self.data.df.loc[current_date].precip >= self.precip_thresh:
-                        self.data.df.loc[
-                            current_date - pd.Timedelta(days=1), "event_end"
-                        ] = True
-                        should_break = True
-                if should_break:
-                    break
+                if count_nan_days > self.max_nodata_days:
+                    update_date = current_date
+                    update_arg = "too many consective nans"
+                    should_break = True
 
                 if (self.data.df.loc[current_date].dS >= self.noise_thresh) & (
-                    ~np.isnan(
-                        self.data.df.loc[
-                            current_date
-                        ].soil_moisture_daily_before_masking
-                    )
+                    ~np.isnan(self.data.df.loc[current_date].soil_moisture_daily)
                 ):
                     # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
                     update_date = current_date - pd.Timedelta(days=1)
-                    self.data.df.loc[update_date, "event_end"] = True
-                    break
+                    update_arg = "dS increment exceed the noise threshold"
+                    should_break = True
 
-                if pd.isna(self.data.df.loc[current_date].dSdt):
-                    # When max number of no data days are reached, dSdt is nan
-                    update_date = current_date - pd.Timedelta(days=1)
+                if should_break:
                     self.data.df.loc[update_date, "event_end"] = True
+                    self.event_end_idx[i] = update_date
                     break
 
         # create a new column for event_end
         self.data.df["dSdt(t-1)"] = self.data.df.dSdt.shift(+1)
 
     def create_event_dataframe(self):
-        start_indices = self.data.df[self.data.df["event_start"]].index
-        end_indices = self.data.df[self.data.df["event_end"]].index
 
         # Create a new DataFrame with each row containing a list of soil moisture values between each pair of event_start and event_end
         event_data = [
@@ -264,6 +276,7 @@ class EventSeparator:
                 "event_end": end_index,
                 "min_sm": self.data.min_sm,
                 "max_sm": self.data.max_sm,
+                "theta_fc": self.data.theta_fc,
                 "soil_moisture_daily": list(
                     self.data.df.loc[
                         start_index:end_index, "soil_moisture_daily"
@@ -274,16 +287,13 @@ class EventSeparator:
                         start_index:end_index, "soil_moisture_daily_before_masking"
                     ].values
                 ),
-                "normalized_sm": list(
-                    self.data.df.loc[start_index:end_index, "normalized_sm"].values
-                ),
                 "precip": list(
                     self.data.df.loc[start_index:end_index, "precip"].values
                 ),
                 "PET": list(self.data.df.loc[start_index:end_index, "pet"].values),
                 "delta_theta": self.data.df.loc[start_index, "dSdt(t-1)"],
             }
-            for start_index, end_index in zip(start_indices, end_indices)
+            for start_index, end_index in zip(self.event_start_idx, self.event_end_idx)
         ]
         return pd.DataFrame(event_data)
 
@@ -303,45 +313,45 @@ class EventSeparator:
         ]
         return event_instances
 
-    def plot_events(self):
-        fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20, 5))
+    # def plot_events(self):
+    #     fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20, 5))
 
-        self.data.df.soil_moisture_daily_before_masking.plot(ax=ax11, alpha=0.5)
-        ax11.scatter(
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_start"]
-            ].index,
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_start"]
-            ].values,
-            color="orange",
-            alpha=0.5,
-        )
-        ax11.scatter(
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_end"]
-            ].index,
-            self.data.df.soil_moisture_daily_before_masking[
-                self.data.df["event_end"]
-            ].values,
-            color="orange",
-            marker="x",
-            alpha=0.5,
-        )
-        self.data.df.precip.plot(ax=ax12, alpha=0.5)
+    #     self.data.df.soil_moisture_daily_before_masking.plot(ax=ax11, alpha=0.5)
+    #     ax11.scatter(
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_start"]
+    #         ].index,
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_start"]
+    #         ].values,
+    #         color="orange",
+    #         alpha=0.5,
+    #     )
+    #     ax11.scatter(
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_end"]
+    #         ].index,
+    #         self.data.df.soil_moisture_daily_before_masking[
+    #             self.data.df["event_end"]
+    #         ].values,
+    #         color="orange",
+    #         marker="x",
+    #         alpha=0.5,
+    #     )
+    #     self.data.df.precip.plot(ax=ax12, alpha=0.5)
 
-        # Save results
-        filename = f"{self.data.EASE_row_index:03d}_{self.data.EASE_column_index:03d}_eventseparation.png"
-        output_dir2 = os.path.join(self.output_dir, "plots")
-        if not os.path.exists(output_dir2):
-            # Use a lock to ensure only one thread creates the directory
-            with threading.Lock():
-                # Check again if the directory was created while waiting
-                if not os.path.exists(output_dir2):
-                    os.makedirs(output_dir2)
+    #     # Save results
+    #     filename = f"{self.data.EASE_row_index:03d}_{self.data.EASE_column_index:03d}_eventseparation.png"
+    #     output_dir2 = os.path.join(self.output_dir, "plots")
+    #     if not os.path.exists(output_dir2):
+    #         # Use a lock to ensure only one thread creates the directory
+    #         with threading.Lock():
+    #             # Check again if the directory was created while waiting
+    #             if not os.path.exists(output_dir2):
+    #                 os.makedirs(output_dir2)
 
-        fig.savefig(os.path.join(output_dir2, filename))
-        plt.close()
+    #     fig.savefig(os.path.join(output_dir2, filename))
+    #     plt.close()
 
     # def adjust_event_starts_a(self):
     #     """In case the soil moisture data is nan on the initial event_start dates, look for data in the previous timesteps"""

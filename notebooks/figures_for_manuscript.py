@@ -22,7 +22,6 @@ from matplotlib.colors import LinearSegmentedColormap
 import mpl_scatter_density
 import matplotlib.colors as mcolors
 
-# %%
 # Ryoko do not have this font on my system
 # import matplotlib as mpl
 
@@ -38,7 +37,7 @@ import matplotlib.colors as mcolors
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = "raraki_2024-02-02_global_eventsep_using_rainfall" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-04-18_conus_fc_as_cutoff" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ############################|###############################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -196,13 +195,6 @@ var_dict = {
         "unit": r"(m^3 m^{-3})",
         "lim": [0, 100],
     },
-    "event_length": {
-        "column_name": "event_length",
-        "symbol": r"",
-        "label": r"Drydown event length",
-        "unit": "(days)",
-        "lim": [0, 100],
-    },
     "sm_range": {
         "column_name": "sm_range",
         "symbol": r"",
@@ -257,7 +249,7 @@ if not os.path.exists(fig_dir):
 else:
     print(f"Already exists: {fig_dir}")
 
-# %% ANCILLARY DATA IMPORT
+# ANCILLARY DATA IMPORT
 # Read coordinate information
 coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
 df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
@@ -285,7 +277,7 @@ df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
 print("Loaded ancillary information (land-cover)")
 
-# %% Calculate some metrics for evaluation
+# Calculate some metrics for evaluation
 
 # Difference between R2 values of two models
 df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
@@ -372,35 +364,35 @@ def calculate_sm_range_abs(row):
 # Applying the function to each row and creating a new column 'sm_range'
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
 df["sm_range_abs"] = df.apply(calculate_sm_range_abs, axis=1)
-
-
-# %%
-def calculate_n_days(row):
-    input_string = row.sm
-
-    # Processing the string
-    input_string = input_string.replace("\n", " np.nan")
-    input_string = input_string.replace(" nan", " np.nan")
-    input_string = input_string.strip("[]")
-
-    # Converting to numpy array and handling np.nan
-    sm = np.array(
-        [
-            float(value) if value != "np.nan" else np.nan
-            for value in input_string.split()
-        ]
-    )
-
-    # Calculating sm_range
-    n_days = len(sm)
-    return n_days
-
-
-# Applying the function to each row and creating a new column 'sm_range'
-df["n_days"] = df.apply(calculate_n_days, axis=1)
 df["event_length"] = (
     pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
 ).dt.days
+
+
+# # %%
+# def calculate_n_days(row):
+#     input_string = row.sm
+
+#     # Processing the string
+#     input_string = input_string.replace("\n", " np.nan")
+#     input_string = input_string.replace(" nan", " np.nan")
+#     input_string = input_string.strip("[]")
+
+#     # Converting to numpy array and handling np.nan
+#     sm = np.array(
+#         [
+#             float(value) if value != "np.nan" else np.nan
+#             for value in input_string.split()
+#         ]
+#     )
+
+#     # Calculating sm_range
+#     n_days = len(sm)
+#     return n_days
+
+
+# # Applying the function to each row and creating a new column 'sm_range'
+# df["n_days"] = df.apply(calculate_n_days, axis=1)
 
 
 #%%
@@ -413,22 +405,23 @@ def filter_by_data_availability(df):
     df['time_list'] = df['time'].apply(str_to_list)
 
     # Filter condition 1: Check if first three items are [0, 1, 2]
-    # condition = df['time_list'].apply(lambda x: x[:3] == [0, 1, 2])
+    condition = df['time_list'].apply(lambda x: x[:3] == [0, 1, 2])
 
-    condition = df['time_list'].apply(
-        lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
-    )
+    # condition = df['time_list'].apply(
+    #     lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
+    # )
 
     # Apply the first filter
     filtered_df = df[condition]
 
     return filtered_df
 
-print(len(df))
-df = filter_by_data_availability(df)
-print(len(df))
+# print(len(df))
+# df = filter_by_data_availability(df)
+# print(len(df))
 
 # %% Exclude model fits failure
+
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
         median_diff_R2=("diff_R2", "median"), count=("diff_R2", "count")
@@ -441,9 +434,10 @@ count_median_number_of_events_perGrid(df)
 
 ###################################################
 # Defining model acceptabiltiy criteria
-q_thresh = 1e-03
+q_thresh = 1.0e-03
 R2_thresh = 0.7
 sm_range_thresh = 0.1
+event_length_thresh = 3
 ###################################################
 
 # Runs where q model performed reasonablly well
@@ -451,6 +445,7 @@ df_filt_q = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(
@@ -462,6 +457,7 @@ count_median_number_of_events_perGrid(df_filt_q)
 df_filt_allq = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(
@@ -473,6 +469,7 @@ count_median_number_of_events_perGrid(df_filt_allq)
 df_filt_exp = df[
     (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 print(
     f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
@@ -486,6 +483,7 @@ df_filt_q_or_exp = df[
         | (df["exp_r_squared"] >= R2_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
@@ -496,6 +494,7 @@ df_filt_q_and_exp = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["exp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["event_length"] > event_length_thresh)
 ].copy()
 
 print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
@@ -508,6 +507,299 @@ n_nonlinear_better_events = sum(
 print(
     f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}"
 )
+# %%
+# Example data
+# df_filt_q["theta_fc_x"].values -> Assuming it's an array of x values
+# df_filt_q["max_sm"].values -> Assuming it's an array of y values
+x = df_filt_q["theta_fc_x"].values
+y = df_filt_q["max_sm"].values
+
+plt.figure(figsize=(8, 6))
+plt.scatter(x, y, label='Data points')
+plt.xlabel("theta_fc")
+plt.ylabel("max theta")
+
+# Adding the 1:1 line for reference
+# Creating a 1:1 line based on the range from 0 to 1
+range_one_to_one = np.arange(0,0.6, 0.01)  # Include 1 in the range
+plt.plot(range_one_to_one, range_one_to_one, color='tab:grey', label='1:1 Line')
+
+plt.legend()
+plt.show()
+
+
+# %%
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+#
+# Rangeland analysis
+#
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+############################################################################################################################################
+
+# Read data 
+_rangeland_info = pd.read_csv(
+    os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
+).drop(["Unnamed: 0"], axis=1)
+
+rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
+
+# merge with results dataframe
+df_filt_q_conus = df_filt_q.merge(
+    rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
+)
+
+# Bin AI values
+df_filt_q_conus["AI_binned2"] = pd.cut(
+    df_filt_q_conus["AI"],
+    # bins=[0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, np.inf],
+    # labels=["0-0.25", "0.25-0.5", "0.5-0.75", "0.75-1.0","1.0-1.25", "1.25-1.5", "1.5-"],
+    bins=[0, 0.5, 1.0, 1.5, np.inf],
+    labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
+)
+
+# Change to percentage (TODO: fix this in the data management)
+df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
+df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
+
+# Print some statistics
+print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
+print(
+    f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
+)
+print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
+
+
+# %%
+# Get the statistics on the proportion of q>1 and q<1 events 
+def get_df_percentage_q(
+    df,
+    var_name,
+    weight_by, 
+    bins=[0, 20, 40, 60, 80, 100],
+    labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
+):
+
+    new_varname = var_name + "_pct"
+    df[new_varname] = pd.cut(df[var_name], bins=bins, labels=labels)
+
+    # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+    q_greater_1 = (
+        df[df["q_q"] > 1]
+        .groupby(["AI_binned2", new_varname])
+        .agg(
+            count_greater_1=('q_q', 'size'),  # Count the occurrences
+            sum_weightfact_q_gt_1=(weight_by, 'sum')  # Sum the event_length
+        )
+        .reset_index()
+    )
+
+    total_counts = (
+        df.groupby(["AI_binned2", new_varname]).agg(
+            total_count=('q_q', 'size'),  # Count the occurrences
+            sum_weightfact_total=(weight_by, 'sum')  # Sum the event_length
+        )
+        .reset_index()
+    )
+    percentage_df = pd.merge(q_greater_1, total_counts, on=["AI_binned2", new_varname])
+
+    percentage_df["percentage_q_gt_1"] = (
+        percentage_df["count_greater_1"] / percentage_df["total_count"]
+    ) * 100
+    percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
+    percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
+    percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
+
+    # count percentage * days percentage
+    # percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
+    # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
+
+    # Percentage of count * days
+    percentage_df["count_x_weight_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_weightfact_q_gt_1"]
+    percentage_df["count_x_weight_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_weightfact_total"]-percentage_df["sum_weightfact_q_gt_1"])
+    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    return percentage_df
+
+percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "sm_range_abs")
+
+print(percentage_df)
+
+#%%
+# Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
+
+def darken_hex_color(hex_color, darken_factor=0.7):
+    # Convert hex to RGB
+    rgb_color = mcolors.hex2color(hex_color)
+    # Convert RGB to HSV
+    hsv_color = mcolors.rgb_to_hsv(rgb_color)
+    # Darken the color by reducing its V (Value) component
+    hsv_color[2] *= darken_factor
+    # Convert back to RGB, then to hex
+    darkened_rgb_color = mcolors.hsv_to_rgb(hsv_color)
+    return mcolors.to_hex(darkened_rgb_color)
+    
+def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
+
+    # Determine unique groups and categories
+    # Define the width of the bars and the space between groups
+    bar_width = 0.2
+    space_between_bars  = 0.025
+    space_between_groups = 0.2
+    
+    # Determine unique values for grouping
+    # Aridity bins
+    x_unique = df[x_column_to_plot].unique()
+    # Vegetation bins
+    z_unique = df[z_var].unique()
+    n_groups = len(z_unique)
+    
+    # Define original colors
+    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
+    min_darken_factor = 0.85
+
+    # Setup for weighted or unweighted percentages
+    if weighted:
+        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
+    else:
+        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
+    
+    # Create the grouped and stacked bars
+    for z_i, z in enumerate(z_unique):
+        for x_i, x in enumerate(x_unique):
+
+            # Darken colors for this group
+            darken_factor = max(np.sqrt(np.sqrt(np.sqrt(1 - (x_i / len(x_unique))))), min_darken_factor)
+            colors = [darken_hex_color(color, darken_factor) for color in base_colors]
+    
+            # Calculate the x position for each group
+            group_offset = (bar_width + space_between_bars) * n_groups
+            x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
+            
+            # Get the subset of data for this group
+            subset = df[(df[x_column_to_plot] == x) & (df[z_var] == z)]
+            
+            # Get bottom values for stacked bars
+            bottom_value = 0
+
+            for i, (y_var, color) in enumerate(zip(y_vars, colors)):
+                ax.bar(
+                    x_pos,
+                    subset[y_var].values[0],
+                    bar_width,
+                    bottom=bottom_value,
+                    color=color,
+                    edgecolor='white',
+                    label=f'{z} - {y_var.split("_")[-1]}' if x_i == 0 and i == 0 else ""
+                )
+
+                bottom_value += subset[y_var].values[0]
+    
+    # Set the x-ticks to the middle of the groups
+    ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
+    ax.set_xticklabels(x_unique, rotation=45)
+    ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
+
+    # Set the y-axis
+    if weighted:
+        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
+        ax.set_ylim([0, 100])
+    else:
+        ax.set_ylabel("Proportion of\ndrydown events (%)")
+        ax.set_ylim([0, 100])
+
+    # Set the second x-ticks
+    # Replicate the z_var labels for the number of x_column_to_plot labels
+    z_labels = np.tile(z_unique, len(x_unique))
+
+    # Adjust the tick positions for the replicated z_var labels
+    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
+
+    # Hide the original x-axis ticks and labels
+    ax.tick_params(axis='x', which='both', length=0)
+
+    # Create a secondary x-axis for the new labels
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(new_tick_positions)
+    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+
+    # Adjust the secondary x-axis to appear below the primary x-axis
+    ax2.spines['top'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.xaxis.set_label_position('bottom')
+    ax2.spines['bottom'].set_position(('outward', 60))
+    ax2.tick_params(axis='x', which='both', length=0)
+    ax2.set_xticklabels(z_labels, rotation=45)
+
+    # Set plot title and legend
+    ax.set_title(title_name)
+
+plt.rcParams.update({"font.size": 11})
+fig, ax = plt.subplots(figsize=(6, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+fig, ax = plt.subplots(figsize=(6, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=True
+)
+plt.tight_layout()
+
+
+# %% 
+# #################################################################
+# Relationship between q and the length of the drydown events
+#################################################################
+# Calculate the number of bins
+
+def plot_eventlength_hist(df):
+    min_value = df['event_length'].min()
+    max_value = df['event_length'].max()
+    bin_width = 1
+    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
+
+    hist = df['event_length'].hist(bins=n_bins)
+    hist.set_xlabel('Length of the event [days]')
+    hist.set_ylabel('Frequency')
+    # hist.set_xlim([0, 20])
+
+# plot_eventlength_hist(df_filt_q)
+plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
+# %%
+
+def plot_eventlength_vs_q(df):
+    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
+    plt.ylabel(r'$q$')
+    plt.xlabel('Length of the event [days]')
+    # plt.xlim([0, 20])
+
+# plot_eventlength_vs_q(df_filt_q)
+plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
 
 # %%
 ##################################################################
@@ -518,6 +810,7 @@ print(
 ###################################################################
 # Number of samples
 ################################################################
+
 
 # How much percent area (based on SMAP pixels) had better R2
 grouped = df_filt_q_and_exp.groupby(["EASE_row_index", "EASE_column_index"]).agg(
@@ -856,7 +1149,7 @@ print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
 # Histogram plots
 ###########################################################################
 
-
+save=True
 def plot_hist(df, var_key):
     plt.rcParams.update({"font.size": 30})
     fig, ax = plt.subplots(figsize=(5.5, 5))
@@ -1913,355 +2206,121 @@ plt.hist(
 pixel_counts["count"].median()
 
 
-# %% Ridgeplot for poster
-def plot_ridgeplot(df, x_var, z_var, categories, colors):
-    # # Create a figure
-    # fig, ax = plt.subplots(figsize=(10, 10))
+# # %% Ridgeplot for poster
+# def plot_ridgeplot(df, x_var, z_var, categories, colors):
+#     # # Create a figure
+#     # fig, ax = plt.subplots(figsize=(10, 10))
 
-    # Create a FacetGrid varying by the categorical variable, using the order and palette defined
-    g = sns.FacetGrid(
-        df,
-        row=z_var["column_name"],
-        hue=z_var["column_name"],
-        aspect=2.5,
-        height=1.5,
-        palette=colors,
-        row_order=categories,
-    )
-    # https://stackoverflow.com/questions/45911709/limit-the-range-of-x-in-seaborn-distplot-kde-estimation
+#     # Create a FacetGrid varying by the categorical variable, using the order and palette defined
+#     g = sns.FacetGrid(
+#         df,
+#         row=z_var["column_name"],
+#         hue=z_var["column_name"],
+#         aspect=2.5,
+#         height=1.5,
+#         palette=colors,
+#         row_order=categories,
+#     )
+#     # https://stackoverflow.com/questions/45911709/limit-the-range-of-x-in-seaborn-distplot-kde-estimation
 
-    # Map the kdeplot for the variable of interest across the FacetGrid
-    def plot_kde_and_lines(x, color, label):
-        ax = plt.gca()  # Get current axis
-        sns.kdeplot(
-            x,
-            bw_adjust=0.1,
-            clip_on=False,
-            fill=True,
-            alpha=0.5,
-            clip=[0, 5],
-            linewidth=0,
-            color=color,
-            ax=ax,
-        )
-        sns.kdeplot(
-            x,
-            bw_adjust=0.1,
-            clip_on=False,
-            clip=[0, 5],
-            linewidth=2.5,
-            color="w",
-            ax=ax,
-        )
-        # Median
-        median_value = x.median()
-        ax.axvline(median_value, color=color, linestyle=":", lw=2, label="Median")
-        # Mode (using KDE peak as a proxy)
-        kde = gaussian_kde(x, bw_method=0.1)
-        kde_values = np.linspace(x.min(), x.max(), 1000)
-        mode_value = kde_values[np.argmax(kde(kde_values))]
-        ax.axvline(mode_value, color=color, linestyle="--", lw=2, label="Mode")
+#     # Map the kdeplot for the variable of interest across the FacetGrid
+#     def plot_kde_and_lines(x, color, label):
+#         ax = plt.gca()  # Get current axis
+#         sns.kdeplot(
+#             x,
+#             bw_adjust=0.1,
+#             clip_on=False,
+#             fill=True,
+#             alpha=0.5,
+#             clip=[0, 5],
+#             linewidth=0,
+#             color=color,
+#             ax=ax,
+#         )
+#         sns.kdeplot(
+#             x,
+#             bw_adjust=0.1,
+#             clip_on=False,
+#             clip=[0, 5],
+#             linewidth=2.5,
+#             color="w",
+#             ax=ax,
+#         )
+#         # Median
+#         median_value = x.median()
+#         ax.axvline(median_value, color=color, linestyle=":", lw=2, label="Median")
+#         # Mode (using KDE peak as a proxy)
+#         kde = gaussian_kde(x, bw_method=0.1)
+#         kde_values = np.linspace(x.min(), x.max(), 1000)
+#         mode_value = kde_values[np.argmax(kde(kde_values))]
+#         ax.axvline(mode_value, color=color, linestyle="--", lw=2, label="Mode")
 
-    #
-    g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+#     #
+#     g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
 
-    # Map the custom plotting function
-    g.map(plot_kde_and_lines, x_var["column_name"])
+#     # Map the custom plotting function
+#     g.map(plot_kde_and_lines, x_var["column_name"])
 
-    # Set the subplots to overlap
-    g.fig.subplots_adjust(hspace=-2)
+#     # Set the subplots to overlap
+#     g.fig.subplots_adjust(hspace=-2)
 
-    # Add a horizontal line for each plot
-    g.map(plt.axhline, y=0, lw=2, clip_on=False)
+#     # Add a horizontal line for each plot
+#     g.map(plt.axhline, y=0, lw=2, clip_on=False)
 
-    # Define and use a simple function to label the plot in axes coordinates
-    def label(x, color, label):
-        ax = plt.gca()
-        ax.text(
-            0,
-            0.2,
-            label,
-            fontweight="bold",
-            color=color,
-            ha="left",
-            va="center",
-            transform=ax.transAxes,
-            size=16,
-        )
+#     # Define and use a simple function to label the plot in axes coordinates
+#     def label(x, color, label):
+#         ax = plt.gca()
+#         ax.text(
+#             0,
+#             0.2,
+#             label,
+#             fontweight="bold",
+#             color=color,
+#             ha="left",
+#             va="center",
+#             transform=ax.transAxes,
+#             size=16,
+#         )
 
-    g.map(label, x_var["column_name"])
+#     g.map(label, x_var["column_name"])
 
-    # Remove axes details that don't play well with overlap
-    g.set_titles("")
-    g.set(yticks=[], ylabel="", xlabel=r"$q$ [-]")
-    g.despine(bottom=True, left=True)
+#     # Remove axes details that don't play well with overlap
+#     g.set_titles("")
+#     g.set(yticks=[], ylabel="", xlabel=r"$q$ [-]")
+#     g.despine(bottom=True, left=True)
 
-    # Adjust the layout
-    plt.tight_layout()
-    plt.show()
+#     # Adjust the layout
+#     plt.tight_layout()
+#     plt.show()
 
-    return g
-
-
-vegetation_color_dict_limit = {
-    "Open shrublands": "#C99728",
-    "Grasslands": "#13BFB2",
-    "Savannas": "#92BA31",
-    "Woody savannas": "#4C6903",
-    "Croplands": "#F7C906",
-}
-
-fig_ridge_veg = plot_ridgeplot(
-    df=df_filt_q,
-    x_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict_limit.keys(),
-    colors=list(vegetation_color_dict_limit.values()),
-)
-
-fig_ridge_veg.savefig(
-    os.path.join(fig_dir, f"sup_hist_ridge_veg.pdf"), dpi=1200, bbox_inches="tight"
-)
-
-fig_ridge_veg.savefig(
-    os.path.join(fig_dir, f"sup_hist_ridge_veg.png"), dpi=1200, bbox_inches="tight"
-)
+#     return g
 
 
-# %%
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-#
-# Rangeland analysis
-#
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
-############################################################################################################################################
+# vegetation_color_dict_limit = {
+#     "Open shrublands": "#C99728",
+#     "Grasslands": "#13BFB2",
+#     "Savannas": "#92BA31",
+#     "Woody savannas": "#4C6903",
+#     "Croplands": "#F7C906",
+# }
 
-# Read data 
-_rangeland_info = pd.read_csv(
-    os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
-).drop(["Unnamed: 0"], axis=1)
+# fig_ridge_veg = plot_ridgeplot(
+#     df=df_filt_q,
+#     x_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict_limit.keys(),
+#     colors=list(vegetation_color_dict_limit.values()),
+# )
 
-rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
+# fig_ridge_veg.savefig(
+#     os.path.join(fig_dir, f"sup_hist_ridge_veg.pdf"), dpi=1200, bbox_inches="tight"
+# )
 
-# merge with results dataframe
-df_filt_q_conus = df_filt_q.merge(
-    rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
-)
+# fig_ridge_veg.savefig(
+#     os.path.join(fig_dir, f"sup_hist_ridge_veg.png"), dpi=1200, bbox_inches="tight"
+# )
 
-# Bin AI values
-df_filt_q_conus["AI_binned2"] = pd.cut(
-    df_filt_q_conus["AI"],
-    bins=[0, 0.5, 1.0, 1.5, np.inf],
-    labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
-)
 
-# Change to percentage (TODO: fix this in the data management)
-df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
-df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
-
-# Print some statistics
-print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
-print(
-    f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
-)
-print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
-#%%
-df_filt_q_conus.head(100)
-
-# %%
-# Get the statistics on the proportion of q>1 and q<1 events 
-def get_df_percentage_q(
-    df,
-    var_name,
-    weight_by, 
-    bins=[0, 20, 40, 60, 80, 100],
-    labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
-):
-
-    new_varname = var_name + "_pct"
-    df[new_varname] = pd.cut(df[var_name], bins=bins, labels=labels)
-
-    # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
-    q_greater_1 = (
-        df[df["q_q"] > 1]
-        .groupby(["AI_binned2", new_varname])
-        .agg(
-            count_greater_1=('q_q', 'size'),  # Count the occurrences
-            sum_weightfact_q_gt_1=(weight_by, 'sum')  # Sum the event_length
-        )
-        .reset_index()
-    )
-
-    total_counts = (
-        df.groupby(["AI_binned2", new_varname]).agg(
-            total_count=('q_q', 'size'),  # Count the occurrences
-            sum_weightfact_total=(weight_by, 'sum')  # Sum the event_length
-        )
-        .reset_index()
-    )
-    percentage_df = pd.merge(q_greater_1, total_counts, on=["AI_binned2", new_varname])
-
-    percentage_df["percentage_q_gt_1"] = (
-        percentage_df["count_greater_1"] / percentage_df["total_count"]
-    ) * 100
-    percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
-    percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
-    percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
-
-    # count percentage * days percentage
-    # percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
-    # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
-
-    # Percentage of count * days
-    percentage_df["count_x_weight_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_weightfact_q_gt_1"]
-    percentage_df["count_x_weight_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_weightfact_total"]-percentage_df["sum_weightfact_q_gt_1"])
-    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
-    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
-    return percentage_df
-
-percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "sm_range_abs")
-
-#%%
-# Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
-
-def darken_hex_color(hex_color, darken_factor=0.7):
-    # Convert hex to RGB
-    rgb_color = mcolors.hex2color(hex_color)
-    # Convert RGB to HSV
-    hsv_color = mcolors.rgb_to_hsv(rgb_color)
-    # Darken the color by reducing its V (Value) component
-    hsv_color[2] *= darken_factor
-    # Convert back to RGB, then to hex
-    darkened_rgb_color = mcolors.hsv_to_rgb(hsv_color)
-    return mcolors.to_hex(darkened_rgb_color)
-    
-def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
-
-    # Determine unique groups and categories
-    # Define the width of the bars and the space between groups
-    bar_width = 0.2
-    space_between_bars  = 0.025
-    space_between_groups = 0.2
-    
-    # Determine unique values for grouping
-    x_unique = df[x_column_to_plot].unique()
-    z_unique = df[z_var].unique()
-    n_groups = len(z_unique)
-    
-    # Define original colors
-    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
-    min_darken_factor = 0.85
-
-    # Setup for weighted or unweighted percentages
-    if weighted:
-        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
-    else:
-        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
-    
-    # Create the grouped and stacked bars
-    for z_i, z in enumerate(z_unique):
-        for x_i, x in enumerate(x_unique):
-
-            # Darken colors for this group
-            darken_factor = max(np.sqrt(np.sqrt(np.sqrt(1 - (x_i / len(x_unique))))), min_darken_factor)
-            colors = [darken_hex_color(color, darken_factor) for color in base_colors]
-    
-            # Calculate the x position for each group
-            group_offset = (bar_width + space_between_bars) * n_groups
-            x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
-            
-            # Get the subset of data for this group
-            subset = df[(df[x_column_to_plot] == x) & (df[z_var] == z)]
-            
-            # Get bottom values for stacked bars
-            bottom_value = 0
-
-            for i, (y_var, color) in enumerate(zip(y_vars, colors)):
-                ax.bar(
-                    x_pos,
-                    subset[y_var].values[0],
-                    bar_width,
-                    bottom=bottom_value,
-                    color=color,
-                    edgecolor='white',
-                    label=f'{z} - {y_var.split("_")[-1]}' if x_i == 0 and i == 0 else ""
-                )
-
-                bottom_value += subset[y_var].values[0]
-    
-    # Set the x-ticks to the middle of the groups
-    ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
-    ax.set_xticklabels(x_unique, rotation=45)
-    ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
-
-    # Set the y-axis
-    if weighted:
-        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
-        ax.set_ylim([0, 50])
-    else:
-        ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 60])
-
-    # Set the second x-ticks
-    # Replicate the z_var labels for the number of x_column_to_plot labels
-    z_labels = np.tile(z_unique, len(x_unique))
-
-    # Adjust the tick positions for the replicated z_var labels
-    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
-
-    # Hide the original x-axis ticks and labels
-    ax.tick_params(axis='x', which='both', length=0)
-
-    # Create a secondary x-axis for the new labels
-    ax2 = ax.twiny()
-    ax2.set_xlim(ax.get_xlim())
-    ax2.set_xticks(new_tick_positions)
-    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-
-    # Adjust the secondary x-axis to appear below the primary x-axis
-    ax2.spines['top'].set_visible(False)
-    ax2.xaxis.set_ticks_position('bottom')
-    ax2.xaxis.set_label_position('bottom')
-    ax2.spines['bottom'].set_position(('outward', 60))
-    ax2.tick_params(axis='x', which='both', length=0)
-    ax2.set_xticklabels(z_labels, rotation=45)
-
-    # Set plot title and legend
-    ax.set_title(title_name)
-
-plt.rcParams.update({"font.size": 11})
-fig, ax = plt.subplots(figsize=(6, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df,
-    x_column_to_plot="AI_binned2",
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=False
-)
-plt.tight_layout()
-
-fig, ax = plt.subplots(figsize=(6, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df,
-    x_column_to_plot="AI_binned2",
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=True
-)
-plt.tight_layout()
 
 # %%
 
@@ -2434,38 +2493,7 @@ plt.savefig(
 )
 
 
-# %% 
-# #################################################################
-# Relationship between q and the length of the drydown events
-#################################################################
-# Calculate the number of bins
-
-def plot_eventlength_hist(df):
-    min_value = df['event_length'].min()
-    max_value = df['event_length'].max()
-    bin_width = 1
-    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
-
-    hist = df['event_length'].hist(bins=n_bins)
-    hist.set_xlabel('Length of the event [days]')
-    hist.set_ylabel('Frequency')
-    # hist.set_xlim([0, 20])
-
-# plot_eventlength_hist(df_filt_q)
-plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
-
-# %%
-
-def plot_eventlength_vs_q(df):
-    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
-    plt.ylabel(r'$q$')
-    plt.xlabel('Length of the event [days]')
-    # plt.xlim([0, 20])
-
-# plot_eventlength_vs_q(df_filt_q)
-plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
-
-
+#
 
 #%%
 from matplotlib.cm import get_cmap

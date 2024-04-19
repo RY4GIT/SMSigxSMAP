@@ -52,6 +52,10 @@ class Data:
         self.start_date = datetime.strptime(cfg["EXTENT"]["start_date"], date_format)
         self.end_date = datetime.strptime(cfg["EXTENT"]["end_date"], date_format)
 
+        # ______________________________________________________________________________
+        # Get ancillary data
+        self.theta_fc = self.get_anc_params()
+
         # _______________________________________________________________________________
         # Datasets
         _df = self.get_concat_datasets()
@@ -130,15 +134,15 @@ class Data:
 
         # Get max and min values
         self.min_sm = df.soil_moisture_daily.min(skipna=True)
+        self.max_sm = df.soil_moisture_daily.max(skipna=True)
         # Instead of actual max values, take the 95% percentile as max_sm # df.soil_moisture_daily.max(skipna=True)
-        self.max_sm = df.soil_moisture_daily.quantile(0.95)
+        self.quantile = df.soil_moisture_daily.quantile(0.95)
 
         df["soil_moisture_daily_before_masking"] = df["soil_moisture_daily"].copy()
         # Mask out the timeseries when sm is larger than 90% percentile value
-        df.loc[df["soil_moisture_daily"] > self.max_sm, "soil_moisture_daily"] = np.nan
-        self.range_sm = self.max_sm - self.min_sm
-        if not (np.isnan(self.min_sm) or np.isnan(self.max_sm)):
-            df["normalized_sm"] = (df.soil_moisture_daily - self.min_sm) / self.range_sm
+        df.loc[df["soil_moisture_daily"] > self.theta_fc, "soil_moisture_daily"] = (
+            np.nan
+        )
 
         return df
 
@@ -153,6 +157,25 @@ class Data:
 
         # Resample to regular time intervals
         return _df.resample("D").asfreq()
+
+    def get_anc_params(self):
+        """Get a datarod of PET data for a pixel"""
+
+        # Get variable dataframe
+        _df = pd.read_csv(
+            os.path.join(self.data_dir, self.datarods_dir, "anc_info.csv")
+        )
+
+        # Drop unnccesary dimension
+        matching_row = _df.loc[
+            (_df["EASE_column_index"] == self.EASE_column_index)
+            & (_df["EASE_row_index"] == self.EASE_row_index)
+        ]
+
+        fc = matching_row["theta_fc"].values[0]
+
+        # Resample to regular time intervals
+        return fc
 
     def get_precipitation(self, varname="SPL4SMGP"):
         """Get a datarod of precipitation data for a pixel"""
@@ -175,7 +198,9 @@ class Data:
         """Calculate d(Soil Moisture)/dt"""
 
         # Allow detecting soil moisture increment even if there is no SM data in between before/after rainfall event
-        df["sm_for_dS_calc"] = df["soil_moisture_daily_before_masking"].ffill()
+        df["sm_for_dS_calc"] = (
+            df["soil_moisture_daily_before_masking"].ffill().infer_objects(copy=False)
+        )
 
         # Calculate dS
         df["dS"] = (
