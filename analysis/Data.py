@@ -137,12 +137,13 @@ class Data:
         self.max_sm = df.soil_moisture_daily.max(skipna=True)
         # Instead of actual max values, take the 95% percentile as max_sm # df.soil_moisture_daily.max(skipna=True)
         self.quantile = df.soil_moisture_daily.quantile(0.95)
+        self.max_cutoff_sm = self.max_sm * 0.95
 
         df["soil_moisture_daily_before_masking"] = df["soil_moisture_daily"].copy()
         # Mask out the timeseries when sm is larger than 90% percentile value
-        df.loc[df["soil_moisture_daily"] > self.theta_fc, "soil_moisture_daily"] = (
-            np.nan
-        )
+        df.loc[
+            df["soil_moisture_daily"] > self.max_cutoff_sm, "soil_moisture_daily"
+        ] = np.nan
 
         return df
 

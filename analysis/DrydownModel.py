@@ -151,6 +151,8 @@ class DrydownModel:
         self.output_dir = output_dir
 
         for i, event in enumerate(self.events):
+            if i == 14:
+                print("stop")
             try:
                 updated_event = self.fit_one_event(event)
                 # Replace the old Event instance with updated one
@@ -266,7 +268,7 @@ class DrydownModel:
 
         ### Delta_theta ###
         min_delta_theta = 0
-        max_delta_theta = self.data.theta_fc - self.data.min_sm
+        max_delta_theta = self.data.max_sm - self.data.min_sm
         ini_delta_theta = event.subset_sm_range
 
         ### Theta_w ###
@@ -275,9 +277,9 @@ class DrydownModel:
         ini_theta_w = (min_theta_w + max_theta_w) / 2
 
         ### Tau ###
-        min_tau = 0
+        min_tau = self.z * (self.data.max_sm - event.subset_min_sm) / event.pet
         max_tau = np.inf
-        ini_tau = 1
+        ini_tau = min_tau * 2
 
         bounds = [
             (min_delta_theta, min_theta_w, min_tau),
@@ -330,9 +332,7 @@ class DrydownModel:
 
         return self.fit_model(
             event=event,
-            model=lambda t, k, q, delta_theta: q_model(
-                t, k, q, delta_theta, event.theta_fc, 0.0
-            ),
+            model=lambda t, k, q, delta_theta: q_model(t, k, q, delta_theta, 1.0, 0.0),
             bounds=bounds,
             p0=p0,
             norm=True,
@@ -504,8 +504,7 @@ class DrydownModel:
                     event.exponential["y_opt"],
                     alpha=0.7,
                     linestyle="--",
-                    color="orange",
-                    label=rf"expoential: $R^2$={event.exponential['r_squared']:.2f}; $\tau$={event.exponential['tau']:.2f}",
+                    color="tab:blue",
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -519,8 +518,7 @@ class DrydownModel:
                     event.q["y_opt"],
                     alpha=0.7,
                     linestyle="--",
-                    color="green",
-                    label=rf"q model: $R^2$={event.q['r_squared']:.2f}; $q$={event.q['q']:.2f}; $PET$={event.pet:.2f}",
+                    color="tab:orange",
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -535,7 +533,6 @@ class DrydownModel:
                     alpha=0.7,
                     linestyle="--",
                     color="blue",
-                    label=f"sigmoid: R^2={event.sigmoid['r_squared']:.2f}; k={event.sigmoid['k']:.2f}",
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -555,16 +552,16 @@ class DrydownModel:
             # Plot exponential model
             if self.run_exponential_model:
                 try:
-                    exp_param = rf"expoential: $R^2$={event.exponential['r_squared']:.2f}; $\tau$={event.exponential['tau']:.2f}"
+                    exp_param = rf"exp: $R^2$={event.exponential['r_squared']:.2f}; $\tau$={event.exponential['tau']:.2f}"
 
                     ax.text(
                         x[0],
-                        event.q["y_opt"][0] + 0.03,
-                        f"param={exp_param}",
+                        event.q["y_opt"][0] + 0.04,
+                        f"{exp_param}",
                         fontsize=12,
                         ha="left",
                         va="bottom",
-                        color="orange",
+                        color="tab:blue",
                     )
                 except Exception as e:
                     log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -576,12 +573,12 @@ class DrydownModel:
                     q_param = rf"q model: $R^2$={event.q['r_squared']:.2f}; $q$={event.q['q']:.2f}"
                     ax.text(
                         x[0],
-                        event.q["y_opt"][0],
+                        event.q["y_opt"][0] + 0.005,
                         f"{q_param}",
                         fontsize=12,
                         ha="left",
                         va="bottom",
-                        color="green",
+                        color="tab:orange",
                     )
                 except Exception as e:
                     log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -649,7 +646,7 @@ class DrydownModel:
         )
         ax11.axhline(y=self.norm_max, color="tab:grey", linestyle="--", alpha=0.5)
         ax11.set_ylabel("VSWC[m3/m3]")
-        self.data.df.precip.plot(ax=ax12, alpha=0.5)
+        self.data.df.precip.plot(ax=ax12, alpha=0.5, color="tab:grey")
         ax12.set_ylabel("Precipitation[mm/d]")
 
         for event in self.events:
