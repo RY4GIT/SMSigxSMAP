@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def q_drydown(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
+def q_drydown(t, k, q, theta_0, theta_star=1.0, theta_w=0.0):
     """
     Calculate the drydown curve for soil moisture over time using non-linear plant stress model.
 
@@ -17,7 +17,7 @@ def q_drydown(t, k, q, delta_theta, theta_star=1.0, theta_w=0.0):
     float: Rate of change in soil moisture (dtheta/dt) for the given timestep, in m3/m3/day.
     """
 
-    b = delta_theta ** (1 - q)
+    b = (theta_0 - theta_w) ** (1 - q)
 
     a = (1 - q) / ((theta_star - theta_w) ** q)
 
