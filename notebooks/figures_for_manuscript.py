@@ -37,7 +37,7 @@ import matplotlib.colors as mcolors
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-04-18_conus_fc_as_cutoff" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-04-26" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ############################|###############################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -81,21 +81,21 @@ var_dict = {
         "symbol": r"$q$",
         "label": "Nonlinear parameter",
         "unit": "",
-        "lim": [0.5, 4.0],
+        "lim": [0.0, 1.1],
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
         "symbol": r"$ET_{\mathrm{max}}$",
         "label": r"Estimated $ET_{max}$",
         "unit": r"(mm day$^{-1}$)",
-        "lim": [0, 17.5],
+        "lim": [0, 10],
     },
     "theta_star": {
         "column_name": "max_sm",
         "symbol": r"$\theta_*$",
         "label": r"Estimated $\theta_*$",
         "unit": r"(m$^3$ m$^{-3}$)",
-        "lim": [0.1, 0.45],
+        "lim": [0.25, 0.60],
     },
     "sand_bins": {
         "column_name": "sand_bins",
@@ -436,7 +436,7 @@ count_median_number_of_events_perGrid(df)
 # Defining model acceptabiltiy criteria
 q_thresh = 1.0e-03
 R2_thresh = 0.7
-sm_range_thresh = 0.1
+sm_range_thresh = 0 #0.1
 event_length_thresh = 3
 ###################################################
 
@@ -507,25 +507,25 @@ n_nonlinear_better_events = sum(
 print(
     f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}"
 )
-# %%
-# Example data
-# df_filt_q["theta_fc_x"].values -> Assuming it's an array of x values
-# df_filt_q["max_sm"].values -> Assuming it's an array of y values
-x = df_filt_q["theta_fc_x"].values
-y = df_filt_q["max_sm"].values
+# # %%
+# # Example data
+# # df_filt_q["theta_fc_x"].values -> Assuming it's an array of x values
+# # df_filt_q["max_sm"].values -> Assuming it's an array of y values
+# x = df_filt_q["theta_fc_x"].values
+# y = df_filt_q["max_sm"].values
 
-plt.figure(figsize=(8, 6))
-plt.scatter(x, y, label='Data points')
-plt.xlabel("theta_fc")
-plt.ylabel("max theta")
+# plt.figure(figsize=(8, 6))
+# plt.scatter(x, y, label='Data points')
+# plt.xlabel("theta_fc")
+# plt.ylabel("max theta")
 
-# Adding the 1:1 line for reference
-# Creating a 1:1 line based on the range from 0 to 1
-range_one_to_one = np.arange(0,0.6, 0.01)  # Include 1 in the range
-plt.plot(range_one_to_one, range_one_to_one, color='tab:grey', label='1:1 Line')
+# # Adding the 1:1 line for reference
+# # Creating a 1:1 line based on the range from 0 to 1
+# range_one_to_one = np.arange(0,0.6, 0.01)  # Include 1 in the range
+# plt.plot(range_one_to_one, range_one_to_one, color='tab:grey', label='1:1 Line')
 
-plt.legend()
-plt.show()
+# plt.legend()
+# plt.show()
 
 
 # %%
@@ -711,10 +711,10 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     # Set the y-axis
     if weighted:
         ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
-        ax.set_ylim([0, 100])
+        ax.set_ylim([0, 20])
     else:
         ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 100])
+        ax.set_ylim([0, 40])
 
     # Set the second x-ticks
     # Replicate the z_var labels for the number of x_column_to_plot labels
@@ -1156,7 +1156,7 @@ def plot_hist(df, var_key):
 
     # Create the histogram with a bin width of 1
     sns.histplot(
-        df[var_key], binwidth=0.5, color="#2c7fb8", fill=False, linewidth=3, ax=ax
+        df[var_key], binwidth=0.1, color="#2c7fb8", fill=False, linewidth=3, ax=ax
     )
 
     # Calculate median and mean
@@ -1170,7 +1170,7 @@ def plot_hist(df, var_key):
     ax.axvline(mean_value, color="tab:grey", linestyle=":", linewidth=3, label=f"Mean")
 
     # Setting the x limit
-    ax.set_xlim(0, 10)
+    ax.set_xlim(0, 2)
 
     # Adding title and labels
     # ax.set_title("Histogram of $q$ values")
@@ -1520,14 +1520,15 @@ plot_scatter_with_errorbar_categorical(
     plot_legend=False,
 )
 
-axs[1].set_ylim([0.4, 4.0])
+axs[1].set_ylim([0, 0.75])
+axs[1].set_xlim([0, 1.0])
 
-axs[0].set_yticks(
-    [-0.1, -0.08, -0.06, -0.04, -0.02, 0.0], ["0.10", 0.08, 0.06, 0.04, 0.02, "0.00"]
-)
-axs[1].set_yticks(
-    [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0], ["", 1.0, "", 2.0, "", 3.0, "", 4.0]
-)
+# axs[0].set_yticks(
+#     [-0.1, -0.08, -0.06, -0.04, -0.02, 0.0], ["0.10", 0.08, 0.06, 0.04, 0.02, "0.00"]
+# )
+# axs[1].set_yticks(
+#     [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0], ["", 1.0, "", 2.0, "", 3.0, "", 4.0]
+# )
 
 
 plt.tight_layout()
@@ -1629,7 +1630,7 @@ if save:
 # Aridity Index
 
 fig, axs = plt.subplots(2, 2, figsize=(12, 12))
-plt.rcParams.update({"font.size": 18})
+plt.rcParams.update({"font.size": 22})
 
 plot_loss_func(
     ax=axs[0, 0],
@@ -1773,7 +1774,7 @@ def plot_histograms_with_mean_median_categorical(df, x_var, z_var, categories, c
         subset = df[df[z_var["column_name"]] == category]
 
         # Determine bin edges based on bin interval
-        bin_interval = 0.1
+        bin_interval = 0.05
         min_edge = 0
         max_edge = 10
         bins = np.arange(min_edge, max_edge + bin_interval, bin_interval)
@@ -1834,23 +1835,23 @@ def plot_histograms_with_mean_median_categorical(df, x_var, z_var, categories, c
     return fig, ax
 
 
-# %%
-fig_hist_q_veg, _ = plot_histograms_with_mean_median_categorical(
-    df=df_filt_q,
-    x_var=var_dict["q_q"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-)
+# # %%
+# fig_hist_q_veg, _ = plot_histograms_with_mean_median_categorical(
+#     df=df_filt_q,
+#     x_var=var_dict["q_q"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+# )
 
-fig_hist_q_veg.savefig(
-    os.path.join(fig_dir, f"sup_hist_q_veg.png"), dpi=1200, bbox_inches="tight"
-)
+# fig_hist_q_veg.savefig(
+#     os.path.join(fig_dir, f"sup_hist_q_veg.png"), dpi=1200, bbox_inches="tight"
+# )
 
 
 # %%
 def plot_histograms_with_mean_median(df, x_var, z_var, cmap):
-
+    plt.rcParams.update({"font.size": 12})
     # Get unique bins
     bins_in_range = df[z_var["column_name"]].unique()
     bins_list = [bin for bin in bins_in_range if pd.notna(bin)]
@@ -1869,7 +1870,7 @@ def plot_histograms_with_mean_median(df, x_var, z_var, cmap):
         color = plt.get_cmap(cmap)(i / len(bins_list))
 
         # Determine bin edges based on bin interval
-        bin_interval = 0.1
+        bin_interval = 0.05
         min_edge = 0
         max_edge = 10
         bins = np.arange(min_edge, max_edge + bin_interval, bin_interval)
@@ -1930,23 +1931,23 @@ def plot_histograms_with_mean_median(df, x_var, z_var, cmap):
     return fig, ax
 
 
-# %%
-fig_hist_q_ai, _ = plot_histograms_with_mean_median(
-    df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap
-)
+# # %%
+# fig_hist_q_ai, _ = plot_histograms_with_mean_median(
+#     df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap
+# )
 
-fig_hist_q_ai.savefig(
-    os.path.join(fig_dir, f"sup_hist_q_ai.png"), dpi=1200, bbox_inches="tight"
-)
+# fig_hist_q_ai.savefig(
+#     os.path.join(fig_dir, f"sup_hist_q_ai.png"), dpi=1200, bbox_inches="tight"
+# )
 
-# %%
-fig_hist_q_sand, _ = plot_histograms_with_mean_median(
-    df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
-)
+# # %%
+# fig_hist_q_sand, _ = plot_histograms_with_mean_median(
+#     df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
+# )
 
-fig_hist_q_sand.savefig(
-    os.path.join(fig_dir, f"sup_hist_q_sand.png"), dpi=1200, bbox_inches="tight"
-)
+# fig_hist_q_sand.savefig(
+#     os.path.join(fig_dir, f"sup_hist_q_sand.png"), dpi=1200, bbox_inches="tight"
+# )
 
 # %% Including extremely small  q values as well
 fig_hist_q_veg2, _ = plot_histograms_with_mean_median_categorical(
@@ -1961,6 +1962,7 @@ fig_hist_q_veg2.savefig(
     os.path.join(fig_dir, f"sup_hist_q_veg_allq.png"), dpi=1200, bbox_inches="tight"
 )
 
+#%%
 fig_hist_q_ai2, _ = plot_histograms_with_mean_median(
     df=df_filt_allq, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap
 )
@@ -1969,6 +1971,7 @@ fig_hist_q_ai2.savefig(
     os.path.join(fig_dir, f"sup_hist_q_ai_allq.png"), dpi=1200, bbox_inches="tight"
 )
 
+#%%
 fig_hist_q_sand2, _ = plot_histograms_with_mean_median(
     df=df_filt_allq, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
 )
@@ -2025,41 +2028,41 @@ fig_box_ai_veg.savefig(
     os.path.join(fig_dir, f"sup_box_ai_veg.png"), dpi=1200, bbox_inches="tight"
 )
 
-# %%
-# # %% Vegetation vs AI Boxplot
-fig_ai_vs_veg, axs = plt.subplots(1, 2, figsize=(12, 6))
-plot_scatter_with_errorbar_categorical(
-    ax=axs[0],
-    df=df_filt_q,
-    x_var=var_dict["ai"],
-    y_var=var_dict["theta_star"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    title="B",
-    quantile=25,
-    plot_logscale=False,
-    plot_legend=False,
-)
+# # %%
+# # # %% Vegetation vs AI Boxplot
+# fig_ai_vs_veg, axs = plt.subplots(1, 2, figsize=(12, 6))
+# plot_scatter_with_errorbar_categorical(
+#     ax=axs[0],
+#     df=df_filt_q,
+#     x_var=var_dict["ai"],
+#     y_var=var_dict["theta_star"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     title="B",
+#     quantile=25,
+#     plot_logscale=False,
+#     plot_legend=False,
+# )
 
-plot_scatter_with_errorbar_categorical(
-    ax=axs[1],
-    df=df_filt_q,
-    x_var=var_dict["ai"],
-    y_var=var_dict["q_ETmax"],
-    z_var=var_dict["veg_class"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    title="C",
-    quantile=25,
-    plot_logscale=True,
-    plot_legend=False,
-)
+# plot_scatter_with_errorbar_categorical(
+#     ax=axs[1],
+#     df=df_filt_q,
+#     x_var=var_dict["ai"],
+#     y_var=var_dict["q_ETmax"],
+#     z_var=var_dict["veg_class"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     title="C",
+#     quantile=25,
+#     plot_logscale=True,
+#     plot_legend=False,
+# )
 
-fig_ai_vs_veg.tight_layout()
-fig_ai_vs_veg.savefig(
-    os.path.join(fig_dir, f"sup_ai_vs_veg.png"), dpi=1200, bbox_inches="tight"
-)
+# fig_ai_vs_veg.tight_layout()
+# fig_ai_vs_veg.savefig(
+#     os.path.join(fig_dir, f"sup_ai_vs_veg.png"), dpi=1200, bbox_inches="tight"
+# )
 
 
 # %%
@@ -2091,7 +2094,7 @@ def plot_boxplots(df, x_var, y_var):
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
     ax.set_xlabel(f'{x_var["label"]} {x_var["unit"]}')
     ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
-    ax.set_ylim(y_var["lim"][0], y_var["lim"][1] * 5)
+    ax.set_ylim(y_var["lim"][0], y_var["lim"][1])
     fig.tight_layout()
 
     return fig, ax
@@ -2329,7 +2332,7 @@ pixel_counts["count"].median()
 def plot_q_ai_wood_scatter(df):
     fig, ax = plt.subplots(figsize=(6, 4))
     sc=ax.scatter(df["fractional_wood"], df["q_q"], c=df["AI"], cmap="RdBu", alpha=0.3)
-    ax.set_ylim(0,20)
+    ax.set_ylim(0,1.5)
     ax.set_xlabel(var_dict["rangeland_wood"]["label"]+" "+var_dict["rangeland_wood"]["unit"])
     ax.set_ylabel(var_dict["q_q"]["label"]+" "+var_dict["q_q"]["symbol"])
     # Create a colorbar with the scatter plot's color mapping

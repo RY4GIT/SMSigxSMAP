@@ -11,7 +11,7 @@ import matplotlib.gridspec as gridspec
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-04-18_conus_fc_as_cutoff"
+dir_name = f"raraki_2024-04-26"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -315,16 +315,22 @@ def plot_drydown(df, event_id, ax=None, save=False):
 
     min_sm = event.min_sm
     max_sm = event.max_sm
+    norm_max = max_sm * 0.95
+    norm_min = min_sm
+
     exp_delta_theta = event.exp_delta_theta
     theta_w = event.exp_theta_w
     tau = event.exp_tau
     z = 50
-    delta_theta = event.q_theta_0
-    delta_theta_denorm = (event.q_delta_theta ) * (max_sm - min_sm)+ min_sm
-    ETmax = k * (max_sm - min_sm) * z
-    y_nonlinear = (
-        q_drydown(t=t, k=k, q=q, delta_theta=delta_theta) * (max_sm - min_sm) + min_sm
-    )
+
+    theta_0 = event.q_theta_0
+    theta_0_denorm = (event.q_theta_0) * (norm_max - norm_min)
+
+    print(theta_0, theta_0_denorm)
+    ETmax = k * (norm_max - norm_min) * z
+    y_nonlinear = (q_drydown(t=t, k=k, q=q, theta_0=theta_0)) * (
+        norm_max - norm_min
+    ) + norm_min
     y_exp = exponential_drydown(t, exp_delta_theta, theta_w, tau)
 
     # Get soil moisture and precipitation timeseries
@@ -332,7 +338,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
     df_p = get_precipitation(event=event)
 
     # Plotting settings
-    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f}, $ETmax$={ETmax:.1f}, $\Delta \theta$={delta_theta_denorm:.2f})"
+    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f}, $ETmax$={ETmax:.1f}, $\theta_0$={theta_0_denorm:.2f})"
     linear_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $\tau$={tau:.2f}, $\Delta \theta$={exp_delta_theta:.2f})"
 
     start_date = pd.to_datetime(event.event_start) - pd.Timedelta(7, "D")
@@ -406,7 +412,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
 # Defining thresholds
 q_thresh = 0
 success_modelfit_thresh = 0.7
-sm_range_thresh = 0.3
+sm_range_thresh = 0.1
 ###################################################
 
 # CONUS
@@ -414,11 +420,9 @@ lat_min, lat_max = 24.396308, 49.384358
 lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > success_modelfit_thresh)
-    & (df["event_length"] > 7)
-    & (df["q_q"] > 10)
-    & (df["sm_range"] > sm_range_thresh)
-    & (df["AI"] > 1)
+    # (df["q_r_squared"] > success_modelfit_thresh)
+    (df["q_q"] > 100)
+    # & (df["sm_range"] > sm_range_thresh)
     # & (df["longitude"] >= lon_min)
     # & (df["longitude"] <= lon_max)
 ]
@@ -428,7 +432,7 @@ print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 392295
+event_id = 16313
 ################################################
 plot_drydown(df=df_filt, event_id=event_id)
 print(df_filt.loc[event_id])

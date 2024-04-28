@@ -63,8 +63,8 @@ class Event:
             else:
                 self.q = {
                     "k_norm": popt[0],
-                    "q": popt[0],
-                    "theta_0": popt[1],
+                    "q": popt[1],
+                    "theta_0": popt[2],
                     "r_squared": r_squared,
                     "y_opt": y_opt.tolist(),
                 }

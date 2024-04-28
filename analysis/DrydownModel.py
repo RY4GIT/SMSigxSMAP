@@ -151,8 +151,6 @@ class DrydownModel:
         self.output_dir = output_dir
 
         for i, event in enumerate(self.events):
-            if i == 14:
-                print("stop")
             try:
                 updated_event = self.fit_one_event(event)
                 # Replace the old Event instance with updated one
@@ -332,7 +330,7 @@ class DrydownModel:
 
         return self.fit_model(
             event=event,
-            model=lambda t, k, q, delta_theta: q_model(t, k, q, delta_theta, 1.0, 0.0),
+            model=lambda t, k, q, theta_0: q_model(t, k, q, theta_0, 1.0, 0.0),
             bounds=bounds,
             p0=p0,
             norm=True,
