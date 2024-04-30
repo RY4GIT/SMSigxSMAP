@@ -38,7 +38,7 @@ class Data:
 
         # Read inputs
         self.cfg = cfg
-        self.max_nodata_days = self.cfg.getint("EVENT_SEPARATION", "max_nodata_days")
+        self.max_nodata_days = self.cfg.getint("MODEL_PARAMS", "max_nodata_days")
 
         self.EASE_row_index = EASEindex[0]
         self.EASE_column_index = EASEindex[1]

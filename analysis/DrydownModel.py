@@ -167,7 +167,7 @@ class DrydownModel:
         self.plot_results = is_true(cfg["MODEL"]["plot_results"])
         self.force_PET = is_true(cfg["MODEL"]["force_PET"])
         self.run_tau_exp_model = is_true(cfg["MODEL"]["tau_exp_model"])
-        self.run_exp_model = is_true(cfg["MODEL"]["run_exp_model"])
+        self.run_exp_model = is_true(cfg["MODEL"]["exp_model"])
         self.run_q_model = is_true(cfg["MODEL"]["q_model"])
         self.run_sigmoid_model = is_true(cfg["MODEL"]["sigmoid_model"])
         self.is_stage1ET_active = is_true(cfg["MODEL"]["is_stage1ET_active"])
@@ -233,9 +233,7 @@ class DrydownModel:
         # Fit tau exponential model
         if self.run_exp_model:
             try:
-                popt, r_squared, y_opt = self.fit_exp_model(
-                    event, self.is_stage1ET_active
-                )
+                popt, r_squared, y_opt = self.fit_exp_model(event)
 
                 if self.is_stage1ET_active:
                     est_theta_star = popt[2]
@@ -355,9 +353,7 @@ class DrydownModel:
 
         # ______________________________________________________________________________________
         # Execute the event fit
-        return self.fit_model(
-            event=event, model=tau_exp_model, bounds=bounds, p0=p0, norm=False
-        )
+        return self.fit_model(event=event, model=tau_exp_model, bounds=bounds, p0=p0)
 
     def fit_exp_model(self, event):
         """Fits an exponential model to the given event data and returns the fitted parameters.
@@ -376,8 +372,10 @@ class DrydownModel:
         min_ETmax = 0
         if self.force_PET:
             max_ETmax = event.pet
+            min_ETmax = event.pet * 0.2
         else:
             max_ETmax = np.inf
+            min_ETmax = 0
         ini_ETmax = max_ETmax * 0.5
 
         ### theta_0 ###
@@ -386,7 +384,7 @@ class DrydownModel:
                 first_non_nan = value
                 break
 
-        min_theta_0 = first_non_nan + self.target_rmsd
+        min_theta_0 = first_non_nan - self.target_rmsd
         max_theta_0 = first_non_nan + self.target_rmsd
         ini_theta_0 = first_non_nan
 
@@ -408,16 +406,18 @@ class DrydownModel:
             return self.fit_model(
                 event=event,
                 model=lambda t, ETmax, theta_0, theta_star: drydown_piecewise(
-                    exp_model(
-                        ETmax,
-                        theta_0,
-                        theta_star,
-                        self.norm_min,
-                        self.z,
+                    t=t,
+                    model=exp_model(
+                        t=t,
+                        ETmax=ETmax,
+                        theta_0=theta_0,
+                        theta_star=theta_star,
+                        theta_w=self.norm_min,
+                        z=self.z,
                     ),
-                    ETmax,
-                    theta_0,
-                    theta_star,
+                    ETmax=ETmax,
+                    theta_0=theta_0,
+                    theta_star=theta_star,
                 ),
                 bounds=bounds,
                 p0=p0,
@@ -428,7 +428,12 @@ class DrydownModel:
             return self.fit_model(
                 event=event,
                 model=lambda t, ETmax, theta_0: exp_model(
-                    t, ETmax, theta_0, self.norm_max, self.norm_min, self.z
+                    t=t,
+                    ETmax=ETmax,
+                    theta_0=theta_0,
+                    theta_star=self.norm_max,
+                    theta_w=self.norm_min,
+                    z=self.z,
                 ),
                 bounds=bounds,
                 p0=p0,
@@ -453,11 +458,12 @@ class DrydownModel:
         ini_q = 1.0 + 1.0e-03
 
         ### ETmax ###
-        min_ETmax = 0
         if self.force_PET:
             max_ETmax = event.pet
+            min_ETmax = event.pet * 0.2
         else:
             max_ETmax = np.inf
+            min_ETmax = 0
         ini_ETmax = max_ETmax * 0.5
 
         ### theta_0 ###
@@ -466,7 +472,7 @@ class DrydownModel:
                 first_non_nan = value
                 break
 
-        min_theta_0 = first_non_nan + self.target_rmsd
+        min_theta_0 = first_non_nan - self.target_rmsd
         max_theta_0 = first_non_nan + self.target_rmsd
         ini_theta_0 = first_non_nan
 
@@ -488,17 +494,20 @@ class DrydownModel:
             return self.fit_model(
                 event=event,
                 model=lambda t, q, ETmax, theta_0, theta_star: drydown_piecewise(
-                    q_model(
-                        q,
-                        ETmax,
-                        theta_0,
-                        theta_star,
-                        self.norm_min,
-                        self.z,
+                    t=t,
+                    model=q_model(
+                        t=t,
+                        q=q,
+                        ETmax=ETmax,
+                        theta_0=theta_0,
+                        theta_star=theta_star,
+                        theta_w=self.norm_min,
+                        z=self.z,
                     ),
-                    ETmax,
-                    theta_0,
-                    theta_star,
+                    ETmax=ETmax,
+                    theta_0=theta_0,
+                    theta_star=theta_star,
+                    z=self.z,
                 ),
                 bounds=bounds,
                 p0=p0,
@@ -509,7 +518,13 @@ class DrydownModel:
             return self.fit_model(
                 event=event,
                 model=lambda t, q, ETmax, theta_0: q_model(
-                    t, q, ETmax, theta_0, self.norm_max, self.norm_min, self.z
+                    t=t,
+                    q=q,
+                    ETmax=ETmax,
+                    theta_0=theta_0,
+                    theta_star=self.norm_max,
+                    theta_w=self.norm_min,
+                    z=self.z,
                 ),
                 bounds=bounds,
                 p0=p0,
@@ -623,20 +638,23 @@ class DrydownModel:
                 if self.run_exp_model:
                     _results.update(
                         {
-                            "exp_delta_theta": event.tau_exp["delta_theta"],
-                            "exp_theta_w": event.tau_exp["theta_w"],
-                            "exp_tau": event.tau_exp["tau"],
-                            "exp_r_squared": event.tau_exp["r_squared"],
-                            "exp_y_opt": event.tau_exp["y_opt"],
+                            "exp_ETmax": event.exp["ETmax"],
+                            "exp_theta_0": event.exp["theta_0"],
+                            "exp_theta_star": event.exp["theta_star"],
+                            "exp_theta_w": event.exp["theta_w"],
+                            "exp_r_squared": event.exp["r_squared"],
+                            "exp_y_opt": event.exp["y_opt"],
                         }
                     )
 
                 if self.run_q_model:
                     _results.update(
                         {
-                            "q_k": event.q["k_norm"],
                             "q_q": event.q["q"],
+                            "q_ETmax": event.q["ETmax"],
                             "q_theta_0": event.q["theta_0"],
+                            "q_theta_star": event.q["theta_star"],
+                            "q_theta_w": event.q["theta_w"],
                             "q_r_squared": event.q["r_squared"],
                             "q_y_opt": event.q["y_opt"],
                         }
@@ -689,6 +707,46 @@ class DrydownModel:
                     linestyle="--",
                     color="tab:blue",
                 )
+
+                label = rf"t-exp: $R^2$={event.tau_exp['r_squared']:.2f}; $\tau$={event.tau_exp['tau']:.2f}"
+
+                ax.text(
+                    x[0],
+                    event.tau_exp["y_opt"][0] + 0.10,
+                    f"{label}",
+                    fontsize=12,
+                    ha="left",
+                    va="bottom",
+                    color="tab:blue",
+                )
+
+            except Exception as e:
+                log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
+
+        # ______________________________________
+        # Plot exponential model (more physically constrained)
+        if self.run_exp_model:
+            try:
+                ax.plot(
+                    x,
+                    event.exp["y_opt"],
+                    alpha=0.7,
+                    linestyle=":",
+                    color="tab:blue",
+                )
+
+                label = rf"exp: $R^2$={event.exp['r_squared']:.2f}; $ETmax$={event.exp['ETmax']:.2f}"
+
+                ax.text(
+                    x[0],
+                    event.exp["y_opt"][0] + 0.08,
+                    f"{label}",
+                    fontsize=12,
+                    ha="left",
+                    va="bottom",
+                    color="tab:blue",
+                )
+
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
 
@@ -703,6 +761,19 @@ class DrydownModel:
                     linestyle="--",
                     color="tab:orange",
                 )
+
+                label = rf"q model: $R^2$={event.q['r_squared']:.2f}; $q$={event.q['q']:.2f}"
+
+                ax.text(
+                    x[0],
+                    event.q["y_opt"][0] + 0.001,
+                    f"{label}",
+                    fontsize=12,
+                    ha="left",
+                    va="bottom",
+                    color="tab:orange",
+                )
+
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
 
@@ -717,58 +788,18 @@ class DrydownModel:
                     linestyle="--",
                     color="blue",
                 )
-            except Exception as e:
-                log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
 
-        # ______________________________________
-        # Plot exponential model
-        if self.run_tau_exp_model:
-            try:
-                exp_param = rf"exp: $R^2$={event.tau_exp['r_squared']:.2f}; $\tau$={event.tau_exp['tau']:.2f}"
-
-                ax.text(
-                    x[0],
-                    event.q["y_opt"][0] + 0.04,
-                    f"{exp_param}",
-                    fontsize=12,
-                    ha="left",
-                    va="bottom",
-                    color="tab:blue",
-                )
-            except Exception as e:
-                log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
-
-        # ______________________________________
-        # Plot q model
-        if self.run_q_model:
-            try:
-                q_param = rf"q model: $R^2$={event.q['r_squared']:.2f}; $q$={event.q['q']:.2f}"
-                ax.text(
-                    x[0],
-                    event.q["y_opt"][0] + 0.005,
-                    f"{q_param}",
-                    fontsize=12,
-                    ha="left",
-                    va="bottom",
-                    color="tab:orange",
-                )
-            except Exception as e:
-                log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
-
-        # ______________________________________
-        # Plot sigmoid model
-        if self.run_sigmoid_model:
-            try:
-                sigmoid_param = rf"sigmoid model: $R^2$={event.sgm['r_squared']:.2f}; $k$={event.sgm['k']:.2f}"
+                label = rf"sigmoid model: $R^2$={event.sgm['r_squared']:.2f}; $k$={event.sgm['k']:.2f}"
                 ax.text(
                     x[0],
                     event.sgm["y_opt"][0] - 0.03,
-                    f"{sigmoid_param}",
+                    f"{label}",
                     fontsize=12,
                     ha="left",
                     va="bottom",
                     color="blue",
                 )
+
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
 

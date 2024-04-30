@@ -39,7 +39,9 @@ def main():
     # _______________________________________________________________________________________________
     # Verbose models to run
     log.info(f"Running the following models:")
-    if is_true(cfg["MODEL"]["exponential_model"]):
+    if is_true(cfg["MODEL"]["tau_exp_model"]):
+        log.info(f"Tau-based Exponential model")
+    if is_true(cfg["MODEL"]["exp_model"]):
         log.info(f"Exponential model")
     if is_true(cfg["MODEL"]["q_model"]):
         log.info(f"q model")
