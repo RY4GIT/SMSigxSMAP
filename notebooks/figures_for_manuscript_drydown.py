@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from functions import q_drydown, exponential_drydown
+from functions import q_drydown, exponential_drydown, loss_model
 import matplotlib.gridspec as gridspec
 
 # %% Plot config
@@ -350,7 +350,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
     )
 
     ####################################################
-    # Create a figure
+    # Drydown plot
     ####################################################
 
     fig = plt.figure(figsize=(10, 3.5))
@@ -369,8 +369,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
         color="grey",
         label="SMAP observation",
     )
-    ax1.plot(date_range[:-1], y_nonlinear, label=nonlinear_label, color="darkorange")
     ax1.plot(date_range[:-1], y_exp, label=linear_label, color="darkblue", alpha=0.5)
+    ax1.plot(date_range[:-1], y_nonlinear, label=nonlinear_label, color="darkorange")
 
     ax1.set_xlabel("Date")
     ax1.set_ylabel("Soil moisture content" + "\n" + rf"$\theta$ $[m3/m3]$")
@@ -405,6 +405,73 @@ def plot_drydown(df, event_id, ax=None, save=False):
             bbox_inches="tight",
         )
 
+    ####################################################
+    # Loss function
+    ####################################################
+
+    fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
+
+    theta_plot = np.arange(norm_min, norm_max, 0.01)
+    theta_obs = df_ts[pd.to_datetime(event.event_start):pd.to_datetime(event.event_end)].values
+
+    # Plot observed & fitted soil moisture
+    ax3.plot(
+        theta_plot,
+        loss_model(
+            theta_plot,
+            q,
+            k * (norm_max - norm_min),
+            theta_wp=norm_min,
+            theta_star=norm_max,
+        ),
+        color="darkorange",
+    )
+
+    # Plot observed & fitted soil moisture
+    ax3.scatter(
+        theta_obs,
+        loss_model(
+            theta_obs,
+            q,
+            k * (norm_max - norm_min),
+            theta_wp=norm_min,
+            theta_star=norm_max,
+        ),
+        color="grey",
+        alpha=0.5,
+    )
+
+    # Plot observed & fitted soil moisture
+    ax3.plot(
+        theta_plot,
+        loss_model(
+            theta_plot,
+            1,
+            k * (norm_max - norm_min),
+            theta_wp=norm_min,
+            theta_star=norm_max,
+        ),
+        color="darkblue",
+    )
+
+    # Plot observed & fitted soil moisture
+    ax3.scatter(
+        theta_obs,
+        loss_model(
+            theta_obs,
+            1,
+            k * (norm_max - norm_min),
+            theta_wp=norm_min,
+            theta_star=norm_max,
+        ),
+        color="grey",
+        alpha=0.5,
+    )
+
+    ax3.set_xlabel(r"$\theta$ [$m^3$ $m^{-3}$]")
+    ax3.set_ylabel(r"$d\theta/dt$ [$m^3$ $m^{-3}$ $day^{-1}$]")
+    ax3.invert_yaxis()
+
 
 # %%
 # Select the events to plot here
@@ -420,9 +487,8 @@ lat_min, lat_max = 24.396308, 49.384358
 lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    # (df["q_r_squared"] > success_modelfit_thresh)
-    (df["q_q"] > 100)
-    # & (df["sm_range"] > sm_range_thresh)
+    (df["q_r_squared"] > success_modelfit_thresh)
+    & (df["sm_range"] > 0.3)
     # & (df["longitude"] >= lon_min)
     # & (df["longitude"] <= lon_max)
 ]
@@ -432,7 +498,7 @@ print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 16313
+event_id = 475650
 ################################################
 plot_drydown(df=df_filt, event_id=event_id)
 print(df_filt.loc[event_id])
