@@ -59,17 +59,17 @@ class EventSeparator:
         # log = modifyLogger(name=__name__, custom_handler=custom_handler)
 
     def init_params(self):
-        self.precip_thresh = self.cfg.getfloat("EVENT_SEPARATION", "precip_thresh")
-        self.target_rmsd = self.cfg.getfloat("EVENT_SEPARATION", "target_rmsd")
+        self.precip_thresh = self.cfg.getfloat("MODEL_PARAMS", "precip_thresh")
+        self.target_rmsd = self.cfg.getfloat("MODEL_PARAMS", "target_rmsd")
         _noise_thresh = (self.data.max_sm - self.data.min_sm) * self.cfg.getfloat(
-            "EVENT_SEPARATION", "increment_thresh_fraction"
+            "MODEL_PARAMS", "increment_thresh_fraction"
         )
         self.noise_thresh = np.minimum(_noise_thresh, self.target_rmsd * 2)
         self.dS_thresh = self.target_rmsd * 2
         self.minimium_consective_days = self.cfg.getint(
-            "EVENT_SEPARATION", "minimium_consective_days"
+            "MODEL_PARAMS", "minimium_consective_days"
         )
-        self.max_nodata_days = self.cfg.getint("EVENT_SEPARATION", "max_nodata_days")
+        self.max_nodata_days = self.cfg.getint("MODEL_PARAMS", "max_nodata_days")
         self.max_cutoff_sm = self.data.max_sm * 0.95
 
     def separate_events(self, output_dir):
