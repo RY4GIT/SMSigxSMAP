@@ -4,7 +4,6 @@ import time
 
 from Agent import Agent
 from MyLogger import getLogger
-from utils import is_true
 
 __author__ = "Ryoko Araki"
 __contact__ = "raraki@ucsb.edu"
@@ -33,19 +32,19 @@ def main():
 
     # _______________________________________________________________________________________________
     # Define serial/parallel mode
-    run_mode = cfg["MODEL"]["run_mode"]
+    run_mode = cfg.get("MODEL", "run_mode")
     log.info(f"--- Analysis started with {run_mode} mode ---")
 
     # _______________________________________________________________________________________________
     # Verbose models to run
     log.info(f"Running the following models:")
-    if is_true(cfg["MODEL"]["tau_exp_model"]):
+    if cfg.getboolean("MODEL", "tau_exp_model"):
         log.info(f"Tau-based Exponential model")
-    if is_true(cfg["MODEL"]["exp_model"]):
+    if cfg.getboolean("MODEL", "exp_model"):
         log.info(f"Exponential model")
-    if is_true(cfg["MODEL"]["q_model"]):
+    if cfg.getboolean("MODEL", "q_model"):
         log.info(f"q model")
-    if is_true(cfg["MODEL"]["sigmoid_model"]):
+    if cfg.getboolean("MODEL", "sigmoid_model"):
         log.info(f"Sigmoid model")
 
     # Run the model
@@ -54,7 +53,7 @@ def main():
             [181, 513]
         )  # Pick your EASE_row_index and EASE_column_index of interest
     elif run_mode == "parallel":
-        nprocess = int(cfg["MULTIPROCESSING"]["nprocess"])
+        nprocess = cfg.getint("MULTIPROCESSING", "nprocess")
         with mp.Pool(nprocess) as pool:
             results = list(pool.imap(agent.run, agent.target_EASE_idx))
         pool.close()

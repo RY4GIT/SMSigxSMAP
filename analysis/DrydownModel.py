@@ -7,7 +7,6 @@ from MyLogger import getLogger
 import threading
 from scipy.integrate import solve_ivp
 from scipy.optimize import minimize
-from utils import is_true
 
 __author__ = "Ryoko Araki"
 __contact__ = "raraki@ucsb.edu"
@@ -161,29 +160,35 @@ def objective_function(parameters, y_obs, y_init, t_obs):
 
 class DrydownModel:
     def __init__(self, cfg, Data, Events):
+
+        # ______________________________________________________________________
+        # Read input
         self.cfg = cfg
         self.data = Data
         self.events = Events
-        self.plot_results = is_true(cfg["MODEL"]["plot_results"])
-        self.force_PET = is_true(cfg["MODEL"]["force_PET"])
-        self.run_tau_exp_model = is_true(cfg["MODEL"]["tau_exp_model"])
-        self.run_exp_model = is_true(cfg["MODEL"]["exp_model"])
-        self.run_q_model = is_true(cfg["MODEL"]["q_model"])
-        self.run_sigmoid_model = is_true(cfg["MODEL"]["sigmoid_model"])
-        self.is_stage1ET_active = is_true(cfg["MODEL"]["is_stage1ET_active"])
 
-        # Get some parametesr
-        # Soil thickness parameter
+        # ______________________________________________________________________
+        # Read Model config
+        self.plot_results = cfg.getboolean("MODEL", "plot_results")
+        self.force_PET = cfg.getboolean("MODEL", "force_PET")
+        self.run_tau_exp_model = cfg.getboolean("MODEL", "tau_exp_model")
+        self.run_exp_model = cfg.getboolean("MODEL", "exp_model")
+        self.run_q_model = cfg.getboolean("MODEL", "q_model")
+        self.run_sigmoid_model = cfg.getboolean("MODEL", "sigmoid_model")
+        self.is_stage1ET_active = cfg.getboolean("MODEL", "is_stage1ET_active")
+
+        # Model parameters
         self.z = self.cfg.getfloat("MODEL_PARAMS", "z")
         self.target_rmsd = self.cfg.getfloat("MODEL_PARAMS", "target_rmsd")
 
+        # ______________________________________________________________________
         # Set normalization factor
-        self.norm_max = (
-            self.data.max_sm * 0.95
-        )  # event.theta_fc  # max normalization factor
+        self.norm_max = self.data.max_cutoff_sm
         self.norm_min = self.data.min_sm
 
-        if cfg["MODEL"]["run_mode"] == "parallel":
+        # ______________________________________________________________________
+        # Get threadname
+        if cfg.get("MODEL", "run_mode") == "parallel":
             current_thread = threading.current_thread()
             current_thread.name = (
                 f"[{self.data.EASE_row_index},{self.data.EASE_column_index}]"
@@ -390,7 +395,7 @@ class DrydownModel:
 
         ### theta_star ###
         if self.is_stage1ET_active:
-            max_theta_star = event.theta_fc
+            max_theta_star = event.est_theta_fc
             min_theta_star = max_theta_star * 0.5
             ini_theta_star = max_theta_star * 0.8
 
@@ -478,7 +483,7 @@ class DrydownModel:
 
         ### theta_star ###
         if self.is_stage1ET_active:
-            max_theta_star = event.theta_fc
+            max_theta_star = event.est_theta_fc
             min_theta_star = max_theta_star * 0.5
             ini_theta_star = max_theta_star * 0.8
 
@@ -620,7 +625,7 @@ class DrydownModel:
                     "sm": event.y,
                     "min_sm": event.min_sm,
                     "max_sm": event.max_sm,
-                    "theta_fc": event.theta_fc,
+                    "est_theta_fc": event.est_theta_fc,
                     "pet": event.pet,
                 }
 
@@ -850,19 +855,3 @@ class DrydownModel:
         fig.savefig(os.path.join(output_dir2, filename))
 
         plt.close()
-
-
-"""Old codes
-
-
-def neg_log_likelihood(params, t, y):
-    delta_theta, theta_w, tau, sigma = params
-    y_hat = tau_exp_model(t, delta_theta, theta_w, tau)
-    residuals = y - y_hat
-    ssr = np.sum(residuals**2)
-    n = len(y)
-    sigma2 = ssr / n
-    ll = -(n / 2) * np.log(2 * np.pi * sigma2) - (1 / (2 * sigma2)) * ssr
-    return -ll
-
-"""

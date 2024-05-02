@@ -44,20 +44,23 @@ class Data:
         self.EASE_column_index = EASEindex[1]
 
         # Get the directory name
-        self.data_dir = cfg["PATHS"]["data_dir"]
-        self.datarods_dir = cfg["PATHS"]["datarods_dir"]
+        self.data_dir = cfg.get("PATHS", "data_dir")
+        self.datarods_dir = cfg.get("PATHS", "datarods_dir")
 
         # Get the start and end time of the analysis
         date_format = "%Y-%m-%d"
-        self.start_date = datetime.strptime(cfg["EXTENT"]["start_date"], date_format)
-        self.end_date = datetime.strptime(cfg["EXTENT"]["end_date"], date_format)
+        self.start_date = datetime.strptime(
+            cfg.get("EXTENT", "start_date"), date_format
+        )
+        self.end_date = datetime.strptime(cfg.get("EXTENT", "end_date"), date_format)
 
         # ______________________________________________________________________________
         # Get ancillary data
-        self.theta_fc = self.get_anc_params()
+        self.sm_cutoff_method = cfg.get("EXTENT", "sm_cutoff_method")
+        self.est_theta_fc, self.est_theta_star = self.get_anc_params()
 
         # _______________________________________________________________________________
-        # Datasets
+        # Get datasets
         _df = self.get_concat_datasets()
         self.df = self.calc_dSdt(_df)
 
@@ -125,7 +128,7 @@ class Data:
         df = df.resample("D").asfreq()
 
         # Merge the AM and PM soil moisture data into one daily timeseries of data
-        df["soil_moisture_daily"] = df[
+        df["sm"] = df[
             [
                 "Soil_Moisture_Retrieval_Data_AM_soil_moisture",
                 "Soil_Moisture_Retrieval_Data_PM_soil_moisture_pm",
@@ -133,17 +136,20 @@ class Data:
         ].mean(axis=1, skipna=True)
 
         # Get max and min values
-        self.min_sm = df.soil_moisture_daily.min(skipna=True)
-        self.max_sm = df.soil_moisture_daily.max(skipna=True)
+        self.min_sm = df.sm.min(skipna=True)
+        self.max_sm = df.sm.max(skipna=True)
         # Instead of actual max values, take the 95% percentile as max_sm # df.soil_moisture_daily.max(skipna=True)
-        self.quantile = df.soil_moisture_daily.quantile(0.95)
-        self.max_cutoff_sm = self.max_sm * 0.95
+        # self.quantile = df.soil_moisture_daily.quantile(0.95)
 
-        df["soil_moisture_daily_before_masking"] = df["soil_moisture_daily"].copy()
-        # Mask out the timeseries when sm is larger than 90% percentile value
-        df.loc[
-            df["soil_moisture_daily"] > self.max_cutoff_sm, "soil_moisture_daily"
-        ] = np.nan
+        # Get the cutoff line
+        if self.sm_cutoff_method == "sm_quantile":
+            self.max_cutoff_sm = self.max_sm * 0.95
+        elif self.sm_cutoff_method == "est_theta_fc":
+            self.max_cutoff_sm = self.est_theta_fc
+
+        df["sm_unmasked"] = df["sm"].copy()
+        # Mask out the timeseries when sm is larger than cutoff
+        df.loc[df["sm_unmasked"] > self.max_cutoff_sm, "sm_masked"] = np.nan
 
         return df
 
@@ -164,7 +170,7 @@ class Data:
 
         # Get variable dataframe
         _df = pd.read_csv(
-            os.path.join(self.data_dir, self.datarods_dir, "anc_info.csv")
+            os.path.join(self.data_dir, self.datarods_dir, "anc_info_Bassiouni.csv")
         )
 
         # Drop unnccesary dimension
@@ -173,10 +179,11 @@ class Data:
             & (_df["EASE_row_index"] == self.EASE_row_index)
         ]
 
-        fc = matching_row["theta_fc"].values[0]
+        theta_fc = matching_row["theta_fc"].values[0]
+        theta_star = matching_row["theta_star"].values[0]
 
         # Resample to regular time intervals
-        return fc
+        return theta_fc, theta_star
 
     def get_precipitation(self, varname="SPL4SMGP"):
         """Get a datarod of precipitation data for a pixel"""
@@ -199,9 +206,7 @@ class Data:
         """Calculate d(Soil Moisture)/dt"""
 
         # Allow detecting soil moisture increment even if there is no SM data in between before/after rainfall event
-        df["sm_for_dS_calc"] = (
-            df["soil_moisture_daily_before_masking"].ffill().infer_objects(copy=False)
-        )
+        df["sm_for_dS_calc"] = df["sm_unmasked"].ffill().infer_objects(copy=False)
 
         # Calculate dS
         df["dS"] = (
@@ -226,7 +231,7 @@ class Data:
 
         # Calculate dS/dt
         df["dSdt"] = df["dS"] / df["dt"]
-        df.loc[df["soil_moisture_daily_before_masking"].isna(), "dSdt"] = np.nan
+        df.loc[df["sm_unmasked"].isna(), "dSdt"] = np.nan
         df["dSdt"] = (
             df["dSdt"].ffill(limit=self.max_nodata_days).infer_objects(copy=False)
         )

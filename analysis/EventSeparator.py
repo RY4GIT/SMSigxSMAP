@@ -7,7 +7,6 @@ import warnings
 import threading
 from MyLogger import getLogger, modifyLogger
 import logging
-from utils import is_true
 
 __author__ = "Ryoko Araki"
 __contact__ = "raraki@ucsb.edu"
@@ -33,17 +32,9 @@ class ThreadNameHandler(logging.StreamHandler):
 class EventSeparator:
     def __init__(self, cfg, Data):
         self.cfg = cfg
-        self.verbose = cfg["MODEL"]["verbose"].lower() in ["true", "yes", "1"]
-        self.use_rainfall = cfg["MODEL"]["use_rainfall"].lower() in [
-            "true",
-            "yes",
-            "1",
-        ]  # is_true(cfg["MODEL"]["use_rainfall"])
-        self.plot = cfg["MODEL"]["plot_results"].lower() in [
-            "true",
-            "yes",
-            "1",
-        ]  # is_true(cfg["MODEL"]["plot_results"])
+        self.verbose = cfg.getboolean("MODEL", "verbose")
+        self.use_rainfall = cfg.getboolean("MODEL", "use_rainfall")
+        self.plot = cfg.getboolean("MODEL", "plot_results")
 
         self.data = Data
         self.init_params()
@@ -66,11 +57,8 @@ class EventSeparator:
         )
         self.noise_thresh = np.minimum(_noise_thresh, self.target_rmsd * 2)
         self.dS_thresh = self.target_rmsd * 2
-        self.minimium_consective_days = self.cfg.getint(
-            "MODEL_PARAMS", "minimium_consective_days"
-        )
+        self.min_data_points = self.cfg.getint("MODEL_PARAMS", "min_data_points")
         self.max_nodata_days = self.cfg.getint("MODEL_PARAMS", "max_nodata_days")
-        self.max_cutoff_sm = self.data.max_sm * 0.95
 
     def separate_events(self, output_dir):
         """Separate soil moisture timeseries into events"""
@@ -98,36 +86,22 @@ class EventSeparator:
 
         # If the soil moisture data at the beginning of the event is no data or exceeds threshold, look for subsequent available data
         condition_mask = (
-            pd.isna(self.data.df["soil_moisture_daily"]) & self.data.df["event_start"]
+            pd.isna(self.data.df["sm_masked"]) & self.data.df["event_start"]
         )
         event_start_nan_idx = self.data.df.index[condition_mask]
 
         for i, event_start_date in enumerate(event_start_nan_idx):
             current_date = event_start_date
             if (
-                self.data.df.loc[event_start_date].soil_moisture_daily_before_masking
-                > self.max_cutoff_sm
-            ) | (
-                np.isnan(
-                    self.data.df.loc[
-                        event_start_date
-                    ].soil_moisture_daily_before_masking
-                )
-            ):
+                self.data.df.loc[event_start_date].sm_unmasked > self.data.max_cutoff_sm
+            ) | (np.isnan(self.data.df.loc[event_start_date].sm_unmasked)):
                 current_date += pd.Timedelta(days=1)
                 self.data.df.loc[event_start_date, "event_start"] = False
                 self.data.df.loc[current_date, "event_start"] = True
 
                 if (
-                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
-                    > self.max_cutoff_sm
-                ) | (
-                    np.isnan(
-                        self.data.df.loc[
-                            current_date
-                        ].soil_moisture_daily_before_masking
-                    )
-                ):
+                    self.data.df.loc[current_date].sm_unmasked > self.data.max_cutoff_sm
+                ) | (np.isnan(self.data.df.loc[current_date].sm_unmasked)):
                     current_date += pd.Timedelta(days=1)
                     self.data.df.loc[
                         current_date - pd.Timedelta(days=1), "event_start"
@@ -135,17 +109,9 @@ class EventSeparator:
                     self.data.df.loc[current_date, "event_start"] = True
 
                     if (
-                        self.data.df.loc[
-                            current_date
-                        ].soil_moisture_daily_before_masking
-                        > self.max_cutoff_sm
-                    ) | (
-                        np.isnan(
-                            self.data.df.loc[
-                                current_date
-                            ].soil_moisture_daily_before_masking
-                        )
-                    ):
+                        self.data.df.loc[current_date].sm_unmasked
+                        > self.data.max_cutoff_sm
+                    ) | (np.isnan(self.data.df.loc[current_date].sm_unmasked)):
                         self.data.df.loc[
                             current_date - pd.Timedelta(days=1), "event_start"
                         ] = False
@@ -227,9 +193,7 @@ class EventSeparator:
             for j in range(1, remaining_records.days):
                 current_date = event_start_date + pd.Timedelta(days=j)
 
-                if np.isnan(
-                    self.data.df.loc[current_date].soil_moisture_daily_before_masking
-                ):
+                if np.isnan(self.data.df.loc[current_date].sm_unmasked):
                     count_nan_days += 1
                 else:
                     count_nan_days = 0
@@ -245,7 +209,7 @@ class EventSeparator:
                     should_break = True
 
                 if (self.data.df.loc[current_date].dS >= self.noise_thresh) & (
-                    ~np.isnan(self.data.df.loc[current_date].soil_moisture_daily)
+                    ~np.isnan(self.data.df.loc[current_date].sm_masked)
                 ):
                     # Any positive increment smaller than 5% of the observed range of soil moisture at the site is excluded (if there is not precipitation) if it would otherwise truncate a drydown.
                     update_date = current_date - pd.Timedelta(days=1)
@@ -275,33 +239,28 @@ class EventSeparator:
                 "event_end": end_index,
                 "min_sm": self.data.min_sm,
                 "max_sm": self.data.max_sm,
-                "theta_fc": self.data.theta_fc,
-                "soil_moisture_daily": list(
-                    self.data.df.loc[
-                        start_index:end_index, "soil_moisture_daily"
-                    ].values
+                "est_theta_fc": self.data.est_theta_fc,
+                "est_theta_star": self.data.est_theta_star,
+                "sm_masked": list(
+                    self.data.df.loc[start_index:end_index, "sm_masked"].values
                 ),
-                "soil_moisture_daily_before_masking": list(
-                    self.data.df.loc[
-                        start_index:end_index, "soil_moisture_daily_before_masking"
-                    ].values
+                "sm_unmasked": list(
+                    self.data.df.loc[start_index:end_index, "sm_unmasked"].values
                 ),
                 "precip": list(
                     self.data.df.loc[start_index:end_index, "precip"].values
                 ),
                 "PET": list(self.data.df.loc[start_index:end_index, "pet"].values),
-                "delta_theta": self.data.df.loc[start_index, "dSdt(t-1)"],
+                "dSdt(t-1)": self.data.df.loc[start_index, "dSdt(t-1)"],
             }
             for start_index, end_index in zip(self.event_start_idx, self.event_end_idx)
         ]
         return pd.DataFrame(event_data)
 
-    def filter_events(self, min_consecutive_days=5):
+    def filter_events(self, min_data_points=5):
         self.events_df = self.events_df[
-            self.events_df["soil_moisture_daily_before_masking"].apply(
-                lambda x: pd.notna(x).sum()
-            )
-            >= min_consecutive_days
+            self.events_df["sm_masked"].apply(lambda x: pd.notna(x).sum())
+            >= min_data_points
         ].copy()
         self.events_df.reset_index(drop=True, inplace=True)
 
@@ -315,22 +274,22 @@ class EventSeparator:
     # def plot_events(self):
     #     fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20, 5))
 
-    #     self.data.df.soil_moisture_daily_before_masking.plot(ax=ax11, alpha=0.5)
+    #     self.data.df.sm_unmasked.plot(ax=ax11, alpha=0.5)
     #     ax11.scatter(
-    #         self.data.df.soil_moisture_daily_before_masking[
+    #         self.data.df.sm_unmasked[
     #             self.data.df["event_start"]
     #         ].index,
-    #         self.data.df.soil_moisture_daily_before_masking[
+    #         self.data.df.sm_unmasked[
     #             self.data.df["event_start"]
     #         ].values,
     #         color="orange",
     #         alpha=0.5,
     #     )
     #     ax11.scatter(
-    #         self.data.df.soil_moisture_daily_before_masking[
+    #         self.data.df.sm_unmasked[
     #             self.data.df["event_end"]
     #         ].index,
-    #         self.data.df.soil_moisture_daily_before_masking[
+    #         self.data.df.sm_unmasked[
     #             self.data.df["event_end"]
     #         ].values,
     #         color="orange",
@@ -371,7 +330,7 @@ class EventSeparator:
     #                 if not np.isnan(
     #                     self.data.df.loc[
     #                         current_date
-    #                     ].soil_moisture_daily_before_masking
+    #                     ].sm_unmasked
     #                 ):
     #                     update_date = current_date
     #                 # If SM value IS nap.nan, don't update the event start date value
@@ -389,7 +348,7 @@ class EventSeparator:
     #                 not np.isnan(
     #                     self.data.df.loc[
     #                         current_date
-    #                     ].soil_moisture_daily_before_masking
+    #                     ].sm_unmasked
     #                 )
     #             ):
     #                 update_date = current_date
@@ -404,7 +363,7 @@ class EventSeparator:
 
     #     # Get the event start dates
     #     event_start_idx_2 = pd.isna(
-    #         self.data.df["soil_moisture_daily_before_masking"][
+    #         self.data.df["sm_unmasked"][
     #             self.data.df["event_start"]
     #         ]
     #     ).index
@@ -421,7 +380,7 @@ class EventSeparator:
     #                 break
 
     #             if not pd.isna(
-    #                 self.data.df.loc[current_date].soil_moisture_daily_before_masking
+    #                 self.data.df.loc[current_date].sm_unmasked
     #             ):
     #                 update_date = current_date
     #                 break
@@ -444,7 +403,7 @@ class EventSeparator:
     #                 break
 
     #             if np.isnan(
-    #                 self.data.df.loc[current_date].soil_moisture_daily_before_masking
+    #                 self.data.df.loc[current_date].sm_unmasked
     #             ):
     #                 continue
 

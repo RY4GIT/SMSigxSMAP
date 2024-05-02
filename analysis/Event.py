@@ -22,22 +22,21 @@ class Event:
         self.index = index
         self.start_date = event_dict["event_start"]
         self.end_date = event_dict["event_end"]
-        soil_moisture_subset = np.asarray(event_dict["soil_moisture_daily"])
+        sm_subset = np.asarray(event_dict["sm_masked"])
         self.pet = np.nanmax(event_dict["PET"])
         self.min_sm = event_dict["min_sm"]
         self.max_sm = event_dict["max_sm"]
-        self.theta_fc = event_dict["theta_fc"]
+        self.est_theta_fc = event_dict["est_theta_fc"]
+        self.est_theta_star = event_dict["est_theta_star"]
 
         # Prepare the attributes
-        self.subset_sm_range = np.nanmax(soil_moisture_subset) - np.nanmin(
-            soil_moisture_subset
-        )
-        self.subset_min_sm = np.nanmin(soil_moisture_subset)
+        self.subset_sm_range = np.nanmax(sm_subset) - np.nanmin(sm_subset)
+        self.subset_min_sm = np.nanmin(sm_subset)
 
         # Prepare the inputs
-        t = np.arange(0, len(soil_moisture_subset), 1)
-        self.x = t[~np.isnan(soil_moisture_subset)]
-        self.y = soil_moisture_subset[~np.isnan(soil_moisture_subset)]
+        t = np.arange(0, len(sm_subset), 1)
+        self.x = t[~np.isnan(sm_subset)]
+        self.y = sm_subset[~np.isnan(sm_subset)]
 
     def add_attributes(
         self,
