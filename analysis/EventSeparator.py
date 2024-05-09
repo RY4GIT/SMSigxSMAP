@@ -72,7 +72,7 @@ class EventSeparator:
         if self.events_df.empty:
             return None
 
-        self.filter_events(self.minimium_consective_days)
+        self.filter_events(self.min_data_points)
         self.events = self.create_event_instances(self.events_df)
 
         return self.events

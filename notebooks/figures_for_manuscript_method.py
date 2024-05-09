@@ -20,8 +20,8 @@ Global q>1 median: 2.47
 Global q<1 mean: 4.03
 """
 q0 = 1
-q1 = 1.75
-q2 = 0.675
+q1 = 1.5
+q2 = 0.70
 # q1 = 2.47
 # q2 = 0.59
 
@@ -30,7 +30,7 @@ k = 0.3
 # k = 0.1
 theta_w = 0.02
 theta_star = 0.6
-delta_theta = theta_star - theta_w
+delta_theta = theta_star  # - theta_w
 fc_minus_star = 0.05
 theta_fc = theta_star + fc_minus_star
 
@@ -78,9 +78,9 @@ plt.rcParams["mathtext.fontset"] = (
 # %% Plot
 fig = plt.figure(figsize=(8, 4))
 plt.rcParams.update({"font.size": 14})
-c1 = "#108883"  # f"#2c7fb8"
-c2 = "#2EBB9D"  # f"#41b6c4"
-c3 = "#F7CA0D"  # f"#a1dab4"
+c1 = "#2c7fb8"  # "#108883"  # f"#2c7fb8"
+c2 = "#41b6c4"  # "#2EBB9D"  # f"#41b6c4"
+c3 = "#a1dab4"  # "#F7CA0D"  # f"#a1dab4"
 linewidth = 3
 
 ax1 = fig.add_subplot(1, 2, 1)
@@ -141,7 +141,7 @@ ax2 = fig.add_subplot(1, 2, 2)
 ax2.plot(
     t,
     q_drydown(
-        t=t, q=q1, k=k, delta_theta=delta_theta, theta_star=theta_star, theta_w=theta_w
+        t=t, q=q1, k=k, theta_0=delta_theta, theta_star=theta_star, theta_w=theta_w
     ),
     label=f"q={q1}",
     linewidth=linewidth,
@@ -151,7 +151,7 @@ ax2.plot(
 ax2.plot(
     t,
     q_drydown(
-        t=t, q=q2, k=k, delta_theta=delta_theta, theta_star=theta_star, theta_w=theta_w
+        t=t, q=q2, k=k, theta_0=delta_theta, theta_star=theta_star, theta_w=theta_w
     ),
     label=f"q={q2}",
     linewidth=linewidth,
@@ -161,7 +161,11 @@ ax2.plot(
 ax2.plot(
     t,
     exponential_drydown2(
-        t=t, delta_theta=delta_theta, theta_w=theta_w, theta_star=theta_star, k=k
+        t=t,
+        delta_theta=(delta_theta - theta_w),
+        theta_w=theta_w,
+        theta_star=theta_star,
+        k=k,
     ),
     label=f"q={q0}",
     linewidth=linewidth,
@@ -195,7 +199,7 @@ ax2.set(
     xlabel=f'{var_dict["t"]["label"]} {var_dict["t"]["unit"]}',
     ylabel=f'{theta_vardict["label"]} {theta_vardict["unit"]}',
 )
-ax2.set_title(label="B", loc="left")  # "Soil moisture drydown",
+# ax2.set_title(label="B", loc="left")  # "Soil moisture drydown",
 # ax2.set_xticks([t[0], 5], ["   ", "   "])
 ax2.set_yticks(
     [theta_w, theta_star, theta_fc], [r"$\theta_{wp}$", r"$\theta^*$", r"$\theta_{fc}$"]

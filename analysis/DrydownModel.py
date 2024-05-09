@@ -395,8 +395,15 @@ class DrydownModel:
 
         ### theta_star ###
         if self.is_stage1ET_active:
-            max_theta_star = event.est_theta_fc
-            min_theta_star = max_theta_star * 0.5
+            if np.isnan(event.est_theta_fc):
+                max_theta_star = self.data.max_cutoff_sm
+            else:
+                max_theta_star = event.est_theta_fc
+
+            if np.isnan(event.est_theta_star):
+                min_theta_star = max_theta_star * 0.5
+            else:
+                min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
             ini_theta_star = max_theta_star * 0.8
 
         # ______________________________________________________________________________________
@@ -483,8 +490,15 @@ class DrydownModel:
 
         ### theta_star ###
         if self.is_stage1ET_active:
-            max_theta_star = event.est_theta_fc
-            min_theta_star = max_theta_star * 0.5
+            if np.isnan(event.est_theta_fc):
+                max_theta_star = self.data.max_cutoff_sm
+            else:
+                max_theta_star = event.est_theta_fc
+
+            if np.isnan(event.est_theta_star):
+                min_theta_star = max_theta_star * 0.5
+            else:
+                min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
             ini_theta_star = max_theta_star * 0.8
 
         # ______________________________________________________________________________________
@@ -816,23 +830,21 @@ class DrydownModel:
         fig, (ax11, ax12) = plt.subplots(2, 1, figsize=(20 * years_of_record, 5))
 
         ax11.scatter(
-            self.data.df.soil_moisture_daily_before_masking.index,
-            self.data.df.soil_moisture_daily_before_masking.values,
+            self.data.df.sm_unmasked.index,
+            self.data.df.sm_unmasked.values,
             color="grey",
             label="SMAP observation",
             s=1.0,
         )
         ax11.scatter(
-            self.data.df.soil_moisture_daily[self.data.df["event_start"]].index,
-            self.data.df.soil_moisture_daily[self.data.df["event_start"]]
-            .bfill()
-            .values,
+            self.data.df.sm_masked[self.data.df["event_start"]].index,
+            self.data.df.sm_masked[self.data.df["event_start"]].bfill().values,
             color="grey",
             alpha=0.5,
         )
         ax11.scatter(
-            self.data.df.soil_moisture_daily[self.data.df["event_end"]].index,
-            self.data.df.soil_moisture_daily[self.data.df["event_end"]].bfill().values,
+            self.data.df.sm_masked[self.data.df["event_end"]].index,
+            self.data.df.sm_masked[self.data.df["event_end"]].bfill().values,
             color="grey",
             marker="x",
             alpha=0.5,

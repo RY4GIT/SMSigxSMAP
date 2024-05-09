@@ -323,8 +323,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
     tau = event.exp_tau
     z = 50
 
-    theta_0 = event.q_delta_theta
-    theta_0_denorm = (event.q_delta_theta) * (norm_max - norm_min)
+    theta_0 = event.q_theta_0
+    theta_0_denorm = (event.q_theta_0) * (norm_max - norm_min)
 
     print(theta_0, theta_0_denorm)
     ETmax = k * (norm_max - norm_min) * z
@@ -338,8 +338,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
     df_p = get_precipitation(event=event)
 
     # Plotting settings
-    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f})" #, $ETmax$={ETmax:.1f}, $\theta_0$={theta_0_denorm:.2f})"
-    linear_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $\tau$={tau:.2f})" #, $\Delta \theta$={exp_delta_theta:.2f})"
+    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f}, $ETmax$={ETmax:.1f}, $\theta_0$={theta_0_denorm:.2f})"
+    linear_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $\tau$={tau:.2f}, $\Delta \theta$={exp_delta_theta:.2f})"
 
     start_date = pd.to_datetime(event.event_start) - pd.Timedelta(7, "D")
     end_date = pd.to_datetime(event.event_end) + pd.Timedelta(7, "D")
@@ -353,7 +353,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
     # Drydown plot
     ####################################################
 
-    fig = plt.figure(figsize=(13, 3.5))
+    fig = plt.figure(figsize=(10, 3.5))
 
     # Set up a GridSpec layout
     gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
@@ -379,7 +379,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
         f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand)"
     )
 
-    # ax1.axhline(y=max_sm, color="tab:grey", linestyle="--", alpha=0.5)
+    ax1.axhline(y=max_sm, color="tab:grey", linestyle="--", alpha=0.5)
     # Plot preciptation
     ax2.bar(
         df_p[start_date:end_date].index,
@@ -489,11 +489,9 @@ lat_min, lat_max = 24.396308, 49.384358
 lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > 0.9)
+    (df["q_r_squared"] > success_modelfit_thresh)
     & (df["sm_range"] > 0.1)
-    & (df["q_q"] < 0.5)
-    & (df["q_q"] > 0.1)
-    & (df["event_length"]> 10)
+    & (df["q_q"] < 1)
     # & (df["longitude"] >= lon_min)
     # & (df["longitude"] <= lon_max)
 ]
@@ -503,7 +501,7 @@ print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 162269
+event_id = 503295
 ################################################
 plot_drydown(df=df_filt, event_id=event_id)
 print(df_filt.loc[event_id])

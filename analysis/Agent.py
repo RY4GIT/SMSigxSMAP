@@ -63,7 +63,7 @@ class Agent:
             data = Data(self.cfg, sample_EASE_index)
 
             # If there is no soil moisture data available for the pixel, skip the analysis
-            if data.df["soil_moisture_daily"].isna().all():
+            if data.df.sm_masked.isna().all():
                 warnings.warn(
                     f"No soil moisture data at the EASE pixel {sample_EASE_index}"
                 )

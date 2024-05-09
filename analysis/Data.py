@@ -56,7 +56,7 @@ class Data:
 
         # ______________________________________________________________________________
         # Get ancillary data
-        self.sm_cutoff_method = cfg.get("EXTENT", "sm_cutoff_method")
+        self.sm_cutoff_method = cfg.get("MODEL", "sm_cutoff_method")
         self.est_theta_fc, self.est_theta_star = self.get_anc_params()
 
         # _______________________________________________________________________________
@@ -138,16 +138,19 @@ class Data:
         # Get max and min values
         self.min_sm = df.sm.min(skipna=True)
         self.max_sm = df.sm.max(skipna=True)
-        # Instead of actual max values, take the 95% percentile as max_sm # df.soil_moisture_daily.max(skipna=True)
-        # self.quantile = df.soil_moisture_daily.quantile(0.95)
 
         # Get the cutoff line
         if self.sm_cutoff_method == "sm_quantile":
             self.max_cutoff_sm = self.max_sm * 0.95
         elif self.sm_cutoff_method == "est_theta_fc":
-            self.max_cutoff_sm = self.est_theta_fc
+            # If the estimated theta_fc is nan, use this
+            if np.isnan(self.est_theta_fc):
+                self.max_cutoff_sm = self.max_sm * 0.95
+            else:
+                self.max_cutoff_sm = self.est_theta_fc
 
         df["sm_unmasked"] = df["sm"].copy()
+        df["sm_masked"] = df["sm"].copy()
         # Mask out the timeseries when sm is larger than cutoff
         df.loc[df["sm_unmasked"] > self.max_cutoff_sm, "sm_masked"] = np.nan
 
