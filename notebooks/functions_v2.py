@@ -138,8 +138,9 @@ def loss_model(theta, q, ETmax, theta_wp=0.0, theta_star=1.0, z=50.0):
     float: Rate of change in soil moisture (dtheta/dt) for the given soil mositure content, in m3/m3/day.
     """
     k = ETmax / z
-    d_theta = -k * ((theta - theta_wp) / (theta_star - theta_wp)) ** (q)
-    return d_theta
+    d_theta_ii = -k * ((theta - theta_wp) / (theta_star - theta_wp)) ** (q)
+    d_theta_i = -k
+    return np.where(theta > theta_star, d_theta_i, d_theta_ii)
 
 
 def loss_sigmoid(t, theta, theta50, k, a):

@@ -432,8 +432,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
 
     fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
 
-    nonlinear_theta_plot = np.arange(event.q_theta_w, event.q_theta_star, 0.01)
-    linear_theta_plot = np.arange(event.exp_theta_w, event.exp_theta_star, 0.01)
+    nonlinear_theta_plot = np.arange(event.q_theta_w, event.est_theta_star, 0.01)
+    linear_theta_plot = np.arange(event.exp_theta_w, event.est_theta_star, 0.01)
     theta_obs = df_ts[
         pd.to_datetime(event.event_start) : pd.to_datetime(event.event_end)
     ].values
