@@ -63,7 +63,7 @@ class Agent:
             data = Data(self.cfg, sample_EASE_index)
 
             # If there is no soil moisture data available for the pixel, skip the analysis
-            if data.df["soil_moisture_daily"].isna().all():
+            if data.df.sm_masked.isna().all():
                 warnings.warn(
                     f"No soil moisture data at the EASE pixel {sample_EASE_index}"
                 )
@@ -107,7 +107,8 @@ class Agent:
         Args:
             results (list): concatinated results returned from serial/multi-threadding analysis
         """
-        df_results = self.save_to_csv(results)
+        self.save_to_csv(results)
+        self.save_config()
         # self.smapgrid.remap_results(df_results)
         # self.smapgrid.plot_remapped_results(da)
 
@@ -121,3 +122,7 @@ class Agent:
             df = results
         df.to_csv(os.path.join(self.output_dir, "all_results.csv"))
         return df
+
+    def save_config(self):
+        with open(os.path.join(self.output_dir, "config.ini"), "w") as cfg_file:
+            self.cfg.write(cfg_file)

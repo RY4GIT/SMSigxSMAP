@@ -1,3 +1,7 @@
+#%%
+# Use to plot results run before 20240429
+# After that, use v2
+
 # %% Import packages
 import os
 import getpass
@@ -230,6 +234,7 @@ anc_dir = "SMAP_L1_L3_ANC_STATIC"
 anc_file = "anc_info.csv"
 anc_rangeland_file = "anc_info_rangeland.csv"
 anc_rangeland_processed_file = "anc_info_rangeland_processed.csv"
+anc_Bassiouni_params_file = "anc_info_Bassiouni.csv"
 IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
@@ -268,6 +273,8 @@ df_ai = pd.read_csv(os.path.join(data_dir, datarod_dir, ai_file)).drop(
 )
 df_ai.loc[df_ai["AI"] < 0, "AI"] = np.nan
 print("Loaded ancillary information (aridity index)")
+
+
 
 # Land cover
 IGBPclass = pd.read_csv(os.path.join(data_dir, anc_dir, IGBPclass_file))
@@ -308,8 +315,14 @@ df["ai_bins"] = pd.cut(df["AI"], bins=ai_bin_list, include_lowest=True)
 first_I = df["ai_bins"].cat.categories[0]
 new_I = pd.Interval(0, first_I.right)
 df["ai_bins"] = df["ai_bins"].cat.rename_categories({first_I: new_I})
-
-
+#%%
+# Ancillary data
+df_anc_Bassiouni = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_Bassiouni_params_file)).drop(
+    ["Unnamed: 0", "latitude", "longitude"], axis=1
+)
+print("Loaded ancillary information (parameters from Bassiouni)")
+df_anc_Bassiouni.head()
+df = df.merge(df_anc_Bassiouni, on=["EASE_row_index", "EASE_column_index"], how="left")
 # %%
 # Soil mositure range covered by the observation
 def calculate_sm_range(row):
@@ -507,6 +520,7 @@ n_nonlinear_better_events = sum(
 print(
     f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}"
 )
+
 # # %%
 # # Example data
 # # df_filt_q["theta_fc_x"].values -> Assuming it's an array of x values
@@ -526,6 +540,27 @@ print(
 
 # plt.legend()
 # plt.show()
+
+
+# %%
+# Example data
+# df_filt_q["theta_fc_x"].values -> Assuming it's an array of x values
+# df_filt_q["max_sm"].values -> Assuming it's an array of y values
+x = df["theta_star"].values
+y = df["max_sm"].values # * 0.95
+
+plt.figure(figsize=(8, 6))
+plt.scatter(x, y, label='Data points', alpha=0.3, s=1)
+plt.xlabel(r"$\theta*$")
+plt.ylabel(r"Observed max $\theta$")
+
+# Adding the 1:1 line for reference
+# Creating a 1:1 line based on the range from 0 to 1
+range_one_to_one = np.arange(0,0.6, 0.01)  # Include 1 in the range
+plt.plot(range_one_to_one, range_one_to_one, color='tab:grey', label='1:1 Line')
+
+plt.legend()
+plt.show()
 
 
 # %%
