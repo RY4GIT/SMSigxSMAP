@@ -5,13 +5,21 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from functions import q_drydown, exponential_drydown, loss_model
+from functions_v2 import (
+    drydown_piecewise,
+    q_model,
+    exp_model,
+    tau_exp_model,
+    loss_model,
+    q_model_piecewise,
+    exp_model_piecewise,
+)
 import matplotlib.gridspec as gridspec
 
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2023-11-25_global_95asmax"  # f"raraki_2024-04-26"
+dir_name = f"raraki_2024-05-09"  # f"raraki_2024-04-26"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -100,34 +108,34 @@ else:
 df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
 
 # Denormalize k and calculate the estimated ETmax values from k parameter from q model
-df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
-df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
+# df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
+# df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
 
 
-def filter_by_data_availability(df):
-    # Define a helper function to convert string to list
-    def str_to_list(s):
-        return list(map(int, s.strip("[]").split()))
+# def filter_by_data_availability(df):
+#     # Define a helper function to convert string to list
+#     def str_to_list(s):
+#         return list(map(int, s.strip("[]").split()))
 
-    # Convert the 'time' column from string of lists to actual lists
-    df["time_list"] = df["time"].apply(str_to_list)
+#     # Convert the 'time' column from string of lists to actual lists
+#     df["time_list"] = df["time"].apply(str_to_list)
 
-    # Filter condition 1: Check if first three items are [0, 1, 2]
-    condition = df["time_list"].apply(lambda x: x[:3] == [0, 1, 2])
+#     # Filter condition 1: Check if first three items are [0, 1, 2]
+#     condition = df["time_list"].apply(lambda x: x[:3] == [0, 1, 2])
 
-    # condition = df['time_list'].apply(
-    #     lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
-    # )
+#     # condition = df['time_list'].apply(
+#     #     lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
+#     # )
 
-    # Apply the first filter
-    filtered_df = df[condition]
+#     # Apply the first filter
+#     filtered_df = df[condition]
 
-    return filtered_df
+#     return filtered_df
 
 
-print(len(df))
-df = filter_by_data_availability(df)
-print(len(df))
+# print(len(df))
+# df = filter_by_data_availability(df)
+# print(len(df))
 
 
 # Soil mositure range covered by the observation
@@ -310,38 +318,37 @@ def plot_drydown(df, event_id, ax=None, save=False):
 
     # Define variables and parameters
     t = np.arange(0, n_days, 1 / 24)
-    k = event.q_k
-    q = event.q_q
 
-    min_sm = event.min_sm
-    max_sm = event.max_sm
-    norm_max = max_sm * 0.95
-    norm_min = min_sm
+    y_q = q_model_piecewise(
+        t=t,
+        q=event.q_q,
+        ETmax=event.q_ETmax,
+        theta_0=event.q_theta_0,
+        theta_star=event.q_theta_star,
+        theta_w=event.q_theta_w,
+    )
+    y_exp = exp_model_piecewise(
+        t=t,
+        ETmax=event.exp_ETmax,
+        theta_0=event.exp_theta_0,
+        theta_star=event.exp_theta_star,
+        theta_w=event.exp_theta_w,
+    )
 
-    exp_delta_theta = event.exp_delta_theta
-    theta_w = event.exp_theta_w
-    tau = event.exp_tau
-    z = 50
-
-    theta_0 = event.q_theta_0
-    theta_0_denorm = (event.q_theta_0) * (norm_max - norm_min)
-
-    print(theta_0, theta_0_denorm)
-    ETmax = k * (norm_max - norm_min) * z
-    y_nonlinear = (q_drydown(t=t, k=k, q=q, theta_0=theta_0)) * (
-        norm_max - norm_min
-    ) + norm_min
-    y_exp = exponential_drydown(t, exp_delta_theta, theta_w, tau)
+    y_tauexp = tau_exp_model(
+        t, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
+    )
 
     # Get soil moisture and precipitation timeseries
     df_ts = get_soil_moisture(event=event)
     df_p = get_precipitation(event=event)
 
     # Plotting settings
-    nonlinear_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={q:.1f}, $ETmax$={ETmax:.1f}, $\theta_0$={theta_0_denorm:.2f})"
-    linear_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $\tau$={tau:.2f}, $\Delta \theta$={exp_delta_theta:.2f})"
+    q_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={event.q_q:.1f}, $ETmax$={event.q_ETmax:.1f}, $\theta^*$={event.q_theta_star:.2f}, $\theta_w$={event.q_theta_w:.2f}, $\theta_0$={event.q_theta_0:.2f})"
+    exp_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $ETmax$={event.exp_ETmax:.1f}, $\theta^*$={event.exp_theta_star:.2f}, $\theta_w$={event.exp_theta_w:.2f}, $\theta_0$={event.exp_theta_0:.2f})"
+    tauexp_label = rf"Linear model ($R^2$={event.tauexp_r_squared:.2f}, $\tau$={event.tauexp_tau:.2f}, $\Delta \theta$={event.tauexp_delta_theta:.2f}), $\theta_w$={event.tauexp_theta_w:.2f})"
 
-    start_date = pd.to_datetime(event.event_start) - pd.Timedelta(7, "D")
+    start_date = pd.to_datetime(event.event_start) - pd.Timedelta(3, "D")
     end_date = pd.to_datetime(event.event_end) + pd.Timedelta(7, "D")
     date_range = pd.date_range(
         start=pd.to_datetime(event.event_start),
@@ -353,7 +360,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
     # Drydown plot
     ####################################################
 
-    fig = plt.figure(figsize=(10, 3.5))
+    fig = plt.figure(figsize=(15, 3.5))
 
     # Set up a GridSpec layout
     gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
@@ -369,8 +376,23 @@ def plot_drydown(df, event_id, ax=None, save=False):
         color="grey",
         label="SMAP observation",
     )
-    ax1.plot(date_range[:-1], y_exp, label=linear_label, color="darkblue", alpha=0.5)
-    ax1.plot(date_range[:-1], y_nonlinear, label=nonlinear_label, color="darkorange")
+    ax1.plot(
+        date_range[:-1],
+        y_tauexp,
+        label=tauexp_label,
+        color="darkblue",
+        alpha=0.5,
+        linestyle="--",
+    )
+    ax1.plot(date_range[:-1], y_exp, label=exp_label, color="darkblue", alpha=0.5)
+    ax1.plot(date_range[:-1], y_q, label=q_label, color="darkorange")
+    ax1.axhline(
+        y=event.est_theta_fc,
+        color="tab:grey",
+        linestyle="--",
+        alpha=0.5,
+        label=r"Estimated $\theta_{fc}$",
+    )
 
     ax1.set_xlabel("Date")
     ax1.set_ylabel("Soil moisture content" + "\n" + rf"$\theta$ $[m3/m3]$")
@@ -379,7 +401,6 @@ def plot_drydown(df, event_id, ax=None, save=False):
         f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand)"
     )
 
-    ax1.axhline(y=max_sm, color="tab:grey", linestyle="--", alpha=0.5)
     # Plot preciptation
     ax2.bar(
         df_p[start_date:end_date].index,
@@ -405,26 +426,27 @@ def plot_drydown(df, event_id, ax=None, save=False):
             bbox_inches="tight",
         )
 
-    ####################################################
-    # Loss function
-    ####################################################
+    # ####################################################
+    # # Loss function
+    # ####################################################
 
     fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
 
-    theta_plot = np.arange(norm_min, norm_max, 0.01)
+    nonlinear_theta_plot = np.arange(event.q_theta_w, event.q_theta_star, 0.01)
+    linear_theta_plot = np.arange(event.exp_theta_w, event.exp_theta_star, 0.01)
     theta_obs = df_ts[
         pd.to_datetime(event.event_start) : pd.to_datetime(event.event_end)
     ].values
 
     # Plot observed & fitted soil moisture
     ax3.plot(
-        theta_plot,
+        nonlinear_theta_plot,
         loss_model(
-            theta_plot,
-            q,
-            k * (norm_max - norm_min),
-            theta_wp=norm_min,
-            theta_star=norm_max,
+            nonlinear_theta_plot,
+            event.q_q,
+            event.q_ETmax,
+            theta_wp=event.q_theta_w,
+            theta_star=event.q_theta_star,
         ),
         color="darkorange",
     )
@@ -434,10 +456,10 @@ def plot_drydown(df, event_id, ax=None, save=False):
         theta_obs,
         loss_model(
             theta_obs,
-            q,
-            k * (norm_max - norm_min),
-            theta_wp=norm_min,
-            theta_star=norm_max,
+            event.q_q,
+            event.q_ETmax,
+            theta_wp=event.q_theta_w,
+            theta_star=event.q_theta_star,
         ),
         color="grey",
         alpha=0.5,
@@ -445,13 +467,13 @@ def plot_drydown(df, event_id, ax=None, save=False):
 
     # Plot observed & fitted soil moisture
     ax3.plot(
-        theta_plot,
+        linear_theta_plot,
         loss_model(
-            theta_plot,
+            linear_theta_plot,
             1,
-            k * (norm_max - norm_min),
-            theta_wp=norm_min,
-            theta_star=norm_max,
+            event.exp_ETmax,
+            theta_wp=event.exp_theta_w,
+            theta_star=event.exp_theta_star,
         ),
         color="darkblue",
     )
@@ -462,9 +484,9 @@ def plot_drydown(df, event_id, ax=None, save=False):
         loss_model(
             theta_obs,
             1,
-            k * (norm_max - norm_min),
-            theta_wp=norm_min,
-            theta_star=norm_max,
+            event.exp_ETmax,
+            theta_wp=event.exp_theta_w,
+            theta_star=event.exp_theta_star,
         ),
         color="grey",
         alpha=0.5,
@@ -490,8 +512,7 @@ lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
     (df["q_r_squared"] > success_modelfit_thresh)
-    & (df["sm_range"] > 0.1)
-    & (df["q_q"] < 1)
+    & (df["q_q"] > 15)
     # & (df["longitude"] >= lon_min)
     # & (df["longitude"] <= lon_max)
 ]
@@ -501,16 +522,10 @@ print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 503295
+event_id = 7268
 ################################################
 plot_drydown(df=df_filt, event_id=event_id)
 print(df_filt.loc[event_id])
 print(f"Next to try: {df_filt.sample(n=1).index}")
-# %%
-df.columns
 
-# %%
-df["AI"]
-# %%
-df.loc[event_id]
 # %%

@@ -57,7 +57,18 @@ def exp_model(t, ETmax, theta_0, theta_star, theta_w, z=50.0):
     """
 
     tau = z * (theta_star - theta_w) / ETmax
-    return (theta_0 - theta_w) * np.exp(-t / tau) + theta_w
+
+    if theta_0 > theta_star:
+        theta_0_ii = theta_star
+    else:
+        theta_0_ii = theta_0
+
+    k = ETmax / z
+    t_star = (
+        theta_0 - theta_star
+    ) / k  # Time it takes from theta_0 to theta_star (Stage II ET)
+
+    return (theta_0_ii - theta_w) * np.exp(-(t - t_star) / tau) + theta_w
 
 
 def q_model(t, q, ETmax, theta_0, theta_star, theta_w, z=50.0):
@@ -85,7 +96,9 @@ def q_model(t, q, ETmax, theta_0, theta_star, theta_w, z=50.0):
 
     a = (1 - q) / ((theta_star - theta_w) ** q)
 
-    return (-k * a * t + b) ** (1 / (1 - q)) + theta_w
+    t_star = np.maximum(0, (theta_0 - theta_star) / k)
+
+    return (-k * a * (t + t_star) + b) ** (1 / (1 - q)) + theta_w
 
 
 def drydown_piecewise(t, model, ETmax, theta_0, theta_star, z=50.0):
@@ -404,7 +417,7 @@ class DrydownModel:
                 min_theta_star = max_theta_star * 0.5
             else:
                 min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
-            ini_theta_star = max_theta_star * 0.8
+            ini_theta_star = (max_theta_star + min_theta_star) / 2
 
         # ______________________________________________________________________________________
         # Execute the event fit
@@ -499,7 +512,7 @@ class DrydownModel:
                 min_theta_star = max_theta_star * 0.5
             else:
                 min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
-            ini_theta_star = max_theta_star * 0.8
+            ini_theta_star = (max_theta_star + min_theta_star) / 2
 
         # ______________________________________________________________________________________
         # Execute the event fit
