@@ -123,7 +123,7 @@ def exp_model_piecewise(t, ETmax, theta_0, theta_star, theta_w, z=50.0):
     )
 
 
-def loss_model(theta, q, ETmax, theta_wp=0.0, theta_star=1.0, z=50.0):
+def loss_model(theta, q, ETmax, theta_w=0.0, theta_star=1.0, z=50.0):
     """
     Calculate the loss function (dtheta/dt vs theta relationship) using non-linear plant stress model
 
@@ -138,7 +138,7 @@ def loss_model(theta, q, ETmax, theta_wp=0.0, theta_star=1.0, z=50.0):
     float: Rate of change in soil moisture (dtheta/dt) for the given soil mositure content, in m3/m3/day.
     """
     k = ETmax / z
-    d_theta_ii = -k * ((theta - theta_wp) / (theta_star - theta_wp)) ** (q)
+    d_theta_ii = -k * ((theta - theta_w) / (theta_star - theta_w)) ** (q)
     d_theta_i = -k
     return np.where(theta > theta_star, d_theta_i, d_theta_ii)
 

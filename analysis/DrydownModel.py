@@ -421,16 +421,15 @@ class DrydownModel:
         ini_ETmax = max_ETmax * 0.5
 
         ### theta_0 ###
-        for value in event.y:
-            if not np.isnan(value):
-                first_non_nan = value
-                break
-
+        first_non_nan = event.y[~np.isnan(event.y)][0]
         min_theta_0 = first_non_nan - self.target_rmsd
         max_theta_0 = first_non_nan + self.target_rmsd
         ini_theta_0 = first_non_nan
 
         ### theta_star ###
+        # Filter out NaN values
+        second_non_nan = event.y[~np.isnan(event.y)][1]
+
         if self.is_stage1ET_active:
             if np.isnan(event.est_theta_fc):
                 max_theta_star = self.data.max_cutoff_sm
@@ -438,9 +437,9 @@ class DrydownModel:
                 max_theta_star = event.est_theta_fc
 
             if np.isnan(event.est_theta_star):
-                min_theta_star = max_theta_star * 0.5
+                min_theta_star = second_non_nan
             else:
-                min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
+                min_theta_star = np.maximum(event.est_theta_star, second_non_nan)
             ini_theta_star = (max_theta_star + min_theta_star) / 2
 
         # ______________________________________________________________________________________
@@ -510,16 +509,13 @@ class DrydownModel:
         ini_ETmax = max_ETmax * 0.5
 
         ### theta_0 ###
-        for value in event.y:
-            if not np.isnan(value):
-                first_non_nan = value
-                break
-
+        first_non_nan = event.y[~np.isnan(event.y)][0]
         min_theta_0 = first_non_nan - self.target_rmsd
         max_theta_0 = first_non_nan + self.target_rmsd
         ini_theta_0 = first_non_nan
 
         ### theta_star ###
+        second_non_nan = event.y[~np.isnan(event.y)][1]
         if self.is_stage1ET_active:
             if np.isnan(event.est_theta_fc):
                 max_theta_star = self.data.max_cutoff_sm
@@ -527,9 +523,9 @@ class DrydownModel:
                 max_theta_star = event.est_theta_fc
 
             if np.isnan(event.est_theta_star):
-                min_theta_star = max_theta_star * 0.5
+                min_theta_star = second_non_nan
             else:
-                min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
+                min_theta_star = np.maximum(event.est_theta_star, second_non_nan)
             ini_theta_star = (max_theta_star + min_theta_star) / 2
 
         # ______________________________________________________________________________________

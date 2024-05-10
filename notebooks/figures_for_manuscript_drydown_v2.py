@@ -432,8 +432,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
 
     fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
 
-    nonlinear_theta_plot = np.arange(event.q_theta_w, event.est_theta_star, 0.01)
-    linear_theta_plot = np.arange(event.exp_theta_w, event.est_theta_star, 0.01)
+    nonlinear_theta_plot = np.arange(event.q_theta_w, event.est_theta_fc, 0.001)
+    linear_theta_plot = np.arange(event.exp_theta_w, event.est_theta_fc, 0.001)
     theta_obs = df_ts[
         pd.to_datetime(event.event_start) : pd.to_datetime(event.event_end)
     ].values
@@ -445,7 +445,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
             nonlinear_theta_plot,
             event.q_q,
             event.q_ETmax,
-            theta_wp=event.q_theta_w,
+            theta_w=event.q_theta_w,
             theta_star=event.q_theta_star,
         ),
         color="darkorange",
@@ -458,7 +458,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
             theta_obs,
             event.q_q,
             event.q_ETmax,
-            theta_wp=event.q_theta_w,
+            theta_w=event.q_theta_w,
             theta_star=event.q_theta_star,
         ),
         color="grey",
@@ -472,7 +472,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
             linear_theta_plot,
             1,
             event.exp_ETmax,
-            theta_wp=event.exp_theta_w,
+            theta_w=event.exp_theta_w,
             theta_star=event.exp_theta_star,
         ),
         color="darkblue",
@@ -485,7 +485,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
             theta_obs,
             1,
             event.exp_ETmax,
-            theta_wp=event.exp_theta_w,
+            theta_w=event.exp_theta_w,
             theta_star=event.exp_theta_star,
         ),
         color="grey",
@@ -511,21 +511,47 @@ lat_min, lat_max = 24.396308, 49.384358
 lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > success_modelfit_thresh)
-    & (df["q_q"] > 15)
-    # & (df["longitude"] >= lon_min)
-    # & (df["longitude"] <= lon_max)
+    (df["q_r_squared"] > 0.7)
+    & (df["q_q"] < 10)
+    & (df["q_q"] > 5)
+    & (df["sm_range"] >= 0.1)
 ]
-
+# df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
 print(df_filt.index)
 print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 7268
+event_id = 62899
 ################################################
 plot_drydown(df=df_filt, event_id=event_id)
 print(df_filt.loc[event_id])
 print(f"Next to try: {df_filt.sample(n=1).index}")
 
+check_1ts_range(df=df_filt, event_id=event_id)
+
+
 # %%
+def check_1ts_range(df, event_id):
+    event = df.loc[event_id]
+
+    common_params = {
+        "q": event.q_q,
+        "ETmax": event.q_ETmax,
+        "theta_star": event.q_theta_star,
+        "theta_w": event.q_theta_w,
+    }
+
+    s_t_0 = q_model(t=0, theta_0=event.q_theta_star, **common_params)
+    s_t_1 = q_model(t=1, theta_0=event.q_theta_star, **common_params)
+
+    dsdt_0 = loss_model(theta=s_t_0, **common_params)
+    dsdt_1 = loss_model(theta=s_t_1, **common_params)
+
+    print(f"{(dsdt_0 - dsdt_1) / (event.q_ETmax / 50)*100:.1f} percent")
+
+
+# 80 % of the drydown happens in the first timestep ---- it's too rapid
+# %%
+# %%
+plt.scatter(df_filt["event_length"], df_filt["q_q"])
