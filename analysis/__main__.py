@@ -50,7 +50,7 @@ def main():
     # Run the model
     if run_mode == "serial":
         results = agent.run(
-            [181, 513]
+            [51, 212]
         )  # Pick your EASE_row_index and EASE_column_index of interest
     elif run_mode == "parallel":
         nprocess = cfg.getint("MULTIPROCESSING", "nprocess")

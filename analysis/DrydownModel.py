@@ -41,7 +41,7 @@ def tau_exp_model(t, delta_theta, theta_w, tau):
     return delta_theta * np.exp(-t / tau) + theta_w
 
 
-def exp_model(t, ETmax, theta_0, theta_star, theta_w, z=50.0):
+def exp_model(t, ETmax, theta_0, theta_star, theta_w, z=50.0, t_star=0.0):
     """Calculate the drydown curve for soil moisture over time using linear loss function model.
     The above tau_exp_model can be better constrained using the loss function variables, rather than tau models.
 
@@ -57,10 +57,16 @@ def exp_model(t, ETmax, theta_0, theta_star, theta_w, z=50.0):
     """
 
     tau = z * (theta_star - theta_w) / ETmax
-    return (theta_0 - theta_w) * np.exp(-t / tau) + theta_w
+
+    if theta_0 > theta_star:
+        theta_0_ii = theta_star
+    else:
+        theta_0_ii = theta_0
+
+    return (theta_0_ii - theta_w) * np.exp(-(t - t_star) / tau) + theta_w
 
 
-def q_model(t, q, ETmax, theta_0, theta_star, theta_w, z=50.0):
+def q_model(t, q, ETmax, theta_0, theta_star, theta_w, z=50.0, t_star=0.0):
     """
     Calculate the drydown curve for soil moisture over time using non-linear plant stress model.
 
@@ -76,16 +82,47 @@ def q_model(t, q, ETmax, theta_0, theta_star, theta_w, z=50.0):
     Returns:
         float: Rate of change in soil moisture (dtheta/dt) for the given timestep, in m3/m3/day.
     """
+    if theta_0 > theta_star:
+        theta_0_ii = theta_star
+    else:
+        theta_0_ii = theta_0
 
     k = (
         ETmax / z
     )  # Constant term. Convert ETmax to maximum dtheta/dt rate from a unit volume of soil
 
-    b = (theta_0 - theta_w) ** (1 - q)
+    b = (theta_0_ii - theta_w) ** (1 - q)
 
     a = (1 - q) / ((theta_star - theta_w) ** q)
 
-    return (-k * a * t + b) ** (1 / (1 - q)) + theta_w
+    return (-k * a * (t - t_star) + b) ** (1 / (1 - q)) + theta_w
+
+
+def q_model_piecewise(t, q, ETmax, theta_0, theta_star, theta_w, z=50.0):
+
+    k = (
+        ETmax / z
+    )  # Constant term. Convert ETmax to maximum dtheta/dt rate from a unit volume of soil
+
+    t_star = (theta_0 - theta_star) / k  # Time it takes from theta_0 to theta_star
+
+    return np.where(
+        t_star > t,
+        -k * t + theta_0,
+        q_model(
+            t, q, ETmax, theta_0, theta_star, theta_w, t_star=np.maximum(t_star, 0)
+        ),
+    )
+
+
+def exp_model_piecewise(t, ETmax, theta_0, theta_star, theta_w, z=50.0):
+    k = ETmax / z
+    t_star = (theta_0 - theta_star) / k
+    return np.where(
+        t_star > t,
+        -k * t + theta_0,
+        exp_model(t, ETmax, theta_0, theta_star, theta_w, t_star=np.maximum(t_star, 0)),
+    )
 
 
 def drydown_piecewise(t, model, ETmax, theta_0, theta_star, z=50.0):
@@ -384,16 +421,15 @@ class DrydownModel:
         ini_ETmax = max_ETmax * 0.5
 
         ### theta_0 ###
-        for value in event.y:
-            if not np.isnan(value):
-                first_non_nan = value
-                break
-
+        first_non_nan = event.y[~np.isnan(event.y)][0]
         min_theta_0 = first_non_nan - self.target_rmsd
         max_theta_0 = first_non_nan + self.target_rmsd
         ini_theta_0 = first_non_nan
 
         ### theta_star ###
+        # Filter out NaN values
+        second_non_nan = event.y[~np.isnan(event.y)][1]
+
         if self.is_stage1ET_active:
             if np.isnan(event.est_theta_fc):
                 max_theta_star = self.data.max_cutoff_sm
@@ -401,10 +437,10 @@ class DrydownModel:
                 max_theta_star = event.est_theta_fc
 
             if np.isnan(event.est_theta_star):
-                min_theta_star = max_theta_star * 0.5
+                min_theta_star = second_non_nan
             else:
-                min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
-            ini_theta_star = max_theta_star * 0.8
+                min_theta_star = np.maximum(event.est_theta_star, second_non_nan)
+            ini_theta_star = (max_theta_star + min_theta_star) / 2
 
         # ______________________________________________________________________________________
         # Execute the event fit
@@ -417,19 +453,13 @@ class DrydownModel:
             p0 = [ini_ETmax, ini_theta_0, ini_theta_star]
             return self.fit_model(
                 event=event,
-                model=lambda t, ETmax, theta_0, theta_star: drydown_piecewise(
+                model=lambda t, ETmax, theta_0, theta_star: exp_model_piecewise(
                     t=t,
-                    model=exp_model(
-                        t=t,
-                        ETmax=ETmax,
-                        theta_0=theta_0,
-                        theta_star=theta_star,
-                        theta_w=self.norm_min,
-                        z=self.z,
-                    ),
                     ETmax=ETmax,
                     theta_0=theta_0,
                     theta_star=theta_star,
+                    theta_w=self.norm_min,
+                    z=self.z,
                 ),
                 bounds=bounds,
                 p0=p0,
@@ -479,16 +509,13 @@ class DrydownModel:
         ini_ETmax = max_ETmax * 0.5
 
         ### theta_0 ###
-        for value in event.y:
-            if not np.isnan(value):
-                first_non_nan = value
-                break
-
+        first_non_nan = event.y[~np.isnan(event.y)][0]
         min_theta_0 = first_non_nan - self.target_rmsd
         max_theta_0 = first_non_nan + self.target_rmsd
         ini_theta_0 = first_non_nan
 
         ### theta_star ###
+        second_non_nan = event.y[~np.isnan(event.y)][1]
         if self.is_stage1ET_active:
             if np.isnan(event.est_theta_fc):
                 max_theta_star = self.data.max_cutoff_sm
@@ -496,10 +523,10 @@ class DrydownModel:
                 max_theta_star = event.est_theta_fc
 
             if np.isnan(event.est_theta_star):
-                min_theta_star = max_theta_star * 0.5
+                min_theta_star = second_non_nan
             else:
-                min_theta_star = np.minimum(event.est_theta_star, max_theta_star)
-            ini_theta_star = max_theta_star * 0.8
+                min_theta_star = np.maximum(event.est_theta_star, second_non_nan)
+            ini_theta_star = (max_theta_star + min_theta_star) / 2
 
         # ______________________________________________________________________________________
         # Execute the event fit
@@ -512,20 +539,13 @@ class DrydownModel:
             p0 = [ini_q, ini_ETmax, ini_theta_0, ini_theta_star]
             return self.fit_model(
                 event=event,
-                model=lambda t, q, ETmax, theta_0, theta_star: drydown_piecewise(
+                model=lambda t, q, ETmax, theta_0, theta_star: q_model_piecewise(
                     t=t,
-                    model=q_model(
-                        t=t,
-                        q=q,
-                        ETmax=ETmax,
-                        theta_0=theta_0,
-                        theta_star=theta_star,
-                        theta_w=self.norm_min,
-                        z=self.z,
-                    ),
+                    q=q,
                     ETmax=ETmax,
                     theta_0=theta_0,
                     theta_star=theta_star,
+                    theta_w=self.norm_min,
                     z=self.z,
                 ),
                 bounds=bounds,
