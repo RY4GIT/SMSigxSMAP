@@ -13,12 +13,6 @@ from functions import q_drydown, exponential_drydown, loss_model, exponential_dr
 # Define parameters
 
 # Non-linearity parameters
-"""
-Global q<1 median: 0.59
-Global q<1 mean: 0.56
-Global q>1 median: 2.47
-Global q<1 mean: 4.03
-"""
 q0 = 1
 q1 = 1.5
 q2 = 0.70
