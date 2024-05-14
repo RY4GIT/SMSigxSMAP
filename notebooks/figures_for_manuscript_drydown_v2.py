@@ -19,7 +19,7 @@ import matplotlib.gridspec as gridspec
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-05-09"  # f"raraki_2024-04-26"
+dir_name = f"raraki_2024-05-12_global_piecewise"  # f"raraki_2024-04-26"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -432,8 +432,12 @@ def plot_drydown(df, event_id, ax=None, save=False):
 
     fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
 
-    nonlinear_theta_plot = np.arange(event.q_theta_w, event.est_theta_fc, 0.001)
-    linear_theta_plot = np.arange(event.exp_theta_w, event.est_theta_fc, 0.001)
+    if np.isnan(event.est_theta_fc):
+        est_fc = event.max_sm * 0.95
+    else:
+        est_fc = event.est_theta_fc
+    nonlinear_theta_plot = np.arange(event.q_theta_w, est_fc, 0.001)
+    linear_theta_plot = np.arange(event.exp_theta_w, est_fc, 0.001)
     theta_obs = df_ts[
         pd.to_datetime(event.event_start) : pd.to_datetime(event.event_end)
     ].values
@@ -449,6 +453,7 @@ def plot_drydown(df, event_id, ax=None, save=False):
             theta_star=event.q_theta_star,
         ),
         color="darkorange",
+        label="Nonlinear model",
     )
 
     # Plot observed & fitted soil moisture
@@ -476,6 +481,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
             theta_star=event.exp_theta_star,
         ),
         color="darkblue",
+        linestyle="--",
+        label="Linear model",
     )
 
     # Plot observed & fitted soil moisture
@@ -490,31 +497,50 @@ def plot_drydown(df, event_id, ax=None, save=False):
         ),
         color="grey",
         alpha=0.5,
+        label=r"Observed $\theta$" + "\n" + r"($d\theta/dt$ is estimated)",
     )
 
     ax3.set_xlabel(r"$\theta$ [$m^3$ $m^{-3}$]")
     ax3.set_ylabel(r"$d\theta/dt$ [$m^3$ $m^{-3}$ $day^{-1}$]")
+    ax3.legend(loc="upper left")
+    title_value = check_1ts_range(df.loc[event_id], verbose=True)
+    ax3.set_title(
+        f"1st timestep drydown covers {title_value*100:.1f} percent of the range"
+    )
     ax3.invert_yaxis()
 
 
 # %%
-# Select the events to plot here
-###################################################
-# Defining thresholds
-q_thresh = 0
-success_modelfit_thresh = 0.7
-sm_range_thresh = 0.1
-###################################################
+def check_1ts_range(row, verbose=False):
+    common_params = {
+        "q": row.q_q,
+        "ETmax": row.q_ETmax,
+        "theta_star": row.q_theta_star,
+        "theta_w": row.q_theta_w,
+    }
 
-# CONUS
-lat_min, lat_max = 24.396308, 49.384358
-lon_min, lon_max = -125.000000, -66.934570
+    s_t_0 = q_model(t=0, theta_0=row.q_theta_star, **common_params)
+    s_t_1 = q_model(t=1, theta_0=row.q_theta_star, **common_params)
+
+    dsdt_0 = loss_model(theta=s_t_0, **common_params)
+    dsdt_1 = loss_model(theta=s_t_1, **common_params)
+
+    if verbose:
+        print(f"{(dsdt_0 - dsdt_1) / (row.q_ETmax / 50)*100:.1f} percent")
+    return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / 50) * (-1)
+
+
+df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
+
+# %%
+# Select the events to plot here
+
+# # CONUS
+# lat_min, lat_max = 24.396308, 49.384358
+# lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > 0.7)
-    & (df["q_q"] < 10)
-    & (df["q_q"] > 5)
-    & (df["sm_range"] >= 0.1)
+    (df["q_r_squared"] > 0.7) & (df["large_q_criteria"] < 0.8) & (df["sm_range"] >= 0.1)& (df["sm_range"] >= 0.1)
 ]
 # df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
 print(df_filt.index)
@@ -522,36 +548,22 @@ print(f"Try: {df_filt.sample(n=5).index}")
 
 # %%
 ################################################
-event_id = 62899
+event_id = 223258
 ################################################
-plot_drydown(df=df_filt, event_id=event_id)
-print(df_filt.loc[event_id])
+plot_drydown(df=df, event_id=event_id)
+print(df.loc[event_id])
 print(f"Next to try: {df_filt.sample(n=1).index}")
-
-check_1ts_range(df=df_filt, event_id=event_id)
-
-
+# check_1ts_range(df.loc[event_id], verbose=True)
 # %%
-def check_1ts_range(df, event_id):
-    event = df.loc[event_id]
-
-    common_params = {
-        "q": event.q_q,
-        "ETmax": event.q_ETmax,
-        "theta_star": event.q_theta_star,
-        "theta_w": event.q_theta_w,
-    }
-
-    s_t_0 = q_model(t=0, theta_0=event.q_theta_star, **common_params)
-    s_t_1 = q_model(t=1, theta_0=event.q_theta_star, **common_params)
-
-    dsdt_0 = loss_model(theta=s_t_0, **common_params)
-    dsdt_1 = loss_model(theta=s_t_1, **common_params)
-
-    print(f"{(dsdt_0 - dsdt_1) / (event.q_ETmax / 50)*100:.1f} percent")
 
 
 # 80 % of the drydown happens in the first timestep ---- it's too rapid
 # %%
 # %%
 plt.scatter(df_filt["event_length"], df_filt["q_q"])
+# %%
+df_filt["q_r_squared"].hist()
+plt.xlim([0, 1])
+# %%
+plt.scatter(df_filt["q_q"], df_filt["q_ETmax"])
+# %%

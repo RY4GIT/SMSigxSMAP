@@ -423,7 +423,9 @@ class DrydownModel:
         ### theta_0 ###
         first_non_nan = event.y[~np.isnan(event.y)][0]
         min_theta_0 = first_non_nan - self.target_rmsd
-        max_theta_0 = np.minimum(first_non_nan + self.target_rmsd,self.data.max_cutoff_sm)
+        max_theta_0 = np.minimum(
+            first_non_nan + self.target_rmsd, self.data.max_cutoff_sm
+        )
         ini_theta_0 = first_non_nan
 
         ### theta_star ###
@@ -511,7 +513,9 @@ class DrydownModel:
         ### theta_0 ###
         first_non_nan = event.y[~np.isnan(event.y)][0]
         min_theta_0 = first_non_nan - self.target_rmsd
-        max_theta_0 = np.minimum(first_non_nan + self.target_rmsd, self.data.max_cutoff_sm)
+        max_theta_0 = np.minimum(
+            first_non_nan + self.target_rmsd, self.data.max_cutoff_sm
+        )
         ini_theta_0 = first_non_nan
 
         ### theta_star ###

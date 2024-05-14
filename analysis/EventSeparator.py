@@ -59,6 +59,7 @@ class EventSeparator:
         self.dS_thresh = self.target_rmsd * 2
         self.min_data_points = self.cfg.getint("MODEL_PARAMS", "min_data_points")
         self.max_nodata_days = self.cfg.getint("MODEL_PARAMS", "max_nodata_days")
+        self.max_drydown_days = self.cfg.getint("MODEL_PARAMS", "max_drydown_days")
 
     def separate_events(self, output_dir):
         """Separate soil moisture timeseries into events"""
@@ -144,7 +145,9 @@ class EventSeparator:
             count_nan_days = 0
             should_break = False
 
-            for j in range(1, remaining_records.days):
+            for j in range(
+                1, self.max_drydown_days + 1
+            ):  # Only look up to 30 days# remaining_records.days
                 current_date = event_start_date + pd.Timedelta(days=j)
 
                 if np.isnan(self.data.df.loc[current_date].sm_unmasked):
@@ -160,6 +163,11 @@ class EventSeparator:
                 if count_nan_days > self.max_nodata_days:
                     update_date = current_date
                     update_arg = "too many consective nans"
+                    should_break = True
+
+                if j == self.max_drydown_days:
+                    update_date = current_date
+                    update_arg = "drydown is too long"
                     should_break = True
 
                 if self.data.df.loc[current_date].dS >= self.noise_thresh:  # & (
