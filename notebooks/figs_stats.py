@@ -13,7 +13,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.colors import Normalize
-from matplotlib.colors import Normalize
 from textwrap import wrap
 
 from functions import q_model, loss_model
@@ -41,7 +40,7 @@ plt.rcParams["mathtext.fontset"] = (
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-05-12_global_piecewise" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-05-13_global_piecewise" #"raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ############################|###############################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -115,43 +114,58 @@ df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
 print("Loaded ancillary information (land-cover)")
 
-# Calculate some metrics for evaluation
+# Get the binned ancillary information
 
-# Difference between R2 values of two models
-df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
-
-
-# Get the binned dataset
-
-# cmap for sand
+# sand
 sand_bin_list = [i * 0.1 for i in range(11)]
 sand_bin_list = sand_bin_list[1:]
 sand_cmap = "Oranges_r"
 
-# cmap for ai
-ai_bin_list = [i * 0.25 for i in range(7)]
-ai_cmap = "RdBu"
-
-# sand bins
 df["sand_bins"] = pd.cut(df["sand_fraction"], bins=sand_bin_list, include_lowest=True)
 first_I = df["sand_bins"].cat.categories[0]
 new_I = pd.Interval(0.1, first_I.right)
 df["sand_bins"] = df["sand_bins"].cat.rename_categories({first_I: new_I})
 
-# ai_bins
+# ai
+ai_bin_list = [i * 0.25 for i in range(7)]
+ai_cmap = "RdBu"
+
 df["ai_bins"] = pd.cut(df["AI"], bins=ai_bin_list, include_lowest=True)
 first_I = df["ai_bins"].cat.categories[0]
 new_I = pd.Interval(0, first_I.right)
 df["ai_bins"] = df["ai_bins"].cat.rename_categories({first_I: new_I})
 
-# # Ancillary data
-# df_anc_Bassiouni = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_Bassiouni_params_file)).drop(
-#     ["Unnamed: 0", "latitude", "longitude"], axis=1
-# )
-# print("Loaded ancillary information (parameters from Bassiouni)")
-# df_anc_Bassiouni.head()
-# df = df.merge(df_anc_Bassiouni, on=["EASE_row_index", "EASE_column_index"], how="left")
 # %%
+df.columns
+# %% ############################################################################
+# Calculate some stats for evaluation
+
+# Difference between R2 values of two models
+df = df.assign(diff_R2=df["q_r_squared"] - df["tauexp_r_squared"])
+
+def data_availability(row):
+    # Check data point availability in the first 3 time steps of observation
+    # Define a helper function to convert string to list
+    def str_to_list(s):
+        return list(map(int, s.strip("[]").split()))
+
+    # Convert the 'time' column from string of lists to actual lists
+    time_list = str_to_list(row["time"])
+
+    # Check if first three items are [0, 1, 2]
+    # condition = time_list[:3] == [0, 1, 2]
+
+    # Check if at least 2 elements exist in any combination (0 and 1, 0 and 2, or 1 and 2) in the first 3 elements
+    first_3_elements = set(time_list[:3])
+    required_elements = [{0, 1}, {0, 2}, {1, 2}]
+
+    condition = any(
+        required.issubset(first_3_elements) for required in required_elements
+    )
+
+    return condition
+
+
 # Soil mositure range covered by the observation
 def calculate_sm_range(row):
     input_string = row.sm
@@ -175,31 +189,7 @@ def calculate_sm_range(row):
         if row.max_sm != row.min_sm
         else np.nan
     )
-    return sm_range
-
-def calculate_sm_range_abs(row):
-    input_string = row.sm
-
-    # Processing the string
-    input_string = input_string.replace("\n", " np.nan")
-    input_string = input_string.replace(" nan", " np.nan")
-    input_string = input_string.strip("[]")
-
-    # Converting to numpy array and handling np.nan
-    sm = np.array(
-        [
-            float(value) if value != "np.nan" else np.nan
-            for value in input_string.split()
-        ]
-    )
-
-    # Calculating sm_range
-    sm_range_abs = (
-        (np.nanmax(sm) - np.nanmin(sm))
-        if row.max_sm != row.min_sm
-        else np.nan
-    )
-    return sm_range_abs
+    return np.abs(sm_range)
 
 def check_1ts_range(row, verbose=False):
     common_params = {
@@ -219,66 +209,17 @@ def check_1ts_range(row, verbose=False):
         print(f"{(dsdt_0 - dsdt_1) / (row.q_ETmax / z_mm)*100:.1f} percent")
     return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / z_mm) * (-1)
 
-# Applying the function to each row and creating a new column 'sm_range'
+# Create new columns 
+df["first3_avail2"] = df.apply(data_availability, axis=1)
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
-df["sm_range_abs"] = df.apply(calculate_sm_range_abs, axis=1)
 df["event_length"] = (
     pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
 ).dt.days
 df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
 
-# # %%
-# def calculate_n_days(row):
-#     input_string = row.sm
 
-#     # Processing the string
-#     input_string = input_string.replace("\n", " np.nan")
-#     input_string = input_string.replace(" nan", " np.nan")
-#     input_string = input_string.strip("[]")
-
-#     # Converting to numpy array and handling np.nan
-#     sm = np.array(
-#         [
-#             float(value) if value != "np.nan" else np.nan
-#             for value in input_string.split()
-#         ]
-#     )
-
-#     # Calculating sm_range
-#     n_days = len(sm)
-#     return n_days
-
-
-# # Applying the function to each row and creating a new column 'sm_range'
-# df["n_days"] = df.apply(calculate_n_days, axis=1)
-
-
-#%%
-def filter_by_data_availability(df):
-    # Define a helper function to convert string to list
-    def str_to_list(s):
-        return list(map(int, s.strip('[]').split()))
-
-    # Convert the 'time' column from string of lists to actual lists
-    df['time_list'] = df['time'].apply(str_to_list)
-
-    # Filter condition 1: Check if first three items are [0, 1, 2]
-    # condition = df['time_list'].apply(lambda x: x[:3] == [0, 1, 2])
-
-    condition = df['time_list'].apply(
-        lambda x: len(set(x[:4]).intersection({0, 1, 2})) >= 2
-    )
-
-    # Apply the first filter
-    filtered_df = df[condition]
-
-    return filtered_df
-
-print(len(df))
-df = filter_by_data_availability(df)
-print(len(df))
-
-# %% Exclude model fits failure
+# %% ###################################################
+# Exclude model fits failure
 
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
@@ -292,23 +233,23 @@ count_median_number_of_events_perGrid(df)
 
 ###################################################
 # Defining model acceptabiltiy criteria
-q_thresh = 1.0e-03
 R2_thresh = 0.8
-sm_range_thresh = 0.1 #0.1
-# event_length_thresh = 3
-large_q_thresh = 0.7
+sm_range_thresh = 0.15
+small_q_thresh = 1.0e-03
+large_q_thresh = 0.6
 ###################################################
 
 # Runs where q model performed reasonablly well
 df_filt_q = df[
     (df["q_r_squared"] >= R2_thresh)
-    & (df["q_q"] > q_thresh)
     & (df["sm_range"] > sm_range_thresh)
+    & (df["q_q"] > small_q_thresh)
     & (df["large_q_criteria"] < large_q_thresh)
+    & (df["first3_avail2"])
 ].copy()
 
 print(
-    f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range, plus extremely small q removed: {len(df_filt_q)}"
+    f"q model fit successful: {len(df_filt_q)}"
 )
 count_median_number_of_events_perGrid(df_filt_q)
 
@@ -316,22 +257,20 @@ count_median_number_of_events_perGrid(df_filt_q)
 df_filt_allq = df[
     (df["q_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["large_q_criteria"] < large_q_thresh)
 ].copy()
 
 print(
-    f"q model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_allq)}"
+    f"q model fit successful (not filtering q parmaeter values): {len(df_filt_allq)}"
 )
 count_median_number_of_events_perGrid(df_filt_allq)
 
 # Runs where exponential model performed good
 df_filt_exp = df[
-    (df["exp_r_squared"] >= R2_thresh)
+    (df["tauexp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["large_q_criteria"] < large_q_thresh)
 ].copy()
 print(
-    f"exp model fit was successful & fit over {sm_range_thresh*100} percent of the soil mositure range: {len(df_filt_exp)}"
+    f"tau-exp model fit successful: {len(df_filt_exp)}"
 )
 count_median_number_of_events_perGrid(df_filt_exp)
 
@@ -339,29 +278,27 @@ count_median_number_of_events_perGrid(df_filt_exp)
 df_filt_q_or_exp = df[
     (
         (df["q_r_squared"] >= R2_thresh)
-        | (df["exp_r_squared"] >= R2_thresh)
+        | (df["tauexp_r_squared"] >= R2_thresh)
     )
     & (df["sm_range"] > sm_range_thresh)
-    & (df["large_q_criteria"] < large_q_thresh)
 ].copy()
 
-print(f"either q or exp model fit was successful: {len(df_filt_q_or_exp)}")
+print(f"either q or tau-exp model fit successful: {len(df_filt_q_or_exp)}")
 count_median_number_of_events_perGrid(df_filt_q_or_exp)
 
 # Runs where both of the model performed satisfactory
 df_filt_q_and_exp = df[
     (df["q_r_squared"] >= R2_thresh)
-    & (df["exp_r_squared"] >= R2_thresh)
+    & (df["tauexp_r_squared"] >= R2_thresh)
     & (df["sm_range"] > sm_range_thresh)
-    & (df["large_q_criteria"] < large_q_thresh)
 ].copy()
 
-print(f"both q and exp model fit was successful: {len(df_filt_q_and_exp)}")
+print(f"both q and tau-exp model fit successful: {len(df_filt_q_and_exp)}")
 count_median_number_of_events_perGrid(df_filt_q_and_exp)
 
 # How many events showed better R2?
 n_nonlinear_better_events = sum(
-    df_filt_q_and_exp["q_r_squared"] > df_filt_q_and_exp["exp_r_squared"]
+    df_filt_q_and_exp["q_r_squared"] > df_filt_q_and_exp["tauexp_r_squared"]
 )
 print(
     f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}"
@@ -376,7 +313,7 @@ print(
 ############################################################################################################################################
 ############################################################################################################################################
 #
-# Rangeland analysis
+# Plots
 #
 ############################################################################################################################################
 ############################################################################################################################################
@@ -385,6 +322,7 @@ print(
 ############################################################################################################################################
 ############################################################################################################################################
 
+# Rangeland analysis
 # Read data 
 _rangeland_info = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
@@ -469,7 +407,7 @@ def get_df_percentage_q(
     percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
     return percentage_df
 
-percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "sm_range_abs")
+percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "event_length")
 
 print(percentage_df)
 
@@ -549,12 +487,12 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
 
     # Set the y-axis
-    if weighted:
+    if not weighted:
         ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
         ax.set_ylim([0, 40])
     else:
         ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 40])
+        ax.set_ylim([0, 20])
 
     # Set the second x-ticks
     # Replicate the z_var labels for the number of x_column_to_plot labels
@@ -695,7 +633,7 @@ def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=F
     # Set plot title and legend
     ax.set_title(title_name)
 
-percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "sm_range_abs", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
+percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
 
 fig, ax = plt.subplots(figsize=(4, 4))
 plot_grouped_stacked_bar_uni(
@@ -837,7 +775,7 @@ def using_mpl_scatter_density(fig, x, y):
 def plot_R2_models_v2(df, R2_threshold, save=False):
     plt.rcParams.update({"font.size": 30})
     # Read data
-    x = df["exp_r_squared"].values
+    x = df["tauexp_r_squared"].values
     y = df["q_r_squared"].values
 
     # Create a scatter plot
@@ -1101,7 +1039,6 @@ print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
 
 save=True
 def plot_hist(df, var_key):
-    plt.rcParams.update({"font.size": 30})
     fig, ax = plt.subplots(figsize=(5.5, 5))
 
     # Create the histogram with a bin width of 1
@@ -1130,7 +1067,7 @@ def plot_hist(df, var_key):
 
     return fig, ax
 
-
+plt.rcParams.update({"font.size": 30})
 fig_q_hist, _ = plot_hist(df=df_filt_q, var_key="q_q")
 if save:
     fig_q_hist.savefig(
@@ -1317,6 +1254,7 @@ def plot_scatter_with_errorbar(
 #  4-grid Loss function plots + parameter scatter plots
 #######################################
 # Vegetation
+plt.rcParams.update({"font.size": 18})
 fig, axs = plt.subplots(2, 2, figsize=(8, 8))
 plot_loss_func(
     axs[0, 0],
@@ -1533,7 +1471,7 @@ def plot_histograms_with_mean_median(df, x_var, z_var, cmap=None, categories=Non
         subset = df[df[z_var["column_name"]] == category]
 
         # Determine bin edges based on bin interval
-        bin_interval = 0.05
+        bin_interval = 0.2
         min_edge = 0
         max_edge = 10
         bins = np.arange(min_edge, max_edge + bin_interval, bin_interval)
@@ -2494,3 +2432,4 @@ fig_hist_q_sand2.savefig(
 #         bbox_inches="tight",
 #         transparent=True,
 #     )
+# %%
