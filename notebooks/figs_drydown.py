@@ -15,11 +15,12 @@ from functions import (
     exp_model_piecewise,
 )
 import matplotlib.gridspec as gridspec
+import json
 
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-05-12_global_piecewise"  # f"raraki_2024-04-26"
+dir_name = f"raraki_2024-05-13_global_piecewise"  # f"raraki_2024-04-26"
 ###########################################################################
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
@@ -27,22 +28,8 @@ dir_name = f"raraki_2024-05-12_global_piecewise"  # f"raraki_2024-04-26"
 ## Define model acceptabiltiy criteria
 z_mm = 50  # Soil thickness
 
-var_dict = {
-    "theta": {
-        "column_name": "sm",
-        "symbol": r"$\theta$",
-        "label": r"SMAP soil moisture",
-        "unit": r"$[m^3/m^3]$",
-        "lim": [0, 0.50],
-    },
-    "dtheta": {
-        "column_name": "",
-        "symbol": r"$-d\theta/dt$",
-        "label": r"Change in soil moisture",
-        "unit": r"$[m^3/m^3/day]$",
-        "lim": [-0.10, 0],
-    },
-}
+with open("fig_variable_labels.json", "r") as file:
+    var_dict = json.load(file)
 
 
 # %% ############################################################################
@@ -107,35 +94,34 @@ else:
 # Difference between R2 values of two models
 df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
 
-# Denormalize k and calculate the estimated ETmax values from k parameter from q model
-# df["q_ETmax"] = df["q_k"] * (df["max_sm"] - df["min_sm"]) * z_mm
-# df["q_k_denormalized"] = df["q_k"] * (df["max_sm"] - df["min_sm"])
+
+def data_availability(row):
+    # Define a helper function to convert string to list
+    def str_to_list(s):
+        return list(map(int, s.strip("[]").split()))
+
+    # Convert the 'time' column from string of lists to actual lists
+    time_list = str_to_list(row["time"])
+
+    # Check if first three items are [0, 1, 2]
+    # condition = time_list[:3] == [0, 1, 2]
+
+    # Check if at least 2 elements exist in any combination (0 and 1, 0 and 2, or 1 and 2) in the first 3 elements
+    first_3_elements = set(time_list[:3])
+    required_elements = [{0, 1}, {0, 2}, {1, 2}]
+
+    condition = any(
+        required.issubset(first_3_elements) for required in required_elements
+    )
+
+    return condition
 
 
-# def filter_by_data_availability(df):
-#     # Define a helper function to convert string to list
-#     def str_to_list(s):
-#         return list(map(int, s.strip("[]").split()))
-
-#     # Convert the 'time' column from string of lists to actual lists
-#     df["time_list"] = df["time"].apply(str_to_list)
-
-#     # Filter condition 1: Check if first three items are [0, 1, 2]
-#     condition = df["time_list"].apply(lambda x: x[:3] == [0, 1, 2])
-
-#     # condition = df['time_list'].apply(
-#     #     lambda x: len(set(x[:4]).intersection({0, 1, 2, 3})) >= 3
-#     # )
-
-#     # Apply the first filter
-#     filtered_df = df[condition]
-
-#     return filtered_df
-
-
-# print(len(df))
-# df = filter_by_data_availability(df)
-# print(len(df))
+# Assuming df is your DataFrame
+print("Checking first 3 days data availability")
+# df["first3_avail2"] = df.apply(data_availability, axis=1)
+df["first3_avail2"] = df.apply(data_availability, axis=1)
+print("done")
 
 
 # Soil mositure range covered by the observation
@@ -164,8 +150,10 @@ def calculate_sm_range(row):
     return sm_range
 
 
+print("Checking the soil moisture range covered by each event")
 # Applying the function to each row and creating a new column 'sm_range'
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
+print("done")
 
 
 def calculate_n_days(row):
@@ -189,12 +177,16 @@ def calculate_n_days(row):
     return n_days
 
 
+print("Checking the number data point available in each event")
 # Applying the function to each row and creating a new column 'sm_range'
 df["n_days"] = df.apply(calculate_n_days, axis=1)
+print("done")
 
+print("Checking the length of the drydown event")
 df["event_length"] = (
     pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
 ).dt.days
+print("done")
 
 
 # %%
@@ -306,13 +298,13 @@ def plot_drydown(df, event_id, ax=None, save=False):
     input_string = (
         event.sm.replace("\n", " np.nan").replace(" nan", " np.nan").strip("[]")
     )
-    sm = np.array(
-        [
-            float(value) if value != "np.nan" else np.nan
-            for value in input_string.split()
-        ]
-    )
-    values = event.time.strip("[]").split()
+    # sm = np.array(
+    #     [
+    #         float(value) if value != "np.nan" else np.nan
+    #         for value in input_string.split()
+    #     ]
+    # )
+    # values = event.time.strip("[]").split()
     # Calculating n_days
     n_days = (pd.to_datetime(event.event_end) - pd.to_datetime(event.event_start)).days
 
@@ -505,7 +497,9 @@ def plot_drydown(df, event_id, ax=None, save=False):
     ax3.legend(loc="upper left")
     title_value = check_1ts_range(df.loc[event_id], verbose=True)
     ax3.set_title(
-        f"1st timestep drydown covers {title_value*100:.1f} percent of the range"
+        f"1st timestep drydown covers {title_value*100:.0f}% of the range"
+        + "\n"
+        + f"sm range covers {event.sm_range*100:.0f}% of the historical"
     )
     ax3.invert_yaxis()
 
@@ -530,8 +524,9 @@ def check_1ts_range(row, verbose=False):
     return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / 50) * (-1)
 
 
+print("Checking the potential first step drydown")
 df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
-
+print("done")
 # %%
 # Select the events to plot here
 
@@ -540,31 +535,45 @@ df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
 # lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > 0.7)
-    & (df["large_q_criteria"] < 0.8)
-    & (df["large_q_criteria"] > 0.7)
-    & (df["sm_range"] >= 0.1)
-    & (df["q_q"] < 1)
+    (df["q_r_squared"] > 0.8)
+    & (df["sm_range"] > 0.15)
+    & (df["large_q_criteria"] < 0.6)
+    & (df["first3_avail2"])
+    & (df["q_q"] > 1.0e-04)
 ]
 # df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
 print(df_filt.index)
 print(f"Try: {df_filt.sample(n=5).index}")
 
+# Get the indices that are NOT in df_filt
+not_in_filt_indices = df[~df.index.isin(df_filt.index)].index
+
+# Display the indices
+print(not_in_filt_indices)
+
+# Ensure there are enough indices to sample from
+if len(not_in_filt_indices) >= 5:
+    print(f"Try: {not_in_filt_indices.to_series().sample(n=5).index}")
+else:
+    print("Not enough indices to sample 5.")
+
 # %%
 ################################################
-event_id = 77531
+event_id = 295227
 ################################################
 plot_drydown(df=df, event_id=event_id)
 print(df.loc[event_id])
-print(f"Next to try: {df_filt.sample(n=1).index}")
+print(f"Next to try (in df): {df_filt.sample(n=1).index}")
+print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
 # check_1ts_range(df.loc[event_id], verbose=True)
 # %%
-
-
-# 80 % of the drydown happens in the first timestep ---- it's too rapid
-# %%
-# %%
+plt.scatter(df["event_length"], df["q_q"])
 plt.scatter(df_filt["event_length"], df_filt["q_q"])
+
+# %%
+plt.scatter(df["large_q_criteria"], df["q_q"])
+plt.scatter(df_filt["large_q_criteria"], df_filt["q_q"])
+# %%
 # %%
 df_filt["q_r_squared"].hist()
 plt.xlim([0, 1])
