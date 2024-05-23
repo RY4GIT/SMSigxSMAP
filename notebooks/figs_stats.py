@@ -335,18 +335,217 @@ df_filt_q_conus = df_filt_q.merge(
     rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
 )
 
-# Bin AI values
-df_filt_q_conus["AI_binned2"] = pd.cut(
-    df_filt_q_conus["AI"],
-    # bins=[0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, np.inf],
-    # labels=["0-0.25", "0.25-0.5", "0.5-0.75", "0.75-1.0","1.0-1.25", "1.25-1.5", "1.5-"],
-    bins=[0, 0.5, 1.0, 1.5, np.inf],
-    labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
-)
+# %%
+df_filt_q_conus.columns
 
-# Change to percentage (TODO: fix this in the data management)
-df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
-df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
+# %%
+# Group by (EASE_row_index, EASE_column_index)
+df_filt_q_conus_agg = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).agg({
+    'q_q': ['median', 'var'],  # Calculate median and variance of "q_q"
+    'fractional_wood': 'median',  # Calculate median of "fracwood_pct"
+    'AI': 'median',  # Calculate median of "AI",
+    'event_length':'median'
+}).reset_index()
+
+# Flatten the multi-level column index
+df_filt_q_conus_agg.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df_filt_q_conus_agg.columns.values]
+
+# # Rename columns to desired names
+# df_filt_q_conus_agg.rename(columns={
+#     'EASE_row_index_': 'EASE_row_index',
+#     'EASE_column_index_': 'EASE_column_index',
+#     'q_q_median': 'median_q_q',
+#     'q_q_var': 'variance_q_q',
+#     'fracwood_pct_median': 'median_fracwood_pct',
+#     'AI_median': 'median_AI'
+# }, inplace=True)
+
+df_filt_q_conus_agg.head()
+
+
+# %%
+
+df_filt_q_conus_agg.plot("fractional_wood_median", "q_q_median", "scatter")
+
+df_filt_q_conus_agg.plot("fractional_wood_median", "q_q_var", "scatter")
+
+df_filt_q_conus.plot("fractional_wood", "q_q", "scatter")
+# %%
+# Plotting
+plt.figure(figsize=(10, 5))
+# sns.scatterplot(x='fractional_wood_median', y='q_q_median', hue='fractional_wood_median', palette='viridis', data=df_filt_q_conus_agg)
+import statsmodels.api as sm
+
+# Calculate LOWESS
+lowess = sm.nonparametric.lowess(df_filt_q_conus['q_q'], df_filt_q_conus['fractional_wood'], frac=0.2)
+lowess_x = lowess[:, 0]
+lowess_y = lowess[:, 1]
+
+# Plot LOWESS line
+plt.plot(lowess_x, lowess_y, 'k-', label='LOWESS Line')
+plt.legend()
+# Adding a trend line
+sns.regplot(x='fractional_wood', y='q_q', data=df_filt_q_conus, scatter=False, color='black')
+# # Setting up the discrete colormap from 'summer'
+cmap = plt.cm.YlGn
+norm = plt.Normalize(vmin=0, vmax=100)
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+sm.set_array([])
+# Adding regression lines per 5-year segments
+frac_wood_interval = 20
+for start in range(0, 100, frac_wood_interval):
+    segment = df_filt_q_conus[(df_filt_q_conus['fractional_wood'] >= start) & (df_filt_q_conus['fractional_wood'] < start + frac_wood_interval)]
+    midpoint = start + 2.5  # Midpoint for color indexing
+    color = cmap(norm(midpoint))
+    dark_color = [x * 0.8 for x in color[:3]] + [1]
+    sns.regplot(x='fractional_wood', y='q_q', data=segment, scatter=False,  color=dark_color)
+    sns.scatterplot(x='fractional_wood', y='q_q', data=segment, alpha=0.3, color=color)
+
+# Enhancing the plot
+plt.title('')
+plt.ylim([1,3])
+# plt.colorbar(label='fractional_wood_median')
+
+plt.show()
+
+
+# %%
+# Plotting
+plt.figure(figsize=(10, 5))
+# sns.scatterplot(x='fractional_wood_median', y='q_q_median', hue='fractional_wood_median', palette='viridis', data=df_filt_q_conus_agg)
+
+from scipy.optimize import curve_fit
+def model(x, a, b):
+    return np.exp(a * x + b)
+
+
+import statsmodels.api as sm
+
+
+
+# Adding a trend line
+sns.regplot(x='fractional_wood_median', y='q_q_median', data=df_filt_q_conus_agg, scatter=False, color='black')
+
+mask = ~np.isnan(df_filt_q_conus_agg['fractional_wood_median']) & ~np.isnan(df_filt_q_conus_agg['q_q_median']) & ~np.isinf(df_filt_q_conus_agg['fractional_wood_median']) & ~np.isinf(df_filt_q_conus_agg['q_q_var'])
+
+x =  df_filt_q_conus_agg['fractional_wood_median'][mask]
+y = df_filt_q_conus_agg['q_q_median'][mask]
+popt, _ = curve_fit(model,x, y)
+x_line = np.arange(0, 100, 1)
+y_line = model(x_line, *popt)
+plt.plot(x_line, y_line, '--', color="grey")
+
+
+# # Setting up the discrete colormap from 'summer'
+cmap = plt.cm.YlGn
+norm = plt.Normalize(vmin=0, vmax=100)
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+sm.set_array([])
+
+# Adding regression lines per 5-year segments
+frac_wood_interval = 35
+for start in range(0, 100, frac_wood_interval):
+    segment = df_filt_q_conus_agg[(df_filt_q_conus_agg['fractional_wood_median'] >= start) & (df_filt_q_conus_agg['fractional_wood_median'] < start + frac_wood_interval)]
+    midpoint = start + 2.5  # Midpoint for color indexing
+    color = cmap(norm(midpoint))
+    dark_color = [x * 0.8 for x in color[:3]] + [1]
+    # sns.regplot(x='fractional_wood_median', y='q_q_median', data=segment, scatter=False,  color=dark_color)
+    sns.scatterplot(x='fractional_wood_median', y='q_q_median', data=segment, alpha=0.3, color=color)
+
+    mask = ~np.isnan(segment['fractional_wood_median']) & ~np.isnan(segment['q_q_median']) & ~np.isinf(segment['fractional_wood_median']) & ~np.isinf(segment['q_q_var'])
+
+    x =  segment['fractional_wood_median'][mask]
+    y = segment['q_q_median'][mask]
+
+
+    popt, _ = curve_fit(model,x, y)
+    x_line = np.arange(min(segment['fractional_wood_median']), max(segment['fractional_wood_median']), 1)
+    y_line = model(x_line, *popt)
+    plt.plot(x_line, y_line, '--', color=cmap(norm(start + 2.5)))
+
+# Enhancing the plot
+plt.title('')
+plt.ylim([0,3])
+# plt.colorbar(label='fractional_wood_median')
+
+plt.show()
+
+
+# %%
+# Plotting
+plt.figure(figsize=(10, 5))
+# sns.scatterplot(x='fractional_wood_median', y='q_q_median', hue='fractional_wood_median', palette='viridis', data=df_filt_q_conus_agg)
+
+from scipy.optimize import curve_fit
+def model(x, a, b):
+    return np.exp(a * x + b)
+
+
+import statsmodels.api as sm
+
+# Calculate LOWESS
+lowess = sm.nonparametric.lowess(df_filt_q_conus_agg['q_q_var'], df_filt_q_conus_agg['fractional_wood_median'], frac=1)
+lowess_x = lowess[:, 0]
+lowess_y = lowess[:, 1]
+
+# Plot LOWESS line
+plt.plot(lowess_x, lowess_y, 'k-', label='LOWESS Line')
+plt.legend()
+
+# Adding a trend line
+sns.regplot(x='fractional_wood_median', y='q_q_var', data=df_filt_q_conus_agg, scatter=False, color='black')
+
+mask = ~np.isnan(df_filt_q_conus_agg['fractional_wood_median']) & ~np.isnan(df_filt_q_conus_agg['q_q_var']) & ~np.isinf(df_filt_q_conus_agg['fractional_wood_median']) & ~np.isinf(df_filt_q_conus_agg['q_q_var'])
+
+x =  df_filt_q_conus_agg['fractional_wood_median'][mask]
+y = df_filt_q_conus_agg['q_q_var'][mask]
+popt, _ = curve_fit(model,x, y)
+x_line = np.arange(0, 100, 1)
+y_line = model(x_line, *popt)
+plt.plot(x_line, y_line, '--', color="grey")
+
+
+# # Setting up the discrete colormap from 'summer'
+cmap = plt.cm.YlGn
+norm = plt.Normalize(vmin=0, vmax=100)
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+sm.set_array([])
+
+# Adding regression lines per 5-year segments
+frac_wood_interval = 35
+for start in range(0, 100, frac_wood_interval):
+    segment = df_filt_q_conus_agg[(df_filt_q_conus_agg['fractional_wood_median'] >= start) & (df_filt_q_conus_agg['fractional_wood_median'] < start + frac_wood_interval)]
+    midpoint = start + 2.5  # Midpoint for color indexing
+    color = cmap(norm(midpoint))
+    dark_color = [x * 0.8 for x in color[:3]] + [1]
+    # sns.regplot(x='fractional_wood_median', y='q_q_median', data=segment, scatter=False,  color=dark_color)
+    sns.scatterplot(x='fractional_wood_median', y='q_q_var', data=segment, alpha=0.3, color=color)
+
+    mask = ~np.isnan(segment['fractional_wood_median']) & ~np.isnan(segment['q_q_var']) & ~np.isinf(segment['fractional_wood_median']) & ~np.isinf(segment['q_q_var'])
+
+    x =  segment['fractional_wood_median'][mask]
+    y = segment['q_q_var'][mask]
+
+
+    popt, _ = curve_fit(model,x, y)
+    x_line = np.arange(min(segment['fractional_wood_median']), max(segment['fractional_wood_median']), 1)
+    y_line = model(x_line, *popt)
+    plt.plot(x_line, y_line, '--', color=cmap(norm(start + 2.5)))
+
+# Enhancing the plot
+plt.title('')
+plt.ylim([0,3])
+# plt.colorbar(label='fractional_wood_median')
+
+plt.show()
+
+
+# %%
+
+|
+# # Change to percentage (TODO: fix this in the data management)
+# df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
+# df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
 
 # Print some statistics
 print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
@@ -365,6 +564,78 @@ def get_df_percentage_q(
     bins=[0, 20, 40, 60, 80, 100],
     labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
 ):
+
+    # Bin AI values
+    df["AI_binned2"] = pd.cut(
+        df["AI_median"],
+        # bins=[0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, np.inf],
+        # labels=["0-0.25", "0.25-0.5", "0.5-0.75", "0.75-1.0","1.0-1.25", "1.25-1.5", "1.5-"],
+        bins=[0, 0.5, 1.0, 1.5, np.inf],
+        labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
+    )
+
+    new_varname = var_name + "_pct"
+    df[new_varname] = pd.cut(df[var_name], bins=bins, labels=labels)
+
+    # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+    q_greater_1 = (
+        df[df["q_q_median"] > 1]
+        .groupby(["AI_binned2", new_varname])
+        .agg(
+            count_greater_1=('q_q_median', 'size'),  # Count the occurrences
+            sum_weightfact_q_gt_1=(weight_by, 'sum')  # Sum the event_length
+        )
+        .reset_index()
+    )
+
+    total_counts = (
+        df.groupby(["AI_binned2", new_varname]).agg(
+            total_count=('q_q_median', 'size'),  # Count the occurrences
+            sum_weightfact_total=(weight_by, 'sum')  # Sum the event_length
+        )
+        .reset_index()
+    )
+    percentage_df = pd.merge(q_greater_1, total_counts, on=["AI_binned2", new_varname])
+
+    percentage_df["percentage_q_gt_1"] = (
+        percentage_df["count_greater_1"] / percentage_df["total_count"]
+    ) * 100
+    percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
+    percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
+    percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
+
+    # count percentage * days percentage
+    # percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
+    # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
+
+    # Percentage of count * days
+    percentage_df["count_x_weight_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_weightfact_q_gt_1"]
+    percentage_df["count_x_weight_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_weightfact_total"]-percentage_df["sum_weightfact_q_gt_1"])
+    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    return percentage_df
+
+percentage_df_median = get_df_percentage_q(df_filt_q_conus_agg, "fractional_wood_median", "event_length_median")
+
+
+# %%
+# Get the statistics on the proportion of q>1 and q<1 events 
+def get_df_percentage_q(
+    df,
+    var_name,
+    weight_by, 
+    bins=[0, 20, 40, 60, 80, 100],
+    labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
+):
+
+    # Bin AI values
+    df["AI_binned2"] = pd.cut(
+        df["AI"],
+        # bins=[0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, np.inf],
+        # labels=["0-0.25", "0.25-0.5", "0.5-0.75", "0.75-1.0","1.0-1.25", "1.25-1.5", "1.5-"],
+        bins=[0, 0.5, 1.0, 1.5, np.inf],
+        labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
+    )
 
     new_varname = var_name + "_pct"
     df[new_varname] = pd.cut(df[var_name], bins=bins, labels=labels)
@@ -407,8 +678,8 @@ def get_df_percentage_q(
     percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
     return percentage_df
 
-percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "event_length")
 
+percentage_df = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "event_length")
 print(percentage_df)
 
 #%%
@@ -435,7 +706,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     
     # Determine unique values for grouping
     # Aridity bins
-    x_unique = df[x_column_to_plot].unique()[:-1]
+    x_unique = df[x_column_to_plot].unique()
     # Vegetation bins
     z_unique = df[z_var].unique()
     n_groups = len(z_unique)
@@ -546,6 +817,31 @@ plot_grouped_stacked_bar(
 )
 plt.tight_layout()
 
+#%%
+plt.rcParams.update({"font.size": 11})
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_median_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_median_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=True
+)
+plt.tight_layout()
 # %%
 def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=False):
 
@@ -560,6 +856,7 @@ def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=F
     # Vegetation bins
     z_unique = df[z_var].unique()
     n_groups = len(z_unique)
+    # exclude = df["AI_binned2"].unique([:1])
 
     # exclude = df["AI_binned2"].unique()[-1]
     
@@ -577,7 +874,11 @@ def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=F
     for z_i, z in enumerate(z_unique):
 
         # Get the subset of data for this group
-        subset = df[(df[z_var] == z)] #&(df["AI_binned2"] != exclude)]
+        subset = df[(df[z_var] == z)]#&(df["AI_binned2"] != exclude)]
+        # print(subset.total_count.sum())
+        # Check the sample size before plotting
+        if subset.total_count.sum() < 100:  # If the number of samples in the group is less than 10, skip plotting
+            continue
         
         # Get bottom values for stacked bars
         bottom_value = 0
@@ -634,11 +935,19 @@ def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=F
     ax.set_title(title_name)
 
 percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
+percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
+percentage_df_5 = get_df_percentage_q(
+    df_filt_q_conus, 
+    "fractional_wood", 
+    "event_length", 
+    [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100], 
+    ["0-5%", "5-10%", "10-15%", "15-20%", "20-25%", "25-30%", "30-35%", "35-40%", "40-45%", "45-50%", "50-55%", "55-60%", "60-65%", "65-70%", "70-75%", "75-80%", "80-85%", "85-90%", "90-95%", "95-100%"]
+)
 
 fig, ax = plt.subplots(figsize=(4, 4))
 plot_grouped_stacked_bar_uni(
     ax=ax,
-    df=percentage_df_10,
+    df=percentage_df_5,
     z_var="fractional_wood_pct",
     var_name="rangeland_wood",
     title_name="",
@@ -649,13 +958,16 @@ plt.tight_layout()
 fig, ax = plt.subplots(figsize=(4, 4))
 plot_grouped_stacked_bar_uni(
     ax=ax,
-    df=percentage_df_10,
+    df=percentage_df_5,
     z_var="fractional_wood_pct",
     var_name="rangeland_wood",
     title_name="",
     weighted=False
 )
 plt.tight_layout()
+
+
+# %%
 
 # %% 
 # #################################################################
