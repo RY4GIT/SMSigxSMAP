@@ -18,21 +18,63 @@
         "symbol": "$q$",
         "label": "Nonlinearity parameter",
         "unit": "",
-        "lim": [0.0, 4.0]
+        "lim": [0.75, 3.0]
+    },
+    "q_q_median": {
+        "column_name": "q_q_median",
+        "symbol": "$\\tilde{q}$",
+        "label": "Median nonlinearity parameter",
+        "unit": "",
+        "lim": [0.5, 3.0]
+    },
+    "q_q_var": {
+        "column_name": "q_q_var",
+        "symbol": "$s^2(q)$",
+        "label": "Variance of nonlinearity parameter",
+        "unit": "",
+        "lim": [0.0, 4]
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
         "symbol": "$ET_{\\mathrm{max}}$",
         "label": "Maximum ET",
         "unit": "(mm day$^{-1}$)",
-        "lim": [0, 5]
+        "lim": [1, 4.5]
     },
-    "theta_star": {
-        "column_name": "max_sm",
+    "q_ETmax_median": {
+        "column_name": "q_ETmax_median",
+        "symbol": "$\\tilde{ET_{\\mathrm{max}}}$",
+        "label": "Maximum ET",
+        "unit": "(mm day$^{-1}$)",
+        "lim": [1, 4.5]
+    },
+    "q_ETmax_var": {
+        "column_name": "q_ETmax_var",
+        "symbol": "$s^2(ET_{\\mathrm{max}})$",
+        "label": "Variance of maxET",
+        "unit": "(mm day$^{-1}$)",
+        "lim": [0, 3.5]
+    },
+    "q_theta_star": {
+        "column_name": "q_theta_star",
         "symbol": "$\\theta_*$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
-        "lim": [0.25, 0.50]
+        "lim": [0.15, 0.30]
+    },
+    "q_theta_star_median": {
+        "column_name": "q_theta_star_median",
+        "symbol": "$\\tilde{\\theta^*}$",
+        "label": "Critical soil moisture content",
+        "unit": "(m$^3$ m$^{-3}$)",
+        "lim": [0.15, 0.30]
+    },
+    "q_theta_star_var": {
+        "column_name": "q_theta_star_var",
+        "symbol": "$s^2(\\theta^*)$",
+        "label": "Variance of critical soil moisture content",
+        "unit": "(m$^3$ m$^{-3}$)",
+        "lim": [0, 1.0e-3]
     },
     "sand_bins": {
         "column_name": "sand_bins",
@@ -55,6 +97,13 @@
         "unit": "",
         "lim": [0, 1]
     },
+    "veg_class_mode": {
+        "column_name": "name_most_frequent_str",
+        "symbol": "",
+        "label": "IGBP Landcover Class",
+        "unit": "",
+        "lim": [0, 1]
+    },
     "ai": {
         "column_name": "AI",
         "symbol": "AI",
@@ -71,6 +120,13 @@
     },
     "rangeland_wood": {
         "column_name": "fractional_wood",
+        "symbol": "",
+        "label": "Fractional wood cover",
+        "unit": "(%)",
+        "lim": [0, 100]
+    },
+    "rangeland_wood_median": {
+        "column_name": "fractional_wood_median",
         "symbol": "",
         "label": "Fractional wood cover",
         "unit": "(%)",
