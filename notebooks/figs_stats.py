@@ -25,6 +25,8 @@ import json
 plt.rcParams["mathtext.fontset"] = (
     "stixsans"  #'stix'  # Or 'cm' (Computer Modern), 'stixsans', etc.
 )
+from scipy.stats import mannwhitneyu, ks_2samp, median_test, wilcoxon
+from matplotlib.colors import ListedColormap, BoundaryNorm
 # Ryoko do not have this font on my system
 # import matplotlib as mpl
 
@@ -222,7 +224,7 @@ df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
 
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
-        median_diff_R2=("diff_R2", "median"), count=("diff_R2", "count")
+        median_diff_R2_q_tauexp=("diff_R2_q_tauexp", "median"), count=("diff_R2_q_tauexp", "count")
     )
     print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
 
@@ -308,8 +310,9 @@ print(
 _rangeland_info = pd.read_csv(
     os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
 ).drop(["Unnamed: 0"], axis=1)
+# Change with fraction to percentage
 _rangeland_info["fractional_wood"] = _rangeland_info["fractional_wood"] * 100
-
+_rangeland_info["fractional_herb"] = _rangeland_info["fractional_herb"] * 100
 rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
 
 # merge with results dataframe
@@ -384,18 +387,22 @@ df_filt_q_agg = df_filt_q_agg[df_filt_q_agg["id_x_count"]>16]
 
 # %%
 # Plotting
+from scipy.stats import spearmanr
+import statsmodels.api as statsm
 
-def plot_scatter(df, x_var, y_var, camp="plt.cm.YlGn"):
+def plot_scatter(df, x_var, y_var, cmap="YlGn"):
     fig, ax = plt.subplots(figsize=(5, 4))
-    # # Setting up the discrete colormap from 'summer'
-    cmap = plt.cm.YlGn
-    norm = plt.Normalize(vmin=-20, vmax=100)
+    # # Setting up the discrete colormap
+    cmap=plt.get_cmap(cmap) 
+    x_bin_interval = (x_var["lim"][1] - x_var["lim"][0])/5
+    norm = plt.Normalize(vmin=x_var["lim"][0]-x_bin_interval, vmax=x_var["lim"][1])
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-
+    
+    print(x_bin_interval)
+    print(np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval))
     # Adding regression lines per 5-year segments
-    x_bin_interval = 20
-    for start in range(0, 100, x_bin_interval):
+    for start in np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval):
 
         # Get data subset
         subset = df[(df[x_var["column_name"]] >= start) & (df[x_var["column_name"]] < start + x_bin_interval)]
@@ -411,22 +418,51 @@ def plot_scatter(df, x_var, y_var, camp="plt.cm.YlGn"):
     
     for line in ax.get_lines():
         line.set_linestyle('--')
+
     # Adding a trend line
     sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=df, scatter=False, color='black', ax=ax)
+
+    # Test the significance of the relationship
+    df_clean = df.dropna(subset=[x_var["column_name"], y_var["column_name"]])
+
+    # Compute Spearman correlation
+    correlation, p_value = spearmanr(df_clean[x_var["column_name"]].values, df_clean[y_var["column_name"]].values)
+    print("Spearman correlation")
+    print("Correlation:", correlation)
+    print("P-value:", p_value)
+
+    # Regression analysis 
+    x = statsm.add_constant(df_clean[x_var["column_name"]].values)
+    model = statsm.OLS(df_clean[y_var["column_name"]].values, x)
+    results = model.fit()
+    print(results.summary())
 
     # Enhancing the plot
     plt.title('')
     plt.xlabel(f'{x_var["label"]} {x_var["symbol"]} {x_var["unit"]}')
     plt.ylabel(f'{y_var["label"]} {y_var["symbol"]} {y_var["unit"]}')
-    plt.ylim(y_var["lim"])
+    # plt.ylim([y_var["lim"][0], y_var["lim"][1]])
 
     plt.show()
-
+# %%
 plt.rcParams.update({"font.size": 18})
-plot_scatter(df=df_filt_q_conus, x_var=var_dict["rangeland_wood"], y_var=var_dict["q_q"], camp="plt.cm.YlGn")
-plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_median"], camp="plt.cm.YlGn")
-plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_var"], camp="plt.cm.YlGn")
+plot_scatter(df=df_filt_q_conus, x_var=var_dict["rangeland_wood"], y_var=var_dict["q_q"], cmap="YlGn")
+plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_median"], cmap="YlGn")
+plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_var"], cmap="YlGn")
+# %%
+plot_scatter(df=df_filt_q, x_var=var_dict["AI"], y_var=var_dict["q_q"], cmap=ai_cmap)
+plot_scatter(df=df_filt_q_agg, x_var=var_dict["AI_median"], y_var=var_dict["q_q_median"], cmap=ai_cmap)
+# TODO: debug this. only one color is showing up ... 
+# %%
+plot_scatter(df=df_filt_q, x_var=var_dict["sand_fraction"], y_var=var_dict["q_q"], cmap=sand_cmap)
+plot_scatter(df=df_filt_q_agg, x_var=var_dict["sand_fraction_median"], y_var=var_dict["q_q_median"], cmap=sand_cmap)
 
+# %%
+plot_scatter(df=df_filt_q, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+# plot_scatter(df=df_filt_q_agg, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+
+# %%
+df_filt_q.columns
 # %%
 
 # # Change to percentage (TODO: fix this in the data management)
@@ -973,7 +1009,6 @@ plot_R2_models_v2(df=df_filt_q_and_exp, R2_threshold=R2_thresh, save=True)
 def plot_map(
     ax, df, coord_info, cmap, norm, var_item, stat_type, title="", bar_label=None
 ):
-    plt.rcParams.update({"font.size": 12})
 
     # Get the mean values of the variable
     if stat_type == "median":
@@ -1045,7 +1080,7 @@ def plot_map(
     ax.set_ylabel("Latitude")
     if title != "":
         ax.set_title(title, loc="left")
-
+|
 
 # %%
 #################################
@@ -1054,6 +1089,7 @@ def plot_map(
 save = False
 # Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
 # Also exclude the extremely small value of q that deviates the analysis
+plt.rcParams.update({"font.size": 12})
 var_key = "q_q"
 norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
 fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
@@ -1103,9 +1139,29 @@ plot_map(
     stat_type=stat_type,
     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
 )
+fig_map_R2, ax = plt.subplots(
+    figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+)
 if save:
     fig_map_R2.savefig(
-        os.path.join(fig_dir, f"R2_map_{stat_type}.png"),
+        os.path.join(fig_dir, f"R2_map_{stat_type}_and.png"),
+        dpi=900,
+        bbox_inches="tight",
+        transparent=True,
+    )
+plot_map(
+    ax=ax,
+    df=df_filt_q_or_exp,
+    coord_info=coord_info,
+    cmap="RdBu",
+    norm=norm,
+    var_item=var_dict[var_key],
+    stat_type=stat_type,
+    bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
+)
+if save:
+    fig_map_R2.savefig(
+        os.path.join(fig_dir, f"R2_map_{stat_type}_or.png"),
         dpi=900,
         bbox_inches="tight",
         transparent=True,
@@ -2083,9 +2139,8 @@ fig_hist_q_sand2.savefig(
 
 
 # %%
-from scipy.stats import mannwhitneyu, ks_2samp, median_test, wilcoxon
-from matplotlib.colors import ListedColormap, BoundaryNorm
-def stat_dist_test(df, x_var, z_var, cmap=None, categories=None, colors=None):
+
+def stat_dist_test_binned(df, x_var, z_var, cmap=None, categories=None, colors=None):
     if categories is None:
         # Get unique bins
         bins_in_range = df[z_var["column_name"]].unique()
@@ -2155,23 +2210,40 @@ def stat_dist_test(df, x_var, z_var, cmap=None, categories=None, colors=None):
 
 # %% df_filt_allq: Including extremely small  q values as well
 plt.rcParams.update({"font.size": 12})
-fig_stat_test_veg, _ = stat_dist_test(
+fig_stat_test_veg, _ = stat_dist_test_binned(
     df=df_filt_q,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
-fig_stat_test_ai, _ = stat_dist_test(
-    df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap
-)
+# %%
+_, p_mw = mannwhitneyu(df_filt_q[var_dict["q_q"]["column_name"]].values, df_filt_q[var_dict["AI"]["column_name"]].values, alternative='two-sided')
+print(f"M-W U test: {p_mw:.3f}")
+_, p_ks = ks_2samp(df_filt_q[var_dict["q_q"]["column_name"]].values, df_filt_q[var_dict["AI"]["column_name"]].values)
+print(f"K-S test: {p_ks:.3f}")
+stat, p_med, _, _ = median_test(df_filt_q[var_dict["q_q"]["column_name"]].values, df_filt_q[var_dict["AI"]["column_name"]].values)
+print(f"Median test: {p_med:.3f}")
 
-fig_stat_test_sand, _ = stat_dist_test(
-    df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
-)
+# fig_stat_test_ai, _ = stat_dist_test(
+#     df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap
+# )
+# %%
+df_filt_q_clean = df_filt_q.dropna(subset=["q_q", "sand_fraction"])
+_, p_mw = mannwhitneyu(df_filt_q_clean[var_dict["q_q"]["column_name"]].values, df_filt_q_clean[var_dict["sand_fraction"]["column_name"]].values, alternative='two-sided')
+print(f"M-W U test: {p_mw:.3f}")
+_, p_ks = ks_2samp(df_filt_q_clean[var_dict["q_q"]["column_name"]].values, df_filt_q_clean[var_dict["sand_fraction"]["column_name"]].values)
+print(f"K-S test: {p_ks:.3f}")
+stat, p_med, _, _ = median_test(df_filt_q_clean[var_dict["q_q"]["column_name"]].values, df_filt_q_clean[var_dict["sand_fraction"]["column_name"]].values)
+print(f"Median test: {p_med:.3f}")
+
+# fig_stat_test_sand, _ = stat_dist_test(
+#     df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
+# )
+
 # %%
 plt.rcParams.update({"font.size": 12})
-fig_stat_test_veg, _ = stat_dist_test(
+fig_stat_test_veg, _ = stat_dist_test_binned(
     df=df_filt_q_agg,
     x_var=var_dict["q_q_median"],
     z_var=var_dict["veg_class_mode"],
@@ -2181,10 +2253,25 @@ fig_stat_test_veg, _ = stat_dist_test(
 fig_stat_test_ai, _ = stat_dist_test(
     df=df_filt_q_agg, x_var=var_dict["q_q_median"], z_var=var_dict["ai_bins"], cmap=ai_cmap
 )
-
+# %%
+_, p_mw = mannwhitneyu(df_filt_q_agg["q_q_median"].values, df_filt_q_agg["AI_median"].values, alternative='two-sided')
+print(f"M-W U test: {p_mw:.3f}")
+_, p_ks = ks_2samp(df_filt_q_agg["q_q_median"].values, df_filt_q_agg["AI_median"].values)
+print(f"K-S test: {p_ks:.3f}")
+stat, p_med, _, _ = median_test(df_filt_q_agg["q_q_median"].values, df_filt_q_agg["AI_median"].values)
+print(f"Median test: {p_med:.3f}")
+# %%
 fig_stat_test_sand, _ = stat_dist_test(
     df=df_filt_q_agg, x_var=var_dict["q_q_median"], z_var=var_dict["sand_bins"], cmap=sand_cmap
 )
+# %%
+df_filt_q_agg_clean = df_filt_q_agg.dropna(subset=["q_q_median", "sand_fraction_median"])
+_, p_mw = mannwhitneyu(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values, alternative='two-sided')
+print(f"M-W U test: {p_mw:.3f}")
+_, p_ks = ks_2samp(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values)
+print(f"K-S test: {p_ks:.3f}")
+stat, p_med, _, _ = median_test(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values)
+print(f"Median test: {p_med:.3f}")
 # %%
 ###############################################################################################
 ###############################################################################################

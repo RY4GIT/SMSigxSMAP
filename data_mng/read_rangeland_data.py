@@ -162,9 +162,7 @@ def main():
     #################################################
 
     # Configs
-    out_dir = create_output_dir(
-        os.path.join(data_dir, "rangeland_resampled_linear")
-    )
+    out_dir = create_output_dir(os.path.join(data_dir, "rangeland_resampled_linear_v2"))
 
     # Get original files
     filenames = get_filepath_from_pattern(
@@ -192,7 +190,7 @@ def main():
         # Loop through bands
         for band_num in range(1, 7):  # This will loop from 1 to 6
             # Select one vegetation type and start resample
-            veg_ds = ds.sel(band=band_num)
+            _veg_ds = ds.sel(band=band_num)
 
             # print(
             #     f"Currently masking the data of Year {record_year} - band {band_num}"
@@ -204,12 +202,13 @@ def main():
             # print(
             #     f"Finished masking the data of Year {record_year} - band {band_num}\nTime taken for the operation: {elapsed_time} seconds"
             # )
-            
+
             print(
                 f"Currently resampling the data of Year {record_year} - band {band_num}"
             )
             start_time = time.time()
             # veg_ds_resampled = veg_ds.rio.reproject_match(subset_ease_template, resampling=Resampling.average) # Somehow this didn't align with the coastline
+            veg_ds = _veg_ds.where(_veg_ds != _veg_ds._FillValue, 0)
             veg_ds_resampled = veg_ds.interp_like(
                 subset_ease_template, method="linear", kwargs={"fill_value": np.nan}
             )

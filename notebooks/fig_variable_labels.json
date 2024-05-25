@@ -104,12 +104,40 @@
         "unit": "",
         "lim": [0, 1]
     },
-    "ai": {
+    "PET": {
+        "column_name": "pet",
+        "symbol": "PET",
+        "label": "",
+        "unit": "(mm)",
+        "lim": [0.0, 18]
+    },
+    "AI": {
         "column_name": "AI",
         "symbol": "AI",
         "label": "Aridity Index",
         "unit": "(MAP/MAE)",
+        "lim": [0.0, 4]
+    },
+    "AI_median": {
+        "column_name": "AI_median",
+        "symbol": "AI",
+        "label": "Aridity Index",
+        "unit": "(MAP/MAE)",
         "lim": [0.0, 1.5]
+    },
+    "sand_fraction": {
+        "column_name": "sand_fraction",
+        "symbol": "",
+        "label": "Sand fraction",
+        "unit": "[-]",
+        "lim": [0.0, 1.0]
+    },
+    "sand_fraction_median": {
+        "column_name": "sand_fraction_median",
+        "symbol": "",
+        "label": "Sand fraction",
+        "unit": "[-]",
+        "lim": [0.0, 1.0]
     },
     "diff_R2": {
         "column_name": "diff_R2",
