@@ -13,6 +13,7 @@ from functions import (
     loss_model,
     q_model_piecewise,
     exp_model_piecewise,
+    tau_exp_dash,
 )
 import matplotlib.gridspec as gridspec
 import json
@@ -311,35 +312,6 @@ def plot_drydown(df, event_id, ax=None, save=False):
     # Define variables and parameters
     t = np.arange(0, n_days, 1 / 24)
 
-    y_q = q_model_piecewise(
-        t=t,
-        q=event.q_q,
-        ETmax=event.q_ETmax,
-        theta_0=event.q_theta_0,
-        theta_star=event.q_theta_star,
-        theta_w=event.q_theta_w,
-    )
-    y_exp = exp_model_piecewise(
-        t=t,
-        ETmax=event.exp_ETmax,
-        theta_0=event.exp_theta_0,
-        theta_star=event.exp_theta_star,
-        theta_w=event.exp_theta_w,
-    )
-
-    y_tauexp = tau_exp_model(
-        t, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
-    )
-
-    # Get soil moisture and precipitation timeseries
-    df_ts = get_soil_moisture(event=event)
-    df_p = get_precipitation(event=event)
-
-    # Plotting settings
-    q_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={event.q_q:.1f}, $ETmax$={event.q_ETmax:.1f}, $\theta^*$={event.q_theta_star:.2f}, $\theta_w$={event.q_theta_w:.2f}, $\theta_0$={event.q_theta_0:.2f})"
-    exp_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $ETmax$={event.exp_ETmax:.1f}, $\theta^*$={event.exp_theta_star:.2f}, $\theta_w$={event.exp_theta_w:.2f}, $\theta_0$={event.exp_theta_0:.2f})"
-    tauexp_label = rf"Linear model ($R^2$={event.tauexp_r_squared:.2f}, $\tau$={event.tauexp_tau:.2f}, $\Delta \theta$={event.tauexp_delta_theta:.2f}), $\theta_w$={event.tauexp_theta_w:.2f})"
-
     start_date = pd.to_datetime(event.event_start) - pd.Timedelta(3, "D")
     end_date = pd.to_datetime(event.event_end) + pd.Timedelta(7, "D")
     date_range = pd.date_range(
@@ -361,13 +333,37 @@ def plot_drydown(df, event_id, ax=None, save=False):
     ax1 = fig.add_subplot(gs[0])
     ax2 = fig.add_subplot(gs[1], sharex=ax1)
 
-    # Plot observed & fitted soil moisture
+    # ___________________________________________________
+    # SOIL MOISTURE
+    df_ts = get_soil_moisture(event=event)
     ax1.scatter(
         df_ts[start_date:end_date].index,
         df_ts[start_date:end_date].values,
         color="grey",
         label="SMAP observation",
     )
+    ax1.set_xlabel("Date")
+    ax1.set_ylabel("Soil moisture content" + "\n" + rf"$\theta$ $[m3/m3]$")
+    ax1.set_title(
+        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand; PET= {event.pet:.1f} mm)"
+    )
+
+    # ___________________________________________________
+    # PRECIPITATION
+    df_p = get_precipitation(event=event)
+    ax2.bar(
+        df_p[start_date:end_date].index,
+        df_p[start_date:end_date].values.flatten(),
+        color="grey",
+    )
+    ax2.set_ylabel("Precipitation \n[mm/d]")
+
+    # ___________________________________________________
+    # TAU-EXPONENTIAL
+    y_tauexp = tau_exp_model(
+        t, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
+    )
+    tauexp_label = rf"$\tau$-based Linear model ($R^2$={event.tauexp_r_squared:.2f}, $\tau$={event.tauexp_tau:.2f}, $\Delta \theta$={event.tauexp_delta_theta:.2f}), $\theta_w$={event.tauexp_theta_w:.2f})"
     ax1.plot(
         date_range[:-1],
         y_tauexp,
@@ -376,8 +372,34 @@ def plot_drydown(df, event_id, ax=None, save=False):
         alpha=0.5,
         linestyle="--",
     )
+
+    # ___________________________________________________
+    # EXPONENTIAL
+    y_exp = exp_model_piecewise(
+        t=t,
+        ETmax=event.exp_ETmax,
+        theta_0=event.exp_theta_0,
+        theta_star=event.exp_theta_star,
+        theta_w=event.exp_theta_w,
+    )
+    exp_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $ETmax$={event.exp_ETmax:.1f}, $\theta^*$={event.exp_theta_star:.2f}, $\theta_w$={event.exp_theta_w:.2f}, $\theta_0$={event.exp_theta_0:.2f})"
     ax1.plot(date_range[:-1], y_exp, label=exp_label, color="darkblue", alpha=0.5)
+
+    # ___________________________________________________
+    # Q MODEL
+    y_q = q_model_piecewise(
+        t=t,
+        q=event.q_q,
+        ETmax=event.q_ETmax,
+        theta_0=event.q_theta_0,
+        theta_star=event.q_theta_star,
+        theta_w=event.q_theta_w,
+    )
+    q_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={event.q_q:.1f}, $ETmax$={event.q_ETmax:.1f}, $\theta^*$={event.q_theta_star:.2f}, $\theta_w$={event.q_theta_w:.2f}, $\theta_0$={event.q_theta_0:.2f})"
     ax1.plot(date_range[:-1], y_q, label=q_label, color="darkorange")
+
+    # ___________________________________________________
+    # Estimated theta_fc
     ax1.axhline(
         y=event.est_theta_fc,
         color="tab:grey",
@@ -386,23 +408,10 @@ def plot_drydown(df, event_id, ax=None, save=False):
         label=r"Estimated $\theta_{fc}$",
     )
 
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("Soil moisture content" + "\n" + rf"$\theta$ $[m3/m3]$")
-    ax1.legend(loc="upper right")
-    ax1.set_title(
-        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand)"
-    )
-
-    # Plot preciptation
-    ax2.bar(
-        df_p[start_date:end_date].index,
-        df_p[start_date:end_date].values.flatten(),
-        color="grey",
-    )
-    ax2.set_ylabel("Precipitation \n[mm/d]")
-
+    # ___________________________________________________
     # Formatting
     # Optional: Hide x-ticks for ax1 if they're redundant
+    ax1.legend(loc="upper right")
     plt.setp(ax1.get_xticklabels(), visible=False)
 
     # Adjust the subplots to prevent overlap
@@ -433,35 +442,39 @@ def plot_drydown(df, event_id, ax=None, save=False):
     theta_obs = df_ts[
         pd.to_datetime(event.event_start) : pd.to_datetime(event.event_end)
     ].values
+    t_obs = np.where(~np.isnan(theta_obs))[0]
 
-    # Plot observed & fitted soil moisture
-    ax3.plot(
-        nonlinear_theta_plot,
-        loss_model(
-            nonlinear_theta_plot,
-            event.q_q,
-            event.q_ETmax,
-            theta_w=event.q_theta_w,
-            theta_star=event.q_theta_star,
-        ),
-        color="darkorange",
-        label="Nonlinear model",
+    # ___________________________________________________
+    # LINEAR (EXPONENTIAL) MODEL
+    x_tau_in_L = tau_exp_model(
+        t_obs, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
     )
-
-    # Plot observed & fitted soil moisture
+    y_tau_in_L = tau_exp_dash(
+        t_obs, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
+    )
     ax3.scatter(
-        theta_obs,
-        loss_model(
-            theta_obs,
-            event.q_q,
-            event.q_ETmax,
-            theta_w=event.q_theta_w,
-            theta_star=event.q_theta_star,
-        ),
-        color="grey",
+        x_tau_in_L,
+        y_tau_in_L,
+        color="blue",
+        facecolors="none",
         alpha=0.5,
     )
 
+    # Fit the linear regression model
+    slope, intercept = np.polyfit(x_tau_in_L, y_tau_in_L, 1)
+    tauexp_theta_plot = np.arange(event.tauexp_theta_w, est_fc, 0.001)
+    y_vals = slope * tauexp_theta_plot + intercept
+    ax3.plot(
+        tauexp_theta_plot,
+        y_vals,
+        color="darkblue",
+        linestyle="--",
+        alpha=0.9,
+        label=r"$\tau$-based Linear model",
+    )
+
+    # ___________________________________________________
+    # LINEAR MODEL
     # Plot observed & fitted soil moisture
     ax3.plot(
         linear_theta_plot,
@@ -473,25 +486,72 @@ def plot_drydown(df, event_id, ax=None, save=False):
             theta_star=event.exp_theta_star,
         ),
         color="darkblue",
-        linestyle="--",
+        alpha=0.9,
         label="Linear model",
     )
 
     # Plot observed & fitted soil moisture
+    linear_est_theta_obs = exp_model_piecewise(
+        t=t_obs,
+        ETmax=event.exp_ETmax,
+        theta_0=event.exp_theta_0,
+        theta_star=event.exp_theta_star,
+        theta_w=event.exp_theta_w,
+    )
     ax3.scatter(
-        theta_obs,
+        linear_est_theta_obs,
         loss_model(
-            theta_obs,
+            linear_est_theta_obs,
             1,
             event.exp_ETmax,
             theta_w=event.exp_theta_w,
             theta_star=event.exp_theta_star,
         ),
-        color="grey",
+        color="darkblue",
         alpha=0.5,
-        label=r"Observed $\theta$" + "\n" + r"($d\theta/dt$ is estimated)",
+        # label=r"Observed $\theta$" + "\n" + r"($d\theta/dt$ is estimated)",
     )
 
+    # ___________________________________________________
+    # NONLINEAR (Q) MODEL
+    # Plot observed & fitted soil moisture
+    ax3.plot(
+        nonlinear_theta_plot,
+        loss_model(
+            nonlinear_theta_plot,
+            event.q_q,
+            event.q_ETmax,
+            theta_w=event.q_theta_w,
+            theta_star=event.q_theta_star,
+        ),
+        color="darkorange",
+        alpha=0.9,
+        label="Nonlinear model",
+    )
+
+    nonlinear_est_theta_obs = q_model_piecewise(
+        t=t_obs,
+        q=event.q_q,
+        ETmax=event.q_ETmax,
+        theta_0=event.q_theta_0,
+        theta_star=event.q_theta_star,
+        theta_w=event.q_theta_w,
+    )
+    ax3.scatter(
+        nonlinear_est_theta_obs,
+        loss_model(
+            nonlinear_est_theta_obs,
+            event.q_q,
+            event.q_ETmax,
+            theta_w=event.q_theta_w,
+            theta_star=event.q_theta_star,
+        ),
+        color="darkorange",
+        alpha=0.5,
+    )
+
+    # ___________________________________________________
+    # FORMATTING
     ax3.set_xlabel(r"$\theta$ [$m^3$ $m^{-3}$]")
     ax3.set_ylabel(r"$d\theta/dt$ [$m^3$ $m^{-3}$ $day^{-1}$]")
     ax3.legend(loc="upper left")
@@ -536,10 +596,12 @@ print("done")
 
 df_filt = df[
     (df["q_r_squared"] > 0.8)
+    & (df["diff_R2"] > 0)
     & (df["sm_range"] > 0.15)
     & (df["large_q_criteria"] < 0.6)
     & (df["first3_avail2"])
     & (df["q_q"] > 1.0e-04)
+    & (df["q_q"] > 1.4)
 ]
 # df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
 print(df_filt.index)
@@ -559,10 +621,10 @@ else:
 
 # %%
 ################################################
-event_id = 295227
+event_id = 297033
 ################################################
 plot_drydown(df=df, event_id=event_id)
-print(df.loc[event_id])
+# print(df.loc[event_id])
 print(f"Next to try (in df): {df_filt.sample(n=1).index}")
 print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
 # check_1ts_range(df.loc[event_id], verbose=True)
