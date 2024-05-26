@@ -123,6 +123,13 @@ def exp_model_piecewise(t, ETmax, theta_0, theta_star, theta_w, z=50.0):
     )
 
 
+def tau_exp_dash(t, delta_theta, theta_w, tau):
+    """
+    -dtheta/dt at a given timestep (derivative of tau_exp_model function)
+    """
+    return -delta_theta / tau * np.exp(-t / tau)
+
+
 def loss_model(theta, q, ETmax, theta_w=0.0, theta_star=1.0, z=50.0):
     """
     Calculate the loss function (dtheta/dt vs theta relationship) using non-linear plant stress model

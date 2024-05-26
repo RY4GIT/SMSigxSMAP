@@ -162,7 +162,7 @@ def main():
     #################################################
 
     # Configs
-    out_dir = create_output_dir(os.path.join(data_dir, "rangeland_resampled_linear_v2"))
+    out_dir = create_output_dir(os.path.join(data_dir, "rangeland_resampled_avg"))
 
     # Get original files
     filenames = get_filepath_from_pattern(
@@ -190,7 +190,7 @@ def main():
         # Loop through bands
         for band_num in range(1, 7):  # This will loop from 1 to 6
             # Select one vegetation type and start resample
-            _veg_ds = ds.sel(band=band_num)
+            veg_ds = ds.sel(band=band_num)
 
             # print(
             #     f"Currently masking the data of Year {record_year} - band {band_num}"
@@ -208,18 +208,56 @@ def main():
             )
             start_time = time.time()
             # veg_ds_resampled = veg_ds.rio.reproject_match(subset_ease_template, resampling=Resampling.average) # Somehow this didn't align with the coastline
-            veg_ds = _veg_ds.where(_veg_ds != _veg_ds._FillValue, 0)
-            veg_ds_resampled = veg_ds.interp_like(
-                subset_ease_template, method="linear", kwargs={"fill_value": np.nan}
+            # Example of defining new grid boundaries manually or from subset_ease_template
+
+            # grid_interval_y_min = abs(
+            #     subset_ease_template.y.data[0] - subset_ease_template.y.data[1]
+            # )
+            # grid_interval_x_min = abs(
+            #     subset_ease_template.x.data[0] - subset_ease_template.x.data[1]
+            # )
+            # # For maximum edge using the last two elements
+            # grid_interval_y_max = abs(
+            #     subset_ease_template.y.data[-1] - subset_ease_template.y.data[-2]
+            # )
+            # grid_interval_x_max = abs(
+            #     subset_ease_template.x.data[-1] - subset_ease_template.x.data[-2]
+            # )
+
+            new_lat_bounds = np.linspace(
+                start=min(subset_ease_template.y),  # - grid_interval_y_min,
+                stop=max(subset_ease_template.y),  # + grid_interval_y_max,
+                num=len(subset_ease_template.y) + 1,
             )
+            new_lon_bounds = np.linspace(
+                start=min(subset_ease_template.x),  # - grid_interval_x_min,
+                stop=max(subset_ease_template.x),  # + grid_interval_x_max,
+                num=len(subset_ease_template.x) + 1,
+            )
+
+            # Grouping by these new bins
+            _veg_ds_resampled = veg_ds.groupby_bins("y", new_lat_bounds).mean()
+            veg_ds_resampled = _veg_ds_resampled.groupby_bins(
+                "x", new_lon_bounds
+            ).mean()
             end_time = time.time()
             elapsed_time = end_time - start_time
             print(
                 f"Finished resampling the data of Year {record_year} - band {band_num}\nTime taken for the operation: {elapsed_time} seconds"
             )
 
+            out_ds = xr.DataArray(
+                data=veg_ds_resampled.data,
+                dims=["y", "x"],
+                coords={
+                    "y": np.flip(subset_ease_template.y.data),
+                    "x": subset_ease_template.x.data,
+                },
+            )
+            out_ds.attrs["crs"] = "EPSG:4326"
+
             out_filepath = os.path.join(out_dir, f"{record_year}_band{band_num}.nc")
-            veg_ds_resampled.to_netcdf(path=out_filepath)
+            out_ds.to_netcdf(path=out_filepath)
 
 
 if __name__ == "__main__":
