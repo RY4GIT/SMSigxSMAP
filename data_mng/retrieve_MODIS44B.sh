@@ -10,7 +10,7 @@ output_dir="/home/waves/projects/smap-drydown/data/MOD44B.061"
 mkdir -p "$output_dir"
 
 # Download the files, excluding .jpg images
-wget --recursive --no-parent --reject "*.jpg*" -nd --directory-prefix="$output_dir" "$base_url"
+wget --recursive --no-parent --reject "*.jpg*" "*.html*" -nd --directory-prefix="$output_dir" "$base_url"
 
 # Check if wget was successful
 if [ $? -eq 0 ]; then
