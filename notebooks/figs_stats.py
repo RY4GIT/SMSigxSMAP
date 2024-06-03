@@ -240,70 +240,46 @@ small_q_thresh = 1.0e-03
 large_q_thresh = 0.8
 ###################################################
 
-# Runs where q model performed reasonablly well
-df_filt_q = df[
-    (df["q_r_squared"] >= R2_thresh)
-    & (df["sm_range"] > sm_range_thresh)
-    & (df["q_q"] > small_q_thresh)
-    & (df["large_q_criteria"] < large_q_thresh)
-    & (df["first3_avail2"])
-].copy()
+def filter_df(df, criteria):
+    return df[criteria].copy()
 
-print(
-    f"q model fit successful: {len(df_filt_q)}"
-)
-count_median_number_of_events_perGrid(df_filt_q)
+def print_model_success(message, df):
+    print(f"{message} {len(df)}")
+    count_median_number_of_events_perGrid(df)
 
-# Runs where q model performed reasonablly well
-df_filt_allq = df[
-    (df["q_r_squared"] >= R2_thresh)
-    & (df["sm_range"] > sm_range_thresh)
-].copy()
+# Filtering dataframes based on various model criteria
+criteria_q = (df["q_r_squared"] >= R2_thresh) & (df["sm_range"] > sm_range_thresh)
+criteria_specific_q = criteria_q & (df["q_q"] > small_q_thresh) & (df["large_q_criteria"] < large_q_thresh) & (df["first3_avail2"])
+criteria_tauexp = (df["tauexp_r_squared"] >= R2_thresh) & (df["sm_range"] > sm_range_thresh)
+criteria_exp = (df["exp_r_squared"] >= R2_thresh) & (df["sm_range"] > sm_range_thresh)
 
-print(
-    f"q model fit successful (not filtering q parmaeter values): {len(df_filt_allq)}"
-)
-count_median_number_of_events_perGrid(df_filt_allq)
+df_filt_q = filter_df(df, criteria_specific_q)
+df_filt_allq = filter_df(df, criteria_q)
+df_filt_tauexp = filter_df(df, criteria_tauexp)
+df_filt_exp = filter_df(df, criteria_exp)
+df_filt_q_or_tauexp = filter_df(df, criteria_q | criteria_tauexp)
+df_filt_q_and_tauexp = filter_df(df, criteria_q & criteria_tauexp)
+df_filt_q_or_exp = filter_df(df, criteria_q | criteria_exp)
+df_filt_q_and_exp = filter_df(df, criteria_q & criteria_exp)
 
-# Runs where exponential model performed good
-df_filt_exp = df[
-    (df["tauexp_r_squared"] >= R2_thresh)
-    & (df["sm_range"] > sm_range_thresh)
-].copy()
-print(
-    f"tau-exp model fit successful: {len(df_filt_exp)}"
-)
-count_median_number_of_events_perGrid(df_filt_exp)
+# Printing success messages and calculating events
+print_model_success("q model fit successful:", df_filt_q)
+print_model_success("q model fit successful (not filtering q parameter values):", df_filt_allq)
+print_model_success("tau-exp model fit successful:", df_filt_tauexp)
+print_model_success("exp model fit successful:", df_filt_exp)
+print_model_success("either q or tau-exp:", df_filt_q_or_tauexp)
+print_model_success("both q and tau-exp model fit successful:", df_filt_q_and_tauexp)
+print_model_success("either q or exp model fit successful:", df_filt_q_or_exp)
+print_model_success("both q and exp model fit successful:", df_filt_q_and_exp)
 
-# Runs where either of the model performed satisfactory
-df_filt_q_or_exp = df[
-    (
-        (df["q_r_squared"] >= R2_thresh)
-        | (df["tauexp_r_squared"] >= R2_thresh)
-    )
-    & (df["sm_range"] > sm_range_thresh)
-].copy()
+def print_performance_comparison(df, model1, model2):
+    n_better = sum(df[model1] > df[model2])
+    percentage_better = n_better / len(df) * 100
+    print(f"Of successful fits, {model1} performed better in {percentage_better:.0f} percent of events: {n_better}")
 
-print(f"either q or tau-exp model fit successful: {len(df_filt_q_or_exp)}")
-count_median_number_of_events_perGrid(df_filt_q_or_exp)
+print_performance_comparison(df_filt_q_and_tauexp, "q_r_squared", "tauexp_r_squared")
+print_performance_comparison(df_filt_q_and_exp, "q_r_squared", "exp_r_squared")
 
-# Runs where both of the model performed satisfactory
-df_filt_q_and_exp = df[
-    (df["q_r_squared"] >= R2_thresh)
-    & (df["tauexp_r_squared"] >= R2_thresh)
-    & (df["sm_range"] > sm_range_thresh)
-].copy()
-
-print(f"both q and tau-exp model fit successful: {len(df_filt_q_and_exp)}")
-count_median_number_of_events_perGrid(df_filt_q_and_exp)
-
-# How many events showed better R2?
-n_nonlinear_better_events = sum(
-    df_filt_q_and_exp["q_r_squared"] > df_filt_q_and_exp["tauexp_r_squared"]
-)
-print(
-    f"Of successful fits, nonlinear model performed better in {n_nonlinear_better_events/len(df_filt_q_and_exp)*100:.0f} percent of events: {n_nonlinear_better_events}"
-)
 #%%
 ####################################################################################
 # Read rangeland data and join it with d_filt_q
@@ -350,7 +326,6 @@ df_filt_q_agg = df_filt_q.groupby(['EASE_row_index', 'EASE_column_index']).agg({
 }).reset_index()
 
 # Flatten the multi-level column index
-# 
 df_filt_q_agg.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df_filt_q_agg.columns.values]
 df_filt_q_agg.head()
 
@@ -383,511 +358,27 @@ df_filt_q_agg = df_filt_q_agg[df_filt_q_agg["id_x_count"]>16]
 ############################################################################################################################################
 ############################################################################################################################################
 
-
-
-# %%
-# Plotting
-from scipy.stats import spearmanr
-import statsmodels.api as statsm
-
-def plot_scatter(df, x_var, y_var, cmap="YlGn"):
-    fig, ax = plt.subplots(figsize=(5, 4))
-    # # Setting up the discrete colormap
-    cmap=plt.get_cmap(cmap) 
-    x_bin_interval = (x_var["lim"][1] - x_var["lim"][0])/5
-    norm = plt.Normalize(vmin=x_var["lim"][0]-x_bin_interval, vmax=x_var["lim"][1])
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    
-    print(x_bin_interval)
-    print(np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval))
-    # Adding regression lines per 5-year segments
-    for start in np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval):
-
-        # Get data subset
-        subset = df[(df[x_var["column_name"]] >= start) & (df[x_var["column_name"]] < start + x_bin_interval)]
-
-        # Get color 
-        midpoint = start + 2.5  # Midpoint for color indexing
-        color = cmap(norm(midpoint))
-        dark_color = [x * 0.8 for x in color[:3]] + [1]
-
-        # Plot trendline and scatter
-        sns.scatterplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, alpha=0.3, color=color, ax=ax)
-        sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, scatter=False,  color=dark_color, ax=ax)
-    
-    for line in ax.get_lines():
-        line.set_linestyle('--')
-
-    # Adding a trend line
-    sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=df, scatter=False, color='black', ax=ax)
-
-    # Test the significance of the relationship
-    df_clean = df.dropna(subset=[x_var["column_name"], y_var["column_name"]])
-
-    # Compute Spearman correlation
-    correlation, p_value = spearmanr(df_clean[x_var["column_name"]].values, df_clean[y_var["column_name"]].values)
-    print("Spearman correlation")
-    print("Correlation:", correlation)
-    print("P-value:", p_value)
-
-    # Regression analysis 
-    x = statsm.add_constant(df_clean[x_var["column_name"]].values)
-    model = statsm.OLS(df_clean[y_var["column_name"]].values, x)
-    results = model.fit()
-    print(results.summary())
-
-    # Enhancing the plot
-    plt.title('')
-    plt.xlabel(f'{x_var["label"]} {x_var["symbol"]} {x_var["unit"]}')
-    plt.ylabel(f'{y_var["label"]} {y_var["symbol"]} {y_var["unit"]}')
-    # plt.ylim([y_var["lim"][0], y_var["lim"][1]])
-
-    plt.show()
-# %%
-plt.rcParams.update({"font.size": 18})
-plot_scatter(df=df_filt_q_conus, x_var=var_dict["rangeland_wood"], y_var=var_dict["q_q"], cmap="YlGn")
-plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_median"], cmap="YlGn")
-plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_var"], cmap="YlGn")
-# %%
-plot_scatter(df=df_filt_q, x_var=var_dict["AI"], y_var=var_dict["q_q"], cmap=ai_cmap)
-plot_scatter(df=df_filt_q_agg, x_var=var_dict["AI_median"], y_var=var_dict["q_q_median"], cmap=ai_cmap)
-# TODO: debug this. only one color is showing up ... 
-# %%
-plot_scatter(df=df_filt_q, x_var=var_dict["sand_fraction"], y_var=var_dict["q_q"], cmap=sand_cmap)
-plot_scatter(df=df_filt_q_agg, x_var=var_dict["sand_fraction_median"], y_var=var_dict["q_q_median"], cmap=sand_cmap)
-
-# %%
-plot_scatter(df=df_filt_q, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
-# plot_scatter(df=df_filt_q_agg, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
-
-# %%
-df_filt_q.columns
-# %%
-
-# # Change to percentage (TODO: fix this in the data management)
-# df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
-# df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
-
-# Print some statistics
-print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
-print(
-    f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
-)
-print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
-
-
-# %%
-# Get the statistics on the proportion of q>1 and q<1 events 
-def get_df_percentage_q(
-    df,
-    x1_varname,
-    x2_varname,
-    y_varname,
-    weight_by, 
-    bins=[0, 20, 40, 60, 80, 100],
-    labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
-):
-
-    # Bin AI values
-    x2_new_varname = x2_varname + "_binned2"
-    df[x2_new_varname] = pd.cut(
-        df[x2_varname],
-        # bins=[0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, np.inf],
-        # labels=["0-0.25", "0.25-0.5", "0.5-0.75", "0.75-1.0","1.0-1.25", "1.25-1.5", "1.5-"],
-        bins=[0, 0.5, 1.0, 1.5, np.inf],
-        labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
-    )
-
-    x1_new_varname = x1_varname + "_pct"
-    df[x1_new_varname] = pd.cut(df[x1_varname], bins=bins, labels=labels)
-
-    # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
-    q_greater_1 = (
-        df[df[y_varname] > 1]
-        .groupby([x2_new_varname, x1_new_varname])
-        .agg(
-            count_greater_1=(y_varname, 'size'),  # Count the occurrences
-            sum_weightfact_q_gt_1=(weight_by, 'sum')  # Sum the event_length
-        )
-        .reset_index()
-    )
-
-    total_counts = (
-        df.groupby([x2_new_varname, x1_new_varname]).agg(
-            total_count=(y_varname, 'size'),  # Count the occurrences
-            sum_weightfact_total=(weight_by, 'sum')  # Sum the event_length
-        )
-        .reset_index()
-    )
-    percentage_df = pd.merge(q_greater_1, total_counts, on=[x2_new_varname, x1_new_varname])
-
-    percentage_df["percentage_q_gt_1"] = (
-        percentage_df["count_greater_1"] / percentage_df["total_count"]
-    ) * 100
-    percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
-    percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
-    percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
-
-    # count percentage * days percentage
-    # percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
-    # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
-
-    # Percentage of count * days
-    percentage_df["count_x_weight_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_weightfact_q_gt_1"]
-    percentage_df["count_x_weight_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_weightfact_total"]-percentage_df["sum_weightfact_q_gt_1"])
-    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
-    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
-    return percentage_df
-
-
-percentage_df = get_df_percentage_q(df=df_filt_q_conus, x1_varname="fractional_wood", x2_varname="AI", y_varname="q_q", weight_by="event_length")
-percentage_df_median = get_df_percentage_q(df=df_filt_q_conus_agg, x1_varname="fractional_wood_median", x2_varname="AI_median", y_varname="q_q_median", weight_by="event_length_median")
-
-#%%
-# Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
-
-def darken_hex_color(hex_color, darken_factor=0.7):
-    # Convert hex to RGB
-    rgb_color = mcolors.hex2color(hex_color)
-    # Convert RGB to HSV
-    hsv_color = mcolors.rgb_to_hsv(rgb_color)
-    # Darken the color by reducing its V (Value) component
-    hsv_color[2] *= darken_factor
-    # Convert back to RGB, then to hex
-    darkened_rgb_color = mcolors.hsv_to_rgb(hsv_color)
-    return mcolors.to_hex(darkened_rgb_color)
-    
-def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
-
-    # Determine unique groups and categories
-    # Define the width of the bars and the space between groups
-    bar_width = 0.2
-    space_between_bars  = 0.025
-    space_between_groups = 0.2
-    
-    # Determine unique values for grouping
-    # Aridity bins
-    x_unique = df[x_column_to_plot].unique()
-    # Vegetation bins
-    z_unique = df[z_var].unique()
-    n_groups = len(z_unique)
-    
-    # Define original colors
-    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
-    min_darken_factor = 0.85
-
-    # Setup for weighted or unweighted percentages
-    if weighted:
-        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
-    else:
-        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
-    
-    # Create the grouped and stacked bars
-    for z_i, z in enumerate(z_unique):
-        for x_i, x in enumerate(x_unique):
-
-            # Darken colors for this group
-            darken_factor = max(np.sqrt(np.sqrt(np.sqrt(1 - (x_i / len(x_unique))))), min_darken_factor)
-            colors = [darken_hex_color(color, darken_factor) for color in base_colors]
-    
-            # Calculate the x position for each group
-            group_offset = (bar_width + space_between_bars) * n_groups
-            x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
-            
-            # Get the subset of data for this group
-            subset = df[(df[x_column_to_plot] == x) & (df[z_var] == z)]
-            
-            # Get bottom values for stacked bars
-            bottom_value = 0
-
-            for i, (y_var, color) in enumerate(zip(y_vars, colors)):
-                ax.bar(
-                    x_pos,
-                    subset[y_var].values[0],
-                    bar_width,
-                    bottom=bottom_value,
-                    color=color,
-                    edgecolor='white',
-                    label=f'{z} - {y_var.split("_")[-1]}' if x_i == 0 and i == 0 else ""
-                )
-
-                bottom_value += subset[y_var].values[0]
-    
-    # Set the x-ticks to the middle of the groups
-    ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
-    ax.set_xticklabels(x_unique, rotation=45)
-    ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
-
-    # Set the y-axis
-    if not weighted:
-        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
-        ax.set_ylim([0, 40])
-    else:
-        ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 20])
-
-    # Set the second x-ticks
-    # Replicate the z_var labels for the number of x_column_to_plot labels
-    z_labels = np.tile(z_unique, len(x_unique))
-
-    # Adjust the tick positions for the replicated z_var labels
-    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
-
-    # Hide the original x-axis ticks and labels
-    ax.tick_params(axis='x', which='both', length=0)
-
-    # Create a secondary x-axis for the new labels
-    ax2 = ax.twiny()
-    ax2.set_xlim(ax.get_xlim())
-    ax2.set_xticks(new_tick_positions)
-    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-
-    # Adjust the secondary x-axis to appear below the primary x-axis
-    ax2.spines['top'].set_visible(False)
-    ax2.xaxis.set_ticks_position('bottom')
-    ax2.xaxis.set_label_position('bottom')
-    ax2.spines['bottom'].set_position(('outward', 60))
-    ax2.tick_params(axis='x', which='both', length=0)
-    ax2.set_xticklabels(z_labels, rotation=45)
-
-    # Set plot title and legend
-    ax.set_title(title_name)
-
-plt.rcParams.update({"font.size": 11})
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df,
-    x_column_to_plot="AI_binned2",
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=False
-)
-plt.tight_layout()
-
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df,
-    x_column_to_plot="AI_binned2",
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=True
-)
-plt.tight_layout()
-
-plt.rcParams.update({"font.size": 11})
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df_median,
-    x_column_to_plot="AI_median_binned2",
-    z_var="fractional_wood_median_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=False
-)
-plt.tight_layout()
-
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df_median,
-    x_column_to_plot="AI_median_binned2",
-    z_var="fractional_wood_median_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=True
-)
-plt.tight_layout()
-# %%
-def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=False):
-
-    # Determine unique groups and categories
-    # Define the width of the bars and the space between groups
-    bar_width = 0.2
-    space_between_bars  = 0.025
-    space_between_groups = 0.2
-    
-    # Determine unique values for grouping
-
-    # Vegetation bins
-    z_unique = df[z_var].unique()
-    n_groups = len(z_unique)
-    # exclude = df["AI_binned2"].unique([:1])
-
-    # exclude = df["AI_binned2"].unique()[-1]
-    
-    # Define original colors
-    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
-    min_darken_factor = 0.85
-
-    # Setup for weighted or unweighted percentages
-    if weighted:
-        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
-    else:
-        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
-    
-    # Create the grouped and stacked bars
-    for z_i, z in enumerate(z_unique):
-
-        # Get the subset of data for this group
-        subset = df[(df[z_var] == z)]#&(df["AI_binned2"] != exclude)]
-        # print(subset.total_count.sum())
-        # Check the sample size before plotting
-        if subset.total_count.sum() < 100:  # If the number of samples in the group is less than 10, skip plotting
-            continue
-        
-        # Get bottom values for stacked bars
-        bottom_value = 0
-        # Calculate the x position for each group
-        group_offset = (bar_width + space_between_bars) * n_groups
-        x_pos = (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
-            
-
-        for i, (y_var, color) in enumerate(zip(y_vars, base_colors)):
-            ax.bar(
-                x_pos,
-                subset[y_var].values[0],
-                bar_width,
-                bottom=bottom_value,
-                color=color,
-                edgecolor='white',
-            )
-
-            bottom_value += subset[y_var].values[0]
-
-    # Set the y-axis
-    if weighted:
-        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
-        ax.set_ylim([0, 20])
-    else:
-        ax.set_ylabel("Proportion of\ndrydown events (%)")
-        ax.set_ylim([0, 40])
-
-    # Set the second x-ticks
-    # Replicate the z_var labels for the number of x_column_to_plot labels
-    z_labels = z_unique
-
-    # Adjust the tick positions for the replicated z_var labels
-    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
-
-    # Hide the original x-axis ticks and labels
-    ax.tick_params(axis='x', which='both', length=0)
-
-    # Create a secondary x-axis for the new labels
-    ax2 = ax.twiny()
-    ax2.set_xlim(ax.get_xlim())
-    ax2.set_xticks(new_tick_positions)
-    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
-
-    # Adjust the secondary x-axis to appear below the primary x-axis
-    ax2.spines['top'].set_visible(False)
-    ax2.xaxis.set_ticks_position('bottom')
-    ax2.xaxis.set_label_position('bottom')
-    ax2.spines['bottom'].set_position(('outward', 60))
-    ax2.tick_params(axis='x', which='both', length=0)
-    ax2.set_xticklabels(z_labels, rotation=45)
-
-    # Set plot title and legend
-    ax.set_title(title_name)
-
-percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "AI", "q_q", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
-percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "AI", "q_q", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
-percentage_df_5 = get_df_percentage_q(
-    df_filt_q_conus, 
-    "fractional_wood", 
-    "AI", "q_q", 
-    "event_length", 
-    [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100], 
-    ["0-5%", "5-10%", "10-15%", "15-20%", "20-25%", "25-30%", "30-35%", "35-40%", "40-45%", "45-50%", "50-55%", "55-60%", "60-65%", "65-70%", "70-75%", "75-80%", "80-85%", "85-90%", "90-95%", "95-100%"]
-)
-
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar_uni(
-    ax=ax,
-    df=percentage_df_10,
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=True
-)
-plt.tight_layout()
-
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar_uni(
-    ax=ax,
-    df=percentage_df_10,
-    z_var="fractional_wood_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=False
-)
-plt.tight_layout()
-
-
-# %%
-
-# %% 
-# #################################################################
-# Relationship between q and the length of the drydown events
-#################################################################
-# Calculate the number of bins
-
-def plot_eventlength_hist(df):
-    min_value = df['event_length'].min()
-    max_value = df['event_length'].max()
-    bin_width = 1
-    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
-
-    hist = df['event_length'].hist(bins=n_bins)
-    hist.set_xlabel('Length of the event [days]')
-    hist.set_ylabel('Frequency')
-    # hist.set_xlim([0, 20])
-
-# plot_eventlength_hist(df_filt_q)
-plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
-
-# %%
-
-def plot_eventlength_vs_q(df):
-    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
-    plt.ylabel(r'$q$')
-    plt.xlabel('Length of the event [days]')
-    # plt.xlim([0, 20])
-
-# plot_eventlength_vs_q(df_filt_q)
-plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
-
-
-# %%
-##################################################################
-##### Statistics
-#################################################################
-
-# %%
 ###################################################################
 # Number of samples
-################################################################
-
-
+################################################################0
 # How much percent area (based on SMAP pixels) had better R2
-grouped = df_filt_q_and_exp.groupby(["EASE_row_index", "EASE_column_index"]).agg(
-    median_diff_R2=("diff_R2", "median"), count=("diff_R2", "count")
-)
-print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
-print(f"Number of SMAP grids with data: {len(grouped)}")
-num_positive_median_diff_R2 = (grouped["median_diff_R2"] > 0).sum()
-print(
-    f"Number of SMAP grids with bettter nonlinear model fits: {num_positive_median_diff_R2} ({(num_positive_median_diff_R2/len(grouped))*100:.1f} percent)"
-)
 
-sns.histplot(grouped["count"], binwidth=0.5, color="#2c7fb8", fill=False, linewidth=3)
+def count_model_performance(df, varname):
+    grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
+        median_diff_R2=(varname, "median"), count=(varname, "count")
+    )
+    print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
+    print(f"Number of SMAP grids with data: {len(grouped)}")
+    pos_median_diff_R2 = (grouped["median_diff_R2"] > 0).sum()
+    print(
+        f"Number of SMAP grids with bettter nonlinear model fits: {pos_median_diff_R2} ({(pos_median_diff_R2/len(grouped))*100:.1f} percent)"
+    )
+    # sns.histplot(grouped["count"], binwidth=0.5, color="#2c7fb8", fill=False, linewidth=3)
 
+count_model_performance(df_filt_q_or_exp, "diff_R2_q_tauexp")
+count_model_performance(df_filt_q_or_exp, "diff_R2_q_exp")
 
+# %%
 ###################################################################
 # Number of samples
 ###################################################################
@@ -946,10 +437,11 @@ def using_mpl_scatter_density(fig, x, y):
     fig.colorbar(density, label="Number of points per pixel")
 
 
-def plot_R2_models_v2(df, R2_threshold, save=False):
+def plot_R2_models_v2(df, linearmodel, R2_threshold, save=False):
     plt.rcParams.update({"font.size": 30})
+
     # Read data
-    x = df["tauexp_r_squared"].values
+    x = df[f"{linearmodel}_r_squared"].values
     y = df["q_r_squared"].values
 
     # Create a scatter plot
@@ -957,11 +449,15 @@ def plot_R2_models_v2(df, R2_threshold, save=False):
     fig = plt.figure(figsize=(4.7 * 1.2, 4 * 1.2))
     ax = fig.add_subplot(1, 1, 1, projection="scatter_density")
     density = ax.scatter_density(x, y, cmap=white_viridis, vmin=0, vmax=30)
-    fig.colorbar(density, label="Number of points per pixel")
+    fig.colorbar(density, label="Frequency")
     plt.show()
 
     # plt.title(rf'')
-    ax.set_xlabel(r"Linear model")
+    if linearmodel=="tauexp":
+        ax.set_xlabel(r"$\tau$-based Linear model")
+    else:
+        ax.set_xlabel(r"Linear model")
+
     ax.set_ylabel(r"Non-linear model")
 
     # Add 1:1 line
@@ -990,17 +486,17 @@ def plot_R2_models_v2(df, R2_threshold, save=False):
 
     if save:
         fig.savefig(
-            os.path.join(fig_dir, f"R2_scatter.png"), dpi=900, bbox_inches="tight"
+            os.path.join(fig_dir, f"R2_scatter_{linearmodel}.png"), dpi=900, bbox_inches="tight"
         )
         fig.savefig(
-            os.path.join(fig_dir, f"R2_scatter.pdf"), dpi=1200, bbox_inches="tight"
+            os.path.join(fig_dir, f"R2_scatter_{linearmodel}.pdf"), dpi=1200, bbox_inches="tight"
         )
     return fig, ax
 
 
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
-plot_R2_models_v2(df=df_filt_q_and_exp, R2_threshold=R2_thresh, save=True)
-
+plot_R2_models_v2(df=df_filt_q_and_exp, linearmodel="exp", R2_threshold=R2_thresh, save=True)
+plot_R2_models_v2(df=df_filt_q_and_tauexp, linearmodel="tauexp", R2_threshold=R2_thresh, save=True)
 
 # %%
 ############################################################################
@@ -1080,7 +576,7 @@ def plot_map(
     ax.set_ylabel("Latitude")
     if title != "":
         ax.set_title(title, loc="left")
-|
+
 
 # %%
 #################################
@@ -1091,13 +587,16 @@ save = False
 # Also exclude the extremely small value of q that deviates the analysis
 plt.rcParams.update({"font.size": 12})
 var_key = "q_q"
-norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+from matplotlib.colors import LinearSegmentedColormap
+q_colors = ["#F7CA0D", "#78c679",  "#004529"]  # These are your colors c1, c2, and c3
+q_cmap = LinearSegmentedColormap.from_list("custom_cmap", q_colors, N=256)
+norm = Normalize(vmin=0.75, vmax=3.0)
 fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
 plot_map(
     ax=ax,
     df=df_filt_q,
     coord_info=coord_info,
-    cmap="YlGnBu",
+    cmap=q_cmap,
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
@@ -1121,59 +620,150 @@ print(f"Global mean q: {df_filt_q['q_q'].mean()}")
 
 # %% Map of differences in R2 values
 
-save = True
+# save = True
+# stat_type = "median"
+
+# # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
+# var_key = "diff_R2_exp"
+# norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+# fig_map_R2, ax = plt.subplots(
+#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+# )
+# plot_map(
+#     ax=ax,
+#     df=df_filt_q_and_exp,
+#     coord_info=coord_info,
+#     cmap="RdBu",
+#     norm=norm,
+#     var_item=var_dict[var_key],
+#     stat_type=stat_type,
+#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
+# )
+# fig_map_R2, ax = plt.subplots(
+#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+# )
+# if save:
+#     fig_map_R2.savefig(
+#         os.path.join(fig_dir, f"R2_map_{stat_type}_and_exp.png"),
+#         dpi=900,
+#         bbox_inches="tight",
+#         transparent=True,
+#     )
+
+# plot_map(
+#     ax=ax,
+#     df=df_filt_q_or_exp,
+#     coord_info=coord_info,
+#     cmap="RdBu",
+#     norm=norm,
+#     var_item=var_dict[var_key],
+#     stat_type=stat_type,
+#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
+# )
+# if save:
+#     fig_map_R2.savefig(
+#         os.path.join(fig_dir, f"R2_map_{stat_type}_or_exp.png"),
+#         dpi=900,
+#         bbox_inches="tight",
+#         transparent=True,
+#     )
+
+# print(
+#     f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2_q_exp'].median()}"
+# )
+# print(
+#     f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2_q_exp'].mean()}"
+# )
+
+# # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
+# var_key = "diff_R2_tauexp"
+# norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
+# fig_map_R2, ax = plt.subplots(
+#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+# )
+# plot_map(
+#     ax=ax,
+#     df=df_filt_q_and_tauexp,
+#     coord_info=coord_info,
+#     cmap="RdBu",
+#     norm=norm,
+#     var_item=var_dict[var_key],
+#     stat_type=stat_type,
+#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
+# )
+# fig_map_R2, ax = plt.subplots(
+#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+# )
+# if save:
+#     fig_map_R2.savefig(
+#         os.path.join(fig_dir, f"R2_map_{stat_type}_and_tauexp.png"),
+#         dpi=900,
+#         bbox_inches="tight",
+#         transparent=True,
+#     )
+
+# plot_map(
+#     ax=ax,
+#     df=df_filt_q_or_tauexp,
+#     coord_info=coord_info,
+#     cmap="RdBu",
+#     norm=norm,
+#     var_item=var_dict[var_key],
+#     stat_type=stat_type,
+#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
+# )
+# if save:
+#     fig_map_R2.savefig(
+#         os.path.join(fig_dir, f"R2_map_{stat_type}_or_tauexp.png"),
+#         dpi=900,
+#         bbox_inches="tight",
+#         transparent=True,
+#     )
+
+# print(
+#     f"Global median diff R2 (nonlinear - tau-based linear): {df_filt_q_and_exp['diff_R2_q_tauexp'].median()}"
+# )
+# print(
+#     f"Global mean diff R2 (nonlinear - tau-based linear): {df_filt_q_and_exp['diff_R2_q_tauexp'].mean()}"
+# )
+
+
+# %%
 stat_type = "median"
-# Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
-var_key = "diff_R2"
-norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-fig_map_R2, ax = plt.subplots(
-    figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
-)
-plot_map(
-    ax=ax,
-    df=df_filt_q_and_exp,
-    coord_info=coord_info,
-    cmap="RdBu",
-    norm=norm,
-    var_item=var_dict[var_key],
-    stat_type=stat_type,
-    bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
-)
-fig_map_R2, ax = plt.subplots(
-    figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
-)
-if save:
-    fig_map_R2.savefig(
-        os.path.join(fig_dir, f"R2_map_{stat_type}_and.png"),
-        dpi=900,
-        bbox_inches="tight",
-        transparent=True,
-    )
-plot_map(
-    ax=ax,
-    df=df_filt_q_or_exp,
-    coord_info=coord_info,
-    cmap="RdBu",
-    norm=norm,
-    var_item=var_dict[var_key],
-    stat_type=stat_type,
-    bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
-)
-if save:
-    fig_map_R2.savefig(
-        os.path.join(fig_dir, f"R2_map_{stat_type}_or.png"),
-        dpi=900,
-        bbox_inches="tight",
-        transparent=True,
-    )
 
-print(
-    f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].median()}"
-)
-print(
-    f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2'].mean()}"
-)
+def plot_map_and_save(fig, ax, df, coord_info, cmap, norm, var_item, stat_type, file_name):
+    plot_map(ax=ax, df=df, coord_info=coord_info, cmap=cmap, norm=norm, var_item=var_item, stat_type=stat_type,
+             bar_label=stat_type.capitalize() + " differences\nin " + var_item["label"])
+    if save:
+        fig.savefig(os.path.join(fig_dir, file_name), dpi=900, bbox_inches='tight', transparent=True)
 
+def print_global_stats(df, diff_var, model_desc):
+    print(f"Global median diff R2 ({model_desc}): {df[diff_var].median()}")
+    print(f"Global mean diff R2 ({model_desc}): {df[diff_var].mean()}")
+
+# Setup common variables
+var_key_exp = "diff_R2_exp"
+var_key_tauexp = "diff_R2_tauexp"
+norm_exp = Normalize(vmin=var_dict[var_key_exp]["lim"][0], vmax=var_dict[var_key_exp]["lim"][1])
+norm_tauexp = Normalize(vmin=var_dict[var_key_tauexp]["lim"][0], vmax=var_dict[var_key_tauexp]["lim"][1])
+
+# Plot and save maps for exp model
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map_and_save(fig_map_R2, ax, df_filt_q_and_exp, coord_info, "RdBu", norm_exp, var_dict[var_key_exp], stat_type, f"R2_map_{stat_type}_and_exp.png")
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map_and_save(fig_map_R2, ax, df_filt_q_or_exp, coord_info, "RdBu", norm_exp, var_dict[var_key_exp], stat_type, f"R2_map_{stat_type}_or_exp.png")
+
+# Print statistical summaries for exp model
+print_global_stats(df_filt_q_and_exp, 'diff_R2_q_exp', 'nonlinear - linear')
+
+# Plot and save maps for tauexp model
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map_and_save(fig_map_R2, ax, df_filt_q_and_tauexp, coord_info, "RdBu", norm_tauexp, var_dict[var_key_tauexp], stat_type, f"R2_map_{stat_type}_and_tauexp.png")
+fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+plot_map_and_save(fig_map_R2, ax, df_filt_q_or_tauexp, coord_info, "RdBu", norm_tauexp, var_dict[var_key_tauexp], stat_type, f"R2_map_{stat_type}_or_tauexp.png")
+
+# Print statistical summaries for tauexp model
+print_global_stats(df_filt_q_and_tauexp, 'diff_R2_q_tauexp', 'nonlinear - tau-based linear')
 # %%
 save = save
 # Map of theta_star
@@ -2016,6 +1606,399 @@ fig.savefig(
     os.path.join(fig_dir, "sup_lossfnc_sand_var.pdf"), dpi=1200, bbox_inches="tight"
 )
 
+
+# %%
+# Get the statistics on the proportion of q>1 and q<1 events 
+def get_df_percentage_q(
+    df,
+    x1_varname,
+    x2_varname,
+    y_varname,
+    weight_by, 
+    bins=[0, 20, 40, 60, 80, 100],
+    labels=["0-20%", "20-40%", "40-60%", "60-80%", "80-100%"],
+):
+
+    # Bin AI values
+    x2_new_varname = x2_varname + "_binned2"
+    df[x2_new_varname] = pd.cut(
+        df[x2_varname],
+        # bins=[0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, np.inf],
+        # labels=["0-0.25", "0.25-0.5", "0.5-0.75", "0.75-1.0","1.0-1.25", "1.25-1.5", "1.5-"],
+        bins=[0, 0.5, 1.0, 1.5, np.inf],
+        labels=["0-0.5", "0.5-1.0", "1.0-1.5", "1.5-"],
+    )
+
+    x1_new_varname = x1_varname + "_pct"
+    df[x1_new_varname] = pd.cut(df[x1_varname], bins=bins, labels=labels)
+
+    # Calculating percentage of q>1 events for each AI bin and fractional_wood_pct
+    q_greater_1 = (
+        df[df[y_varname] > 1]
+        .groupby([x2_new_varname, x1_new_varname])
+        .agg(
+            count_greater_1=(y_varname, 'size'),  # Count the occurrences
+            sum_weightfact_q_gt_1=(weight_by, 'sum')  # Sum the event_length
+        )
+        .reset_index()
+    )
+
+    total_counts = (
+        df.groupby([x2_new_varname, x1_new_varname]).agg(
+            total_count=(y_varname, 'size'),  # Count the occurrences
+            sum_weightfact_total=(weight_by, 'sum')  # Sum the event_length
+        )
+        .reset_index()
+    )
+    percentage_df = pd.merge(q_greater_1, total_counts, on=[x2_new_varname, x1_new_varname])
+
+    percentage_df["percentage_q_gt_1"] = (
+        percentage_df["count_greater_1"] / percentage_df["total_count"]
+    ) * 100
+    percentage_df["percentage_q_le_1"] = 100 - percentage_df["percentage_q_gt_1"]
+    percentage_df["percentage_q_le_1"] = percentage_df["percentage_q_le_1"].fillna(0)
+    percentage_df["percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"].fillna(0)
+
+    # count percentage * days percentage
+    # percentage_df["weighted_percentage_q_gt_1"] = percentage_df["percentage_q_gt_1"] * percentage_df["sum_event_length_q_gt_1"]/ percentage_df["sum_event_length_total"]
+    # percentage_df["weighted_percentage_q_le_1"] = percentage_df["percentage_q_le_1"] * (percentage_df["sum_event_length_total"]-percentage_df["sum_event_length_q_gt_1"])/ percentage_df["sum_event_length_total"]
+
+    # Percentage of count * days
+    percentage_df["count_x_weight_q_gt_1"] = percentage_df["count_greater_1"] * percentage_df["sum_weightfact_q_gt_1"]
+    percentage_df["count_x_weight_q_le_1"] = (percentage_df["total_count"] - percentage_df["count_greater_1"]) * (percentage_df["sum_weightfact_total"]-percentage_df["sum_weightfact_q_gt_1"])
+    percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
+    return percentage_df
+
+
+percentage_df = get_df_percentage_q(df=df_filt_q_conus, x1_varname="fractional_wood", x2_varname="AI", y_varname="q_q", weight_by="event_length")
+percentage_df_median = get_df_percentage_q(df=df_filt_q_conus_agg, x1_varname="fractional_wood_median", x2_varname="AI_median", y_varname="q_q_median", weight_by="event_length_median")
+
+#%%
+# Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
+
+def darken_hex_color(hex_color, darken_factor=0.7):
+    # Convert hex to RGB
+    rgb_color = mcolors.hex2color(hex_color)
+    # Convert RGB to HSV
+    hsv_color = mcolors.rgb_to_hsv(rgb_color)
+    # Darken the color by reducing its V (Value) component
+    hsv_color[2] *= darken_factor
+    # Convert back to RGB, then to hex
+    darkened_rgb_color = mcolors.hsv_to_rgb(hsv_color)
+    return mcolors.to_hex(darkened_rgb_color)
+    
+def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_name, weighted=False):
+
+    # Determine unique groups and categories
+    # Define the width of the bars and the space between groups
+    bar_width = 0.2
+    space_between_bars  = 0.025
+    space_between_groups = 0.2
+    
+    # Determine unique values for grouping
+    # Aridity bins
+    x_unique = df[x_column_to_plot].unique()
+    # Vegetation bins
+    z_unique = df[z_var].unique()
+    n_groups = len(z_unique)
+    
+    # Define original colors
+    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
+    min_darken_factor = 0.85
+
+    # Setup for weighted or unweighted percentages
+    if weighted:
+        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
+    else:
+        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
+    
+    # Create the grouped and stacked bars
+    for z_i, z in enumerate(z_unique):
+        for x_i, x in enumerate(x_unique):
+
+            # Darken colors for this group
+            darken_factor = max(np.sqrt(np.sqrt(np.sqrt(1 - (x_i / len(x_unique))))), min_darken_factor)
+            colors = [darken_hex_color(color, darken_factor) for color in base_colors]
+    
+            # Calculate the x position for each group
+            group_offset = (bar_width + space_between_bars) * n_groups
+            x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
+            
+            # Get the subset of data for this group
+            subset = df[(df[x_column_to_plot] == x) & (df[z_var] == z)]
+            
+            # Get bottom values for stacked bars
+            bottom_value = 0
+
+            for i, (y_var, color) in enumerate(zip(y_vars, colors)):
+                ax.bar(
+                    x_pos,
+                    subset[y_var].values[0],
+                    bar_width,
+                    bottom=bottom_value,
+                    color=color,
+                    edgecolor='white',
+                    label=f'{z} - {y_var.split("_")[-1]}' if x_i == 0 and i == 0 else ""
+                )
+
+                bottom_value += subset[y_var].values[0]
+    
+    # Set the x-ticks to the middle of the groups
+    ax.set_xticks([i * (group_offset + space_between_groups) + group_offset / 2 for i in range(len(x_unique))])
+    ax.set_xticklabels(x_unique, rotation=45)
+    ax.set_xlabel(f"{var_dict["ai_bins"]['label']} {var_dict["ai_bins"]['unit']}")
+
+    # Set the y-axis
+    if not weighted:
+        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
+        ax.set_ylim([0, 40])
+    else:
+        ax.set_ylabel("Proportion of\ndrydown events (%)")
+        ax.set_ylim([0, 20])
+
+    # Set the second x-ticks
+    # Replicate the z_var labels for the number of x_column_to_plot labels
+    z_labels = np.tile(z_unique, len(x_unique))
+
+    # Adjust the tick positions for the replicated z_var labels
+    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
+
+    # Hide the original x-axis ticks and labels
+    ax.tick_params(axis='x', which='both', length=0)
+
+    # Create a secondary x-axis for the new labels
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(new_tick_positions)
+    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+
+    # Adjust the secondary x-axis to appear below the primary x-axis
+    ax2.spines['top'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.xaxis.set_label_position('bottom')
+    ax2.spines['bottom'].set_position(('outward', 60))
+    ax2.tick_params(axis='x', which='both', length=0)
+    ax2.set_xticklabels(z_labels, rotation=45)
+
+    # Set plot title and legend
+    ax.set_title(title_name)
+
+plt.rcParams.update({"font.size": 11})
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df,
+    x_column_to_plot="AI_binned2",
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=True
+)
+plt.tight_layout()
+
+plt.rcParams.update({"font.size": 11})
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df_median,
+    x_column_to_plot="AI_median_binned2",
+    z_var="fractional_wood_median_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar(
+    ax=ax,
+    df=percentage_df_median,
+    x_column_to_plot="AI_median_binned2",
+    z_var="fractional_wood_median_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=True
+)
+plt.tight_layout()
+# %%
+def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=False):
+
+    # Determine unique groups and categories
+    # Define the width of the bars and the space between groups
+    bar_width = 0.2
+    space_between_bars  = 0.025
+    space_between_groups = 0.2
+    
+    # Determine unique values for grouping
+
+    # Vegetation bins
+    z_unique = df[z_var].unique()
+    n_groups = len(z_unique)
+    # exclude = df["AI_binned2"].unique([:1])
+
+    # exclude = df["AI_binned2"].unique()[-1]
+    
+    # Define original colors
+    base_colors  = ['#FFE268', '#22BBA9'] # (q<1, q>1)
+    min_darken_factor = 0.85
+
+    # Setup for weighted or unweighted percentages
+    if weighted:
+        y_vars = ['weighted_percentage_q_le_1', 'weighted_percentage_q_gt_1']
+    else:
+        y_vars = ['percentage_q_le_1', 'percentage_q_gt_1']
+    
+    # Create the grouped and stacked bars
+    for z_i, z in enumerate(z_unique):
+
+        # Get the subset of data for this group
+        subset = df[(df[z_var] == z)]#&(df["AI_binned2"] != exclude)]
+        # print(subset.total_count.sum())
+        # Check the sample size before plotting
+        if subset.total_count.sum() < 100:  # If the number of samples in the group is less than 10, skip plotting
+            continue
+        
+        # Get bottom values for stacked bars
+        bottom_value = 0
+        # Calculate the x position for each group
+        group_offset = (bar_width + space_between_bars) * n_groups
+        x_pos = (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
+            
+
+        for i, (y_var, color) in enumerate(zip(y_vars, base_colors)):
+            ax.bar(
+                x_pos,
+                subset[y_var].values[0],
+                bar_width,
+                bottom=bottom_value,
+                color=color,
+                edgecolor='white',
+            )
+
+            bottom_value += subset[y_var].values[0]
+
+    # Set the y-axis
+    if weighted:
+        ax.set_ylabel("Weighted proportion of\ndrydown events\nby event length (%)")
+        ax.set_ylim([0, 20])
+    else:
+        ax.set_ylabel("Proportion of\ndrydown events (%)")
+        ax.set_ylim([0, 40])
+
+    # Set the second x-ticks
+    # Replicate the z_var labels for the number of x_column_to_plot labels
+    z_labels = z_unique
+
+    # Adjust the tick positions for the replicated z_var labels
+    new_tick_positions = [i + bar_width / 2 for i in range(len(z_labels))]
+
+    # Hide the original x-axis ticks and labels
+    ax.tick_params(axis='x', which='both', length=0)
+
+    # Create a secondary x-axis for the new labels
+    ax2 = ax.twiny()
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(new_tick_positions)
+    ax2.set_xlabel(f"{var_dict[var_name]['label']} {var_dict[var_name]['unit']}")
+
+    # Adjust the secondary x-axis to appear below the primary x-axis
+    ax2.spines['top'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.xaxis.set_label_position('bottom')
+    ax2.spines['bottom'].set_position(('outward', 60))
+    ax2.tick_params(axis='x', which='both', length=0)
+    ax2.set_xticklabels(z_labels, rotation=45)
+
+    # Set plot title and legend
+    ax.set_title(title_name)
+
+percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "AI", "q_q", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
+percentage_df_10 = get_df_percentage_q(df_filt_q_conus, "fractional_wood", "AI", "q_q", "event_length", [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], ["0-10%","10-20%", "20-30%", "30-40%", "40-50%","50-60%", "60-70%", "70-80%", "80-90%", "90-100%"])
+percentage_df_5 = get_df_percentage_q(
+    df_filt_q_conus, 
+    "fractional_wood", 
+    "AI", "q_q", 
+    "event_length", 
+    [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100], 
+    ["0-5%", "5-10%", "10-15%", "15-20%", "20-25%", "25-30%", "30-35%", "35-40%", "40-45%", "45-50%", "50-55%", "55-60%", "60-65%", "65-70%", "70-75%", "75-80%", "80-85%", "85-90%", "90-95%", "95-100%"]
+)
+
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar_uni(
+    ax=ax,
+    df=percentage_df_10,
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=True
+)
+plt.tight_layout()
+
+fig, ax = plt.subplots(figsize=(4, 4))
+plot_grouped_stacked_bar_uni(
+    ax=ax,
+    df=percentage_df_10,
+    z_var="fractional_wood_pct",
+    var_name="rangeland_wood",
+    title_name="",
+    weighted=False
+)
+plt.tight_layout()
+
+
+# %%
+
+# %% 
+# #################################################################
+# Relationship between q and the length of the drydown events
+#################################################################
+# Calculate the number of bins
+
+def plot_eventlength_hist(df):
+    min_value = df['event_length'].min()
+    max_value = df['event_length'].max()
+    bin_width = 1
+    n_bins = int((max_value - min_value) / bin_width) + 1  # Adding 1 to include the max value
+
+    hist = df['event_length'].hist(bins=n_bins)
+    hist.set_xlabel('Length of the event [days]')
+    hist.set_ylabel('Frequency')
+    # hist.set_xlim([0, 20])
+
+# plot_eventlength_hist(df_filt_q)
+plot_eventlength_hist(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
+# %%
+
+def plot_eventlength_vs_q(df):
+    plt.scatter(df['event_length'], df['q_q'], marker='.', alpha=0.3)
+    plt.ylabel(r'$q$')
+    plt.xlabel('Length of the event [days]')
+    # plt.xlim([0, 20])
+
+# plot_eventlength_vs_q(df_filt_q)
+plot_eventlength_vs_q(df_filt_q_conus[~pd.isna(df_filt_q_conus["barren_percent"])])
+
+
+# %%
+##################################################################
+##### Statistics
+#################################################################
+
+
 # %%
 ##########################################################################################
 # Histogram with mean and median
@@ -2272,6 +2255,100 @@ _, p_ks = ks_2samp(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean
 print(f"K-S test: {p_ks:.3f}")
 stat, p_med, _, _ = median_test(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values)
 print(f"Median test: {p_med:.3f}")
+
+
+
+
+# %%
+# Plotting
+from scipy.stats import spearmanr
+import statsmodels.api as statsm
+
+def plot_scatter(df, x_var, y_var, cmap="YlGn"):
+    fig, ax = plt.subplots(figsize=(5, 4))
+    # # Setting up the discrete colormap
+    cmap=plt.get_cmap(cmap) 
+    x_bin_interval = (x_var["lim"][1] - x_var["lim"][0])/5
+    norm = plt.Normalize(vmin=x_var["lim"][0]-x_bin_interval, vmax=x_var["lim"][1])
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    
+    print(x_bin_interval)
+    print(np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval))
+    # Adding regression lines per 5-year segments
+    for start in np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval):
+
+        # Get data subset
+        subset = df[(df[x_var["column_name"]] >= start) & (df[x_var["column_name"]] < start + x_bin_interval)]
+
+        # Get color 
+        midpoint = start + 2.5  # Midpoint for color indexing
+        color = cmap(norm(midpoint))
+        dark_color = [x * 0.8 for x in color[:3]] + [1]
+
+        # Plot trendline and scatter
+        sns.scatterplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, alpha=0.3, color=color, ax=ax)
+        sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, scatter=False,  color=dark_color, ax=ax)
+    
+    for line in ax.get_lines():
+        line.set_linestyle('--')
+
+    # Adding a trend line
+    sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=df, scatter=False, color='black', ax=ax)
+
+    # Test the significance of the relationship
+    df_clean = df.dropna(subset=[x_var["column_name"], y_var["column_name"]])
+
+    # Compute Spearman correlation
+    correlation, p_value = spearmanr(df_clean[x_var["column_name"]].values, df_clean[y_var["column_name"]].values)
+    print("Spearman correlation")
+    print("Correlation:", correlation)
+    print("P-value:", p_value)
+
+    # Regression analysis 
+    x = statsm.add_constant(df_clean[x_var["column_name"]].values)
+    model = statsm.OLS(df_clean[y_var["column_name"]].values, x)
+    results = model.fit()
+    print(results.summary())
+
+    # Enhancing the plot
+    plt.title('')
+    plt.xlabel(f'{x_var["label"]} {x_var["symbol"]} {x_var["unit"]}')
+    plt.ylabel(f'{y_var["label"]} {y_var["symbol"]} {y_var["unit"]}')
+    # plt.ylim([y_var["lim"][0], y_var["lim"][1]])
+
+    plt.show()
+# %%
+plt.rcParams.update({"font.size": 18})
+plot_scatter(df=df_filt_q_conus, x_var=var_dict["rangeland_wood"], y_var=var_dict["q_q"], cmap="YlGn")
+plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_median"], cmap="YlGn")
+plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_var"], cmap="YlGn")
+# %%
+plot_scatter(df=df_filt_q, x_var=var_dict["AI"], y_var=var_dict["q_q"], cmap=ai_cmap)
+plot_scatter(df=df_filt_q_agg, x_var=var_dict["AI_median"], y_var=var_dict["q_q_median"], cmap=ai_cmap)
+# TODO: debug this. only one color is showing up ... 
+# %%
+plot_scatter(df=df_filt_q, x_var=var_dict["sand_fraction"], y_var=var_dict["q_q"], cmap=sand_cmap)
+plot_scatter(df=df_filt_q_agg, x_var=var_dict["sand_fraction_median"], y_var=var_dict["q_q_median"], cmap=sand_cmap)
+
+# %%
+plot_scatter(df=df_filt_q, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+# plot_scatter(df=df_filt_q_agg, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+
+# %%
+df_filt_q.columns
+# %%
+
+# # Change to percentage (TODO: fix this in the data management)
+# df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
+# df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
+
+# Print some statistics
+print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
+print(
+    f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
+)
+print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
 # %%
 ###############################################################################################
 ###############################################################################################

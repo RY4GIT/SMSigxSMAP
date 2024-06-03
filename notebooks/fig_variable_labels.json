@@ -146,6 +146,20 @@
         "unit": "",
         "lim": [-0.02, 0.02]
     },
+    "diff_R2_exp": {
+        "column_name": "diff_R2_q_exp",
+        "symbol": "$R^2$",
+        "label": "$R^2$ (Nonlinear - linear)",
+        "unit": "",
+        "lim": [-0.1, 0.1]
+    },
+    "diff_R2_tauexp": {
+        "column_name": "diff_R2_q_tauexp",
+        "symbol": "$R^2$",
+        "label": "$R^2$ (Nonlinear - $\\tau$-based linear)",
+        "unit": "",
+        "lim": [-0.01, 0.01]
+    },
     "rangeland_wood": {
         "column_name": "fractional_wood",
         "symbol": "",

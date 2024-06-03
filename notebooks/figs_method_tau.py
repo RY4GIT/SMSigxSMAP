@@ -35,7 +35,7 @@ theta_0 = theta_fc
 
 c3 = "#108883"  # "#108883"  # f"#2c7fb8"
 c2 = "#2EBB9D"  # "#2EBB9D"  # f"#41b6c4"
-c1 = "#F7CA0D"  # "#F7CA0D"  # f"#a1dab4"
+c1 = "#269A81"  # "#F7CA0D"  # f"#a1dab4"
 
 d3 = "#2c7fb8"
 d2 = "#41b6c4"
