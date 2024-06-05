@@ -15,17 +15,17 @@
     },
     "q_q": {
         "column_name": "q_q",
-        "symbol": "$q$",
-        "label": "Nonlinearity parameter",
-        "unit": "",
+        "symbol": "$\\hat{q}$",
+        "label": "Nonlinearity",
+        "unit": "(-)",
         "lim": [0.75, 3.0]
     },
     "q_q_median": {
         "column_name": "q_q_median",
-        "symbol": "$\\tilde{q}$",
+        "symbol": "$\\hat{q}$",
         "label": "Median nonlinearity parameter",
-        "unit": "",
-        "lim": [0.5, 3.0]
+        "unit": "(-)",
+        "lim": [1.0, 3.0]
     },
     "q_q_var": {
         "column_name": "q_q_var",
@@ -36,17 +36,17 @@
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
-        "symbol": "$ET_{\\mathrm{max}}$",
+        "symbol": "$\\hat{ET_{\\mathrm{max}}}$",
         "label": "Maximum ET",
         "unit": "(mm day$^{-1}$)",
         "lim": [1, 4.5]
     },
     "q_ETmax_median": {
         "column_name": "q_ETmax_median",
-        "symbol": "$\\tilde{ET_{\\mathrm{max}}}$",
+        "symbol": "$\\hat{ET_{\\mathrm{max}}}$",
         "label": "Maximum ET",
         "unit": "(mm day$^{-1}$)",
-        "lim": [1, 4.5]
+        "lim": [1.0, 3.25]
     },
     "q_ETmax_var": {
         "column_name": "q_ETmax_var",
@@ -57,14 +57,14 @@
     },
     "q_theta_star": {
         "column_name": "q_theta_star",
-        "symbol": "$\\theta_*$",
+        "symbol": "$\\hat{\\theta}^*$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0.15, 0.30]
     },
     "q_theta_star_median": {
         "column_name": "q_theta_star_median",
-        "symbol": "$\\tilde{\\theta^*}$",
+        "symbol": "$\\hat{\\theta}^*$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0.15, 0.30]
@@ -134,7 +134,7 @@
     },
     "sand_fraction_median": {
         "column_name": "sand_fraction_median",
-        "symbol": "",
+        "symbol": "Sand fraction",
         "label": "Sand fraction",
         "unit": "[-]",
         "lim": [0.0, 1.0]
@@ -148,14 +148,14 @@
     },
     "diff_R2_exp": {
         "column_name": "diff_R2_q_exp",
-        "symbol": "$R^2$",
+        "symbol": "",
         "label": "$R^2$ (Nonlinear - linear)",
         "unit": "",
         "lim": [-0.1, 0.1]
     },
     "diff_R2_tauexp": {
         "column_name": "diff_R2_q_tauexp",
-        "symbol": "$R^2$",
+        "symbol": "",
         "label": "$R^2$ (Nonlinear - $\\tau$-based linear)",
         "unit": "",
         "lim": [-0.01, 0.01]
@@ -163,7 +163,7 @@
     "rangeland_wood": {
         "column_name": "fractional_wood",
         "symbol": "",
-        "label": "Fractional wood cover",
+        "label": "Wood fraction of vegetated area",
         "unit": "(%)",
         "lim": [0, 100]
     },
@@ -177,7 +177,7 @@
     "rangeland_wood_bins": {
         "column_name": "fractional_wood_pct",
         "symbol": "",
-        "label": "Fractional wood cover",
+        "label": "Wood fraction of vegetated area",
         "unit": "(%)",
         "lim": [0, 100]
     },
@@ -188,7 +188,7 @@
         "unit": "(%)",
         "lim": [0, 100]
     },
-    "rangeland_othe": {
+    "rangeland_other": {
         "column_name": "",
         "symbol": "",
         "label": "Other landcover",
@@ -216,7 +216,7 @@
         "unit": "(days)",
         "lim": [0, 100]
     },
-    "theta_w": {
+    "q_theta_w": {
         "column_name": "q_theta_w",
         "symbol": "\\theta_w",
         "label": "Wilting point",
@@ -228,13 +228,6 @@
         "symbol": "",
         "label": "Fraction of soil moisture range covered",
         "unit": "(-)",
-        "lim": [0, 100]
-    },
-    "q_delta_theta": {
-        "column_name": "q_theta_0",
-        "symbol": "\\theta_0",
-        "label": "Initial soil moisture content at the start of the drydown",
-        "unit": "(m^3 m^{-3})",
         "lim": [0, 100]
     }
 }

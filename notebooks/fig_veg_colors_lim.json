@@ -1,7 +1,7 @@
 {
-    "Open shrublands": "#C99728",
-    "Grasslands": "#13BFB2",
-    "Savannas": "#92BA31",
-    "Woody savannas": "#4C6903",
-    "Croplands": "#F7C906"
+    "Open shrublands": "#d8b365",
+    "Grasslands": "#F7CA0D",
+    "Savannas": "#5ab4ac",
+    "Woody savannas": "#01665e",
+    "Cropland/natural vegetation": "#c7eae5"
 }

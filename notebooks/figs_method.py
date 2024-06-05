@@ -84,8 +84,8 @@ plt.rcParams["mathtext.fontset"] = (
 # %% Plot
 fig = plt.figure(figsize=(8, 4))
 plt.rcParams.update({"font.size": 14})
-c1 = "#108883"  # "#108883"  # f"#2c7fb8"
-c2 = "#2EBB9D"  # "#2EBB9D"  # f"#41b6c4"
+c1 = "#01665e"  # "#108883"  # f"#2c7fb8"
+c2 = "#5ab4ac"  # "#2EBB9D"  # f"#41b6c4"
 c3 = "#F7CA0D"  # "#F7CA0D"  # f"#a1dab4"
 linewidth = 3
 
@@ -132,7 +132,7 @@ ax1.set(
     ylabel=f'{dtheta_vardict["label"]} {dtheta_vardict["unit"]}',
 )
 ax1.set_title(
-    label="A", loc="left"
+    label="(a)", loc="left"
 )  # rf"Normalized loss function $L(\theta)/\Delta z$",)
 ax1.set_xticks(
     [theta_w, theta_star, theta_star + fc_minus_star],
@@ -217,7 +217,7 @@ ax2.set(
     xlabel=f'{var_dict["t"]["label"]} {var_dict["t"]["unit"]}',
     ylabel=f'{theta_vardict["label"]} {theta_vardict["unit"]}',
 )
-ax2.set_title(label="B", loc="left")  # "Soil moisture drydown",
+ax2.set_title(label="(b)", loc="left")  # "Soil moisture drydown",
 # ax2.set_xticks([5, 15], [" ", " "])
 ax2.set_yticks(
     [theta_w, theta_star, theta_fc], [r"$\theta_{wp}$", r"$\theta^*$", r"$\theta_{fc}$"]

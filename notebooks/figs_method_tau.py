@@ -33,13 +33,13 @@ theta_fc = theta_star + fc_minus_star
 theta_0 = theta_fc
 
 
-c3 = "#108883"  # "#108883"  # f"#2c7fb8"
-c2 = "#2EBB9D"  # "#2EBB9D"  # f"#41b6c4"
-c1 = "#269A81"  # "#F7CA0D"  # f"#a1dab4"
+# c3 = "#108883"  # "#108883"  # f"#2c7fb8"
+c1 = "#d0d1e6"  # "#2EBB9D"  # f"#41b6c4"
+c2 = "#a6bddb"  # "#F7CA0D"  # f"#a1dab4"
 
-d3 = "#2c7fb8"
-d2 = "#41b6c4"
-d1 = "#a1dab4"
+d1 = "#74a9cf"  # "#2c7fb8"
+d2 = "#3690c0"  # "#41b6c4"
+d3 = "#0570b0"  # "#a1dab4"
 linewidth = 3
 
 
@@ -118,7 +118,7 @@ ax1.set(
     xlabel=f'{theta_vardict["label"]} {theta_vardict["unit"]}',
     ylabel=f'{dtheta_vardict["label"]} {dtheta_vardict["unit"]}',
 )
-ax1.set_title(label="C", loc="left")
+ax1.set_title(label="(c)", loc="left")
 ax1.set_xticks(
     [theta_w1, theta_star, theta_star + fc_minus_star],
     [r"$\theta_{wp}$", r"$\theta^{*}$", r"$\theta_{fc}$"],
@@ -158,7 +158,7 @@ ax2.set(
     xlabel=f'{var_dict["t"]["label"]} {var_dict["t"]["unit"]}',
     ylabel=f'{theta_vardict["label"]} {theta_vardict["unit"]}',
 )
-ax2.set_title(label="D", loc="left")  # "Soil moisture drydown",
+ax2.set_title(label="(d)", loc="left")  # "Soil moisture drydown",
 # ax2.set_xticks([5, 15], [" ", " "])
 ax2.set_yticks(
     [theta_w, theta_star, theta_fc], [r"$\theta_{wp}$", r"$\theta^*$", r"$\theta_{fc}$"]

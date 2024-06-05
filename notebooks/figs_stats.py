@@ -19,6 +19,8 @@ from functions import q_model, loss_model
 from matplotlib.colors import LinearSegmentedColormap
 !pip install mpl-scatter-density
 import mpl_scatter_density
+from scipy.stats import spearmanr
+import statsmodels.api as statsm
 import matplotlib.colors as mcolors
 import json
 # Math font
@@ -49,6 +51,7 @@ dir_name = f"raraki_2024-05-13_global_piecewise" #"raraki_2024-02-02"  # f"rarak
 
 ## Define parameters
 z_mm = 50  # Soil thickness
+save=True
 
 with open('fig_veg_colors_lim.json', 'r') as file:
     vegetation_color_dict = json.load(file)
@@ -63,7 +66,7 @@ with open('fig_variable_labels.json', 'r') as file:
 # Data dir
 user_name = getpass.getuser()
 data_dir = rf"/home/{user_name}/waves/projects/smap-drydown/data"
-datarod_dir = "datarods"
+datarods_dir = "datarods"
 anc_dir = "SMAP_L1_L3_ANC_STATIC"
 anc_file = "anc_info.csv"
 anc_rangeland_file = "anc_info_rangeland.csv"
@@ -90,19 +93,19 @@ else:
 
 # ANCILLARY DATA IMPORT
 # Read coordinate information
-coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
+coord_info = pd.read_csv(os.path.join(data_dir, datarods_dir, coord_info_file))
 df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
 print("Loaded coordinate information")
 
-# Ancillary data
-df_anc = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_file)).drop(
+# Ancillary df
+df_anc = pd.read_csv(os.path.join(data_dir, datarods_dir, anc_file)).drop(
     ["spatial_ref", "latitude", "longitude"], axis=1
 )
 df_anc.loc[df_anc["sand_fraction"] < 0, "sand_fraction"] = np.nan
 print("Loaded ancillary information (sand fraction and land-cover)")
 
 # Aridity indices
-df_ai = pd.read_csv(os.path.join(data_dir, datarod_dir, ai_file)).drop(
+df_ai = pd.read_csv(os.path.join(data_dir, datarods_dir, ai_file)).drop(
     ["latitude", "longitude"], axis=1
 )
 df_ai.loc[df_ai["AI"] < 0, "AI"] = np.nan
@@ -114,6 +117,8 @@ IGBPclass = pd.read_csv(os.path.join(data_dir, anc_dir, IGBPclass_file))
 df = df.merge(df_anc, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
 df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
+df["name"][df["name"]=="Croplands"] = "Cropland/natural vegetation"
+df["name"][df["name"]=="Cropland/natural vegetation mosaics"] = "Cropland/natural vegetation"
 print("Loaded ancillary information (land-cover)")
 
 # Get the binned ancillary information
@@ -144,8 +149,8 @@ df["ai_bins"] = df["ai_bins"].cat.rename_categories({first_I: new_I})
 df = df.assign(diff_R2_q_tauexp=df["q_r_squared"] - df["tauexp_r_squared"])
 df = df.assign(diff_R2_q_exp=df["q_r_squared"] - df["exp_r_squared"])
 
-def data_availability(row):
-    # Check data point availability in the first 3 time steps of observation
+def df_availability(row):
+    # Check df point availability in the first 3 time steps of observation
     # Define a helper function to convert string to list
     def str_to_list(s):
         return list(map(int, s.strip("[]").split()))
@@ -165,7 +170,6 @@ def data_availability(row):
     )
 
     return condition
-
 
 # Soil mositure range covered by the observation
 def calculate_sm_range(row):
@@ -211,7 +215,7 @@ def check_1ts_range(row, verbose=False):
     return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / z_mm) * (-1)
 
 # Create new columns 
-df["first3_avail2"] = df.apply(data_availability, axis=1)
+df["first3_avail2"] = df.apply(df_availability, axis=1)
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
 df["event_length"] = (
     pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
@@ -228,15 +232,14 @@ def count_median_number_of_events_perGrid(df):
     )
     print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
 
-
 print(f"Total number of events: {len(df)}")
 count_median_number_of_events_perGrid(df)
 
 ###################################################
 # Defining model acceptabiltiy criteria
 R2_thresh = 0.8
-sm_range_thresh = 0.15
-small_q_thresh = 1.0e-03
+sm_range_thresh = 0.20
+small_q_thresh = 1.0e-04
 large_q_thresh = 0.8
 ###################################################
 
@@ -247,11 +250,11 @@ def print_model_success(message, df):
     print(f"{message} {len(df)}")
     count_median_number_of_events_perGrid(df)
 
-# Filtering dataframes based on various model criteria
-criteria_q = (df["q_r_squared"] >= R2_thresh) & (df["sm_range"] > sm_range_thresh)
+# Filtering dfframes based on various model criteria
+criteria_q = (df["q_r_squared"] > R2_thresh) & (df["sm_range"] > sm_range_thresh)
 criteria_specific_q = criteria_q & (df["q_q"] > small_q_thresh) & (df["large_q_criteria"] < large_q_thresh) & (df["first3_avail2"])
-criteria_tauexp = (df["tauexp_r_squared"] >= R2_thresh) & (df["sm_range"] > sm_range_thresh)
-criteria_exp = (df["exp_r_squared"] >= R2_thresh) & (df["sm_range"] > sm_range_thresh)
+criteria_tauexp = (df["tauexp_r_squared"] > R2_thresh) & (df["sm_range"] > sm_range_thresh)
+criteria_exp = (df["exp_r_squared"] > R2_thresh) & (df["sm_range"] > sm_range_thresh)
 
 df_filt_q = filter_df(df, criteria_specific_q)
 df_filt_allq = filter_df(df, criteria_q)
@@ -280,39 +283,25 @@ def print_performance_comparison(df, model1, model2):
 print_performance_comparison(df_filt_q_and_tauexp, "q_r_squared", "tauexp_r_squared")
 print_performance_comparison(df_filt_q_and_exp, "q_r_squared", "exp_r_squared")
 
-#%%
-####################################################################################
-# Read rangeland data and join it with d_filt_q
-_rangeland_info = pd.read_csv(
-    os.path.join(data_dir, datarod_dir, anc_rangeland_processed_file)
-).drop(["Unnamed: 0"], axis=1)
-# Change with fraction to percentage
-_rangeland_info["fractional_wood"] = _rangeland_info["fractional_wood"] * 100
-_rangeland_info["fractional_herb"] = _rangeland_info["fractional_herb"] * 100
-rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
-
-# merge with results dataframe
-df_filt_q_conus = df_filt_q.merge(
-    rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
-)
 
 # %%
 ########################################################################
-# Group by pixel (EASE_row_index, EASE_column_index)
-df_filt_q_conus_agg = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).agg({
-    'q_q': ['median', 'var'],  # Calculate median and variance of "q_q"
-    'fractional_wood': 'median',  # Calculate median of "fracwood_pct"
-    'AI': 'median',  # Calculate median of "AI",
-    'event_length':'median',
-    'id': 'count'  # Calculate count of rows for each group
-}).reset_index()
+# # Group by pixel (EASE_row_index, EASE_column_index)
+# df_filt_q_conus_agg = df_filt_q_conus.groupby(['EASE_row_index', 'EASE_column_index']).agg({
+#     'q_q': ['median', 'var'],  # Calculate median and variance of "q_q"
+#     'fractional_wood': 'median',  # Calculate median of "fracwood_pct"
+#     'AI': 'median',  # Calculate median of "AI",
+#     'event_length':'median',
+#     'id': 'count'  # Calculate count of rows for each group
+# }).reset_index()
 
 # Flatten the multi-level column index
 # 
-df_filt_q_conus_agg.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df_filt_q_conus_agg.columns.values]
-df_filt_q_conus_agg.head()
+# df_filt_q_conus_agg.columns = ['_'.join(col).strip() if col[1] else col[0] for col in df_filt_q_conus_agg.columns.values]
+# df_filt_q_conus_agg.head()
 def most_frequent_str(series):
     return series.mode()[0] if not series.mode().empty else None
+
 df_filt_q_agg = df_filt_q.groupby(['EASE_row_index', 'EASE_column_index']).agg({
     'q_q': ['median', 'var'],  # Calculate median and variance of "q_q"
     'AI': 'median',  # Calculate median of "AI",
@@ -339,7 +328,25 @@ first_I = df_filt_q_agg["ai_bins"].cat.categories[0]
 new_I = pd.Interval(0, first_I.right)
 df_filt_q_agg["ai_bins"] = df_filt_q_agg["ai_bins"].cat.rename_categories({first_I: new_I})
 
-df_filt_q_agg = df_filt_q_agg[df_filt_q_agg["id_x_count"]>16]
+# df_filt_q_agg = df_filt_q_agg[df_filt_q_agg["id_x_count"]>8]
+
+#%%
+####################################################################################
+# Read rangeland df and join it with d_filt_q
+_rangeland_info = pd.read_csv(
+    os.path.join(data_dir, datarods_dir, anc_rangeland_processed_file)
+).drop(["Unnamed: 0"], axis=1)
+# Change with fraction to percentage
+_rangeland_info["fractional_wood"] = _rangeland_info["fractional_wood"] * 100
+_rangeland_info["fractional_herb"] = _rangeland_info["fractional_herb"] * 100
+rangeland_info = _rangeland_info.merge(coord_info, on=["EASE_row_index", "EASE_column_index"])
+
+# merge with results dfframe
+df_filt_q_conus = df_filt_q.merge(
+    rangeland_info, on=["EASE_row_index", "EASE_column_index", "year"], how="left"
+)
+
+
 
 # %%
 ############################################################################################################################################
@@ -368,7 +375,7 @@ def count_model_performance(df, varname):
         median_diff_R2=(varname, "median"), count=(varname, "count")
     )
     print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
-    print(f"Number of SMAP grids with data: {len(grouped)}")
+    print(f"Number of SMAP grids with df: {len(grouped)}")
     pos_median_diff_R2 = (grouped["median_diff_R2"] > 0).sum()
     print(
         f"Number of SMAP grids with bettter nonlinear model fits: {pos_median_diff_R2} ({(pos_median_diff_R2/len(grouped))*100:.1f} percent)"
@@ -394,17 +401,8 @@ sample_veg_stat = df_filt_q[["id_x", "name"]].groupby("name").count()
 print(sample_veg_stat)
 sample_veg_stat.to_csv(os.path.join(fig_dir, f"sample_veg_stat.csv"))
 
-# Check no data in sand
+# Check no df in sand
 print(sum(pd.isna(df_filt_q["sand_fraction"]) == True))
-
-###################################################################
-# Stats on q 
-###################################################################
-
-print(f"Global q<1 median: {df_filt_q[df_filt_q["q_q"] < 1]["q_q"].median():.2f}")
-print(f"Global q<1 mean: {df_filt_q[df_filt_q["q_q"] < 1]["q_q"].mean():.2f}")
-print(f"Global q>1 median: {df_filt_q[df_filt_q["q_q"] > 1]["q_q"].median():.2f}")
-print(f"Global q<1 mean: {df_filt_q[df_filt_q["q_q"] > 1]["q_q"].mean():.2f}")
 
 # %%
 ############################################################################
@@ -437,10 +435,10 @@ def using_mpl_scatter_density(fig, x, y):
     fig.colorbar(density, label="Number of points per pixel")
 
 
-def plot_R2_models_v2(df, linearmodel, R2_threshold, save=False):
+def plot_R2_models(df, linearmodel, R2_threshold, save=False):
     plt.rcParams.update({"font.size": 30})
 
-    # Read data
+    # Read df
     x = df[f"{linearmodel}_r_squared"].values
     y = df["q_r_squared"].values
 
@@ -495,10 +493,10 @@ def plot_R2_models_v2(df, linearmodel, R2_threshold, save=False):
 
 
 # Plot R2 of q vs exp model, where where both q and exp model performed R2 > 0.7 and covered >30% of the SM range
-plot_R2_models_v2(df=df_filt_q_and_exp, linearmodel="exp", R2_threshold=R2_thresh, save=True)
-plot_R2_models_v2(df=df_filt_q_and_tauexp, linearmodel="tauexp", R2_threshold=R2_thresh, save=True)
+plot_R2_models(df=df_filt_q_and_exp, linearmodel="exp", R2_threshold=R2_thresh, save=save)
+plot_R2_models(df=df_filt_q_and_tauexp, linearmodel="tauexp", R2_threshold=R2_thresh, save=save)
 
-# %%
+# %% Define plot_map
 ############################################################################
 # Map plots
 ###########################################################################
@@ -526,7 +524,7 @@ def plot_map(
     stat_pad = stat.reindex(new_index, fill_value=np.nan)
 
     # Join latitude and longitude
-    merged_data = (
+    merged_df = (
         stat_pad.reset_index()
         .merge(
             coord_info[
@@ -539,10 +537,10 @@ def plot_map(
     )
 
     # Create pivot array
-    pivot_array = merged_data.pivot(
+    pivot_array = merged_df.pivot(
         index="latitude", columns="longitude", values=var_item["column_name"]
     )
-    pivot_array[pivot_array.index > -60]  # Exclude antarctica in the map (no data)
+    pivot_array[pivot_array.index > -60]  # Exclude antarctica in the map (no df)
 
     # Get lat and lon
     lons = pivot_array.columns.values
@@ -556,7 +554,7 @@ def plot_map(
     ax.coastlines()
 
     if not bar_label:
-        bar_label = f'{stat_label} {var_item["label"]}'
+        bar_label = f'{var_item["label"]} {var_item["symbol"]} {var_item["unit"]}'
 
     # Add colorbar
     plt.colorbar(
@@ -577,21 +575,24 @@ def plot_map(
     if title != "":
         ax.set_title(title, loc="left")
 
+def save_figure(fig, fig_dir, filename, save_format, dpi):
+    path = os.path.join(fig_dir, f"{filename}.{save_format}")
+    fig.savefig(path, dpi=dpi, bbox_inches='tight', transparent=True)
 
 # %%
 #################################
 # Map figures (Main manuscript)
 ################################
-save = False
 # Plot the map of q values, where both q and exp models performed > 0.7 and covered >30% of the SM range
 # Also exclude the extremely small value of q that deviates the analysis
 plt.rcParams.update({"font.size": 12})
 var_key = "q_q"
-from matplotlib.colors import LinearSegmentedColormap
-q_colors = ["#F7CA0D", "#78c679",  "#004529"]  # These are your colors c1, c2, and c3
+
+q_colors = ["#F7CA0D", "#91cf60", "#01665e"]  # These are your colors c1, c2, and c3 # "#5ab4ac", 
 q_cmap = LinearSegmentedColormap.from_list("custom_cmap", q_colors, N=256)
 norm = Normalize(vmin=0.75, vmax=3.0)
 fig_map_q, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
+stat_type = "median"
 plot_map(
     ax=ax,
     df=df_filt_q,
@@ -599,143 +600,21 @@ plot_map(
     cmap=q_cmap,
     norm=norm,
     var_item=var_dict[var_key],
-    stat_type="median",
+    stat_type=stat_type,
 )
-if save:
-    fig_map_q.savefig(
-        os.path.join(fig_dir, f"q_map_median.png"),
-        dpi=900,
-        bbox_inches="tight",
-        transparent=True,
-    )
-    fig_map_q.savefig(
-        os.path.join(fig_dir, f"q_map_median.pdf"),
-        dpi=1200,
-        bbox_inches="tight",
-        transparent=True,
-    )
+
+save_figure(fig_map_q, fig_dir, f'q_map_{stat_type}', 'png', 900)
+save_figure(fig_map_q, fig_dir, f'q_map_{stat_type}', 'pdf', 1200)
 
 print(f"Global median q: {df_filt_q['q_q'].median()}")
 print(f"Global mean q: {df_filt_q['q_q'].mean()}")
+print(f"Global q<1 median: {df_filt_q[df_filt_q["q_q"] < 1]["q_q"].median():.2f}")
+print(f"Global q<1 mean: {df_filt_q[df_filt_q["q_q"] < 1]["q_q"].mean():.2f}")
+print(f"Global q>1 median: {df_filt_q[df_filt_q["q_q"] > 1]["q_q"].median():.2f}")
+print(f"Global q<1 mean: {df_filt_q[df_filt_q["q_q"] > 1]["q_q"].mean():.2f}")
 
 # %% Map of differences in R2 values
-
-# save = True
-# stat_type = "median"
-
-# # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
-# var_key = "diff_R2_exp"
-# norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-# fig_map_R2, ax = plt.subplots(
-#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
-# )
-# plot_map(
-#     ax=ax,
-#     df=df_filt_q_and_exp,
-#     coord_info=coord_info,
-#     cmap="RdBu",
-#     norm=norm,
-#     var_item=var_dict[var_key],
-#     stat_type=stat_type,
-#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
-# )
-# fig_map_R2, ax = plt.subplots(
-#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
-# )
-# if save:
-#     fig_map_R2.savefig(
-#         os.path.join(fig_dir, f"R2_map_{stat_type}_and_exp.png"),
-#         dpi=900,
-#         bbox_inches="tight",
-#         transparent=True,
-#     )
-
-# plot_map(
-#     ax=ax,
-#     df=df_filt_q_or_exp,
-#     coord_info=coord_info,
-#     cmap="RdBu",
-#     norm=norm,
-#     var_item=var_dict[var_key],
-#     stat_type=stat_type,
-#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
-# )
-# if save:
-#     fig_map_R2.savefig(
-#         os.path.join(fig_dir, f"R2_map_{stat_type}_or_exp.png"),
-#         dpi=900,
-#         bbox_inches="tight",
-#         transparent=True,
-#     )
-
-# print(
-#     f"Global median diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2_q_exp'].median()}"
-# )
-# print(
-#     f"Global mean diff R2 (nonlinear - linear): {df_filt_q_and_exp['diff_R2_q_exp'].mean()}"
-# )
-
-# # Plot the map of R2 differences, where both q and exp model performed > 0.7 and covered >30% of the SM range
-# var_key = "diff_R2_tauexp"
-# norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=var_dict[var_key]["lim"][1])
-# fig_map_R2, ax = plt.subplots(
-#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
-# )
-# plot_map(
-#     ax=ax,
-#     df=df_filt_q_and_tauexp,
-#     coord_info=coord_info,
-#     cmap="RdBu",
-#     norm=norm,
-#     var_item=var_dict[var_key],
-#     stat_type=stat_type,
-#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
-# )
-# fig_map_R2, ax = plt.subplots(
-#     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
-# )
-# if save:
-#     fig_map_R2.savefig(
-#         os.path.join(fig_dir, f"R2_map_{stat_type}_and_tauexp.png"),
-#         dpi=900,
-#         bbox_inches="tight",
-#         transparent=True,
-#     )
-
-# plot_map(
-#     ax=ax,
-#     df=df_filt_q_or_tauexp,
-#     coord_info=coord_info,
-#     cmap="RdBu",
-#     norm=norm,
-#     var_item=var_dict[var_key],
-#     stat_type=stat_type,
-#     bar_label= stat_type.capitalize() + " differences\nin " + var_dict[var_key]["label"],
-# )
-# if save:
-#     fig_map_R2.savefig(
-#         os.path.join(fig_dir, f"R2_map_{stat_type}_or_tauexp.png"),
-#         dpi=900,
-#         bbox_inches="tight",
-#         transparent=True,
-#     )
-
-# print(
-#     f"Global median diff R2 (nonlinear - tau-based linear): {df_filt_q_and_exp['diff_R2_q_tauexp'].median()}"
-# )
-# print(
-#     f"Global mean diff R2 (nonlinear - tau-based linear): {df_filt_q_and_exp['diff_R2_q_tauexp'].mean()}"
-# )
-
-
-# %%
 stat_type = "median"
-
-def plot_map_and_save(fig, ax, df, coord_info, cmap, norm, var_item, stat_type, file_name):
-    plot_map(ax=ax, df=df, coord_info=coord_info, cmap=cmap, norm=norm, var_item=var_item, stat_type=stat_type,
-             bar_label=stat_type.capitalize() + " differences\nin " + var_item["label"])
-    if save:
-        fig.savefig(os.path.join(fig_dir, file_name), dpi=900, bbox_inches='tight', transparent=True)
 
 def print_global_stats(df, diff_var, model_desc):
     print(f"Global median diff R2 ({model_desc}): {df[diff_var].median()}")
@@ -749,26 +628,34 @@ norm_tauexp = Normalize(vmin=var_dict[var_key_tauexp]["lim"][0], vmax=var_dict[v
 
 # Plot and save maps for exp model
 fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
-plot_map_and_save(fig_map_R2, ax, df_filt_q_and_exp, coord_info, "RdBu", norm_exp, var_dict[var_key_exp], stat_type, f"R2_map_{stat_type}_and_exp.png")
+plot_map(ax=ax, df=df_filt_q_and_exp, coord_info=coord_info, cmap="RdBu", norm=norm_exp, var_item=var_dict[var_key_exp], stat_type=stat_type)
+if save:
+    save_figure(fig_map_R2, fig_dir, f"R2_map_{stat_type}_and_exp", 'png', 900)
+
 fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
-plot_map_and_save(fig_map_R2, ax, df_filt_q_or_exp, coord_info, "RdBu", norm_exp, var_dict[var_key_exp], stat_type, f"R2_map_{stat_type}_or_exp.png")
+plot_map(ax=ax, df=df_filt_q_or_exp, coord_info=coord_info, cmap="RdBu", norm=norm_exp, var_item=var_dict[var_key_exp], stat_type=stat_type)
+if save:
+    save_figure(fig_map_R2, fig_dir, f"R2_map_{stat_type}_or_exp", 'png', 900)
 
 # Print statistical summaries for exp model
 print_global_stats(df_filt_q_and_exp, 'diff_R2_q_exp', 'nonlinear - linear')
 
 # Plot and save maps for tauexp model
 fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
-plot_map_and_save(fig_map_R2, ax, df_filt_q_and_tauexp, coord_info, "RdBu", norm_tauexp, var_dict[var_key_tauexp], stat_type, f"R2_map_{stat_type}_and_tauexp.png")
+plot_map(ax, df_filt_q_and_tauexp, coord_info, "RdBu", norm_tauexp, var_dict[var_key_tauexp], stat_type)
+if save:
+    save_figure(fig_map_R2, fig_dir, f"R2_map_{stat_type}_and_tauexp", 'png', 900)
 fig_map_R2, ax = plt.subplots(figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()})
-plot_map_and_save(fig_map_R2, ax, df_filt_q_or_tauexp, coord_info, "RdBu", norm_tauexp, var_dict[var_key_tauexp], stat_type, f"R2_map_{stat_type}_or_tauexp.png")
+plot_map(ax, df_filt_q_or_tauexp, coord_info, "RdBu", norm_tauexp, var_dict[var_key_tauexp], stat_type)
+if save:
+    save_figure(fig_map_R2, fig_dir, f"R2_map_{stat_type}_or_tauexp", 'png', 900)
 
 # Print statistical summaries for tauexp model
 print_global_stats(df_filt_q_and_tauexp, 'diff_R2_q_tauexp', 'nonlinear - tau-based linear')
 # %%
-save = save
 # Map of theta_star
-var_key = "theta_star"
-norm = Normalize(vmin=0.0, vmax=0.6)
+var_key = "q_theta_star"
+norm = Normalize(vmin=0.1, vmax=0.4)
 fig_map_theta_star, ax = plt.subplots(
     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
 )
@@ -780,12 +667,10 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
-    title="A",
+    title="(a)",
 )
 if save:
-    fig_map_theta_star.savefig(
-        os.path.join(fig_dir, f"sup_map_thetastar.png"), dpi=900, bbox_inches="tight"
-    )
+    save_figure(fig_map_theta_star, fig_dir, f"sup_map_{var_key}", 'png', 900)
 
 print(f"Global median theta_star: {df_filt_q['max_sm'].median()}")
 print(f"Global mean theta_star: {df_filt_q['max_sm'].mean()}")
@@ -793,7 +678,7 @@ print(f"Global mean theta_star: {df_filt_q['max_sm'].mean()}")
 # %%
 # Map of ETmax
 var_key = "q_ETmax"
-norm = Normalize(vmin=var_dict[var_key]["lim"][0], vmax=10)
+norm = Normalize(vmin=0, vmax=6)
 fig_map_ETmax, ax = plt.subplots(
     figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
 )
@@ -805,12 +690,10 @@ plot_map(
     norm=norm,
     var_item=var_dict[var_key],
     stat_type="median",
-    title="B",
+    title="(b)",
 )
 if save:
-    fig_map_ETmax.savefig(
-        os.path.join(fig_dir, f"sup_map_ETmax.png"), dpi=900, bbox_inches="tight"
-    )
+    save_figure(fig_map_ETmax, fig_dir, f"sup_map_{var_key}", 'png', 900)
 
 print(f"Global median ETmax: {df_filt_q['q_ETmax'].median()}")
 print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
@@ -821,13 +704,12 @@ print(f"Global mean ETmax: {df_filt_q['q_ETmax'].mean()}")
 # Histogram of q values (global)
 ###########################################################################
 
-save=True
 def plot_hist(df, var_key):
     fig, ax = plt.subplots(figsize=(5.5, 5))
 
     # Create the histogram with a bin width of 1
     sns.histplot(
-        df[var_key], binwidth=0.2, color="#2c7fb8", fill=False, linewidth=3, ax=ax
+        df[var_key], binwidth=0.2, color="#62AD5F", fill=False, linewidth=3, ax=ax
     )
 
     # Calculate median and mean
@@ -841,35 +723,24 @@ def plot_hist(df, var_key):
     ax.axvline(mean_value, color="tab:grey", linestyle=":", linewidth=3, label=f"Mean")
 
     # Setting the x limit
-    ax.set_xlim(0, 10)
+    ax.set_xlim(0, 6)
 
     # Adding title and labels
-    # ax.set_title("Histogram of $q$ values")
-    ax.set_xlabel(r"$q$")
+    ax.set_xlabel(var_dict[var_key]["symbol"])
     ax.set_ylabel("Frequency")
-    fig.legend(loc="upper right", bbox_to_anchor=(0.93, 0.9))
+    fig.legend(loc="upper right", bbox_to_anchor=(0.93, 0.9),  fontsize='small')
 
     return fig, ax
 
 plt.rcParams.update({"font.size": 30})
 fig_q_hist, _ = plot_hist(df=df_filt_q, var_key="q_q")
 if save:
-    fig_q_hist.savefig(
-        os.path.join(fig_dir, f"q_hist.png"),
-        dpi=1200,
-        bbox_inches="tight",
-        transparent=True,
-    )
-    fig_q_hist.savefig(
-        os.path.join(fig_dir, f"q_hist.pdf"),
-        dpi=1200,
-        bbox_inches="tight",
-        transparent=True,
-    )
+    save_figure(fig_q_hist, fig_dir, f"q_hist", 'png', 900)
+    save_figure(fig_q_hist, fig_dir, f"q_hist", 'pdf', 1200)
 
 # %%
 ############################################################################
-# Loss function plot
+# Loss function plot + Scatter plots with error bars
 ###########################################################################
 
 def wrap_text(text, width):
@@ -927,7 +798,7 @@ def plot_loss_func(ax, df, z_var, categories=None, colors=None, cmap=None, title
         f"{var_dict['theta']['label']}\n{var_dict['theta']['symbol']} {var_dict['theta']['unit']}"
     )
     ax.set_ylabel(
-        f"{var_dict['dtheta']['label']}\n{var_dict['theta']['symbol']} {var_dict['dtheta']['unit']}"
+        f"{var_dict['dtheta']['label']}\n{var_dict['dtheta']['symbol']} {var_dict['dtheta']['unit']}"
     )
     if title == "":
         title = f'Median loss function by {z_var["label"]} {z_var["unit"]}'
@@ -946,10 +817,6 @@ def plot_loss_func(ax, df, z_var, categories=None, colors=None, cmap=None, title
                 label = text.get_text()
                 wrapped_label = wrap_text(label, 16)  # Wrap text after 16 characters
                 text.set_text(wrapped_label)
-
-############################################################################
-# Scatter plots with error bars
-###########################################################################
 
 def plot_scatter_with_errorbar(
     ax,
@@ -1023,8 +890,8 @@ def plot_scatter_with_errorbar(
         )
 
     # Add labels and title
-    ax.set_xlabel(f"Estimated {x_var['symbol']} {x_var['unit']}")
-    ax.set_ylabel(f"Estimated {y_var['symbol']} {y_var['unit']}")
+    ax.set_xlabel(f"{x_var['symbol']} {x_var['unit']}")
+    ax.set_ylabel(f"{y_var['symbol']} {y_var['unit']}")
     if title == "":
         title = f"Median with {quantile}% confidence interval"
 
@@ -1053,7 +920,7 @@ plot_loss_func(
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
     plot_legend=False,
-    title="A",
+    title="(a)",
 )
 
 plot_scatter_with_errorbar(
@@ -1065,7 +932,7 @@ plot_scatter_with_errorbar(
     quantile=25,
     categories=list(vegetation_color_dict.keys()),
     colors=list(vegetation_color_dict.values()),
-    title="B",
+    title="(b)",
 )
 
 plot_scatter_with_errorbar(
@@ -1077,7 +944,7 @@ plot_scatter_with_errorbar(
     quantile=25,
     categories=list(vegetation_color_dict.keys()),
     colors=list(vegetation_color_dict.values()),
-    title="C",
+    title="(c)",
 )
 plot_scatter_with_errorbar(
     ax=axs[1, 1],
@@ -1088,22 +955,17 @@ plot_scatter_with_errorbar(
     quantile=25,
     categories=list(vegetation_color_dict.keys()),
     colors=list(vegetation_color_dict.values()),
-    title="D",
+    title="(d)",
 )
 
 plt.tight_layout()
 plt.show()
 
 if save:
-    # Save the combined figure
-    fig.savefig(
-        os.path.join(fig_dir, "sup_lossfnc_veg.png"), dpi=1200, bbox_inches="tight"
-    )
-    fig.savefig(
-        os.path.join(fig_dir, "sup_lossfnc_veg.pdf"), dpi=1200, bbox_inches="tight"
-    )
-
-
+    save_figure(fig, fig_dir, f"sup_lossfnc_veg", 'png', 1200)
+    save_figure(fig, fig_dir, f"sup_lossfnc_veg", 'pdf', 1200)
+# %%
+df_filt_q.groupby("name").count()
 # %%
 # With median
 plt.rcParams.update({"font.size": 18})
@@ -1115,7 +977,7 @@ plot_loss_func(
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
     plot_legend=False,
-    title="A",
+    title="(a)",
     median_by_pixel=True
 )
 
@@ -1128,7 +990,7 @@ plot_scatter_with_errorbar(
     quantile=25,
     categories=list(vegetation_color_dict.keys()),
     colors=list(vegetation_color_dict.values()),
-    title="B",
+    title="(b)",
 )
 
 plot_scatter_with_errorbar(
@@ -1140,7 +1002,7 @@ plot_scatter_with_errorbar(
     quantile=25,
     categories=list(vegetation_color_dict.keys()),
     colors=list(vegetation_color_dict.values()),
-    title="C",
+    title="(c)",
 )
 plot_scatter_with_errorbar(
     ax=axs[1, 1],
@@ -1151,84 +1013,17 @@ plot_scatter_with_errorbar(
     quantile=25,
     categories=list(vegetation_color_dict.keys()),
     colors=list(vegetation_color_dict.values()),
-    title="D",
+    title="(d)",
 )
 
 plt.tight_layout()
 plt.show()
 
 if save:
-    # Save the combined figure
-    fig.savefig(
-        os.path.join(fig_dir, "sup_lossfnc_veg_median_by_pixel.png"), dpi=1200, bbox_inches="tight"
-    )
-    fig.savefig(
-        os.path.join(fig_dir, "sup_lossfnc_veg_median_by_pixel.pdf"), dpi=1200, bbox_inches="tight"
-    )
+    save_figure(fig, fig_dir, f"sup_lossfnc_veg_median_by_pixel", 'png', 1200)
+    save_figure(fig, fig_dir, f"sup_lossfnc_veg_median_by_pixel", 'pdf', 1200)
 
 
-# %%
-# With variabiliity
-plt.rcParams.update({"font.size": 18})
-fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-plot_loss_func(
-    axs[0, 0],
-    df_filt_q_agg,
-    var_dict["veg_class_mode"],
-    categories=vegetation_color_dict.keys(),
-    colors=list(vegetation_color_dict.values()),
-    plot_legend=False,
-    title="A",
-    median_by_pixel=True
-)
-
-plot_scatter_with_errorbar(
-    ax=axs[0, 1],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_theta_star_var"],
-    y_var=var_dict["q_q_var"],
-    z_var=var_dict["veg_class_mode"],
-    quantile=25,
-    categories=list(vegetation_color_dict.keys()),
-    colors=list(vegetation_color_dict.values()),
-    title="B",
-)
-
-plot_scatter_with_errorbar(
-    ax=axs[1, 0],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_ETmax_var"],
-    y_var=var_dict["q_q_var"],
-    z_var=var_dict["veg_class_mode"],
-    quantile=25,
-    categories=list(vegetation_color_dict.keys()),
-    colors=list(vegetation_color_dict.values()),
-    title="C",
-)
-plot_scatter_with_errorbar(
-    ax=axs[1, 1],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_theta_star_var"],
-    y_var=var_dict["q_ETmax_var"],
-    z_var=var_dict["veg_class_mode"],
-    quantile=25,
-    categories=list(vegetation_color_dict.keys()),
-    colors=list(vegetation_color_dict.values()),
-    title="D",
-)
-
-plt.tight_layout()
-plt.show()
-
-if save:
-    # Save the combined figure
-    fig.savefig(
-        os.path.join(fig_dir, "sup_lossfnc_veg_var_by_pixel.png"), dpi=1200, bbox_inches="tight"
-    )
-    fig.savefig(
-        os.path.join(fig_dir, "sup_lossfnc_veg_var_by_pixel.pdf"), dpi=1200, bbox_inches="tight"
-    )
-# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg_legend.pdf"), dpi=1200, bbox_inches="tight")
 # %%
 # Aridity Index
 fig, axs = plt.subplots(2, 2, figsize=(8, 8))
@@ -1240,7 +1035,7 @@ plot_loss_func(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     plot_legend=False,
-    title="A",
+    title="(a)",
 )
 
 plot_scatter_with_errorbar(
@@ -1251,7 +1046,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     quantile=25,
-    title="B",
+    title="(b)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1264,7 +1059,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     quantile=25,
-    title="C",
+    title="(c)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1276,7 +1071,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     quantile=25,
-    title="D",
+    title="(d)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1284,12 +1079,10 @@ plot_scatter_with_errorbar(
 plt.tight_layout()
 plt.show()
 
-# Save the combined figure
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai.pdf"), dpi=1200, bbox_inches="tight")
+if save:
+    save_figure(fig, fig_dir, f"sup_lossfnc_ai", 'png', 1200)
+    save_figure(fig, fig_dir, f"sup_lossfnc_ai", 'pdf', 1200)
 
-# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_legend.png"), dpi=1200, bbox_inches="tight")
-# fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_legend.pdf"), dpi=1200, bbox_inches="tight")
 # %%
 # Aridity Index - median
 fig, axs = plt.subplots(2, 2, figsize=(8, 8))
@@ -1301,7 +1094,7 @@ plot_loss_func(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     plot_legend=False,
-    title="A",
+    title="(a)",
     median_by_pixel=True
 )
 
@@ -1313,7 +1106,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     quantile=25,
-    title="B",
+    title="(b)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1326,7 +1119,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     quantile=25,
-    title="C",
+    title="(c)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1338,7 +1131,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["ai_bins"],
     cmap=ai_cmap,
     quantile=25,
-    title="D",
+    title="(d)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1347,71 +1140,15 @@ plt.tight_layout()
 plt.show()
 
 # Save the combined figure
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_median_by_pixel.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_median_by_pixel.pdf"), dpi=1200, bbox_inches="tight")
+
+if save:
+    save_figure(fig, fig_dir, f"sup_lossfnc_ai_median_by_pixel", 'png', 1200)
+    save_figure(fig, fig_dir, f"sup_lossfnc_ai_median_by_pixel", 'pdf', 1200)
+
 
 # fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_legend.png"), dpi=1200, bbox_inches="tight")
 # fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_legend.pdf"), dpi=1200, bbox_inches="tight")
 
-# %%
-# Aridity Index - variance
-fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-plt.rcParams.update({"font.size": 18})
-
-plot_loss_func(
-    ax=axs[0, 0],
-    df=df_filt_q_agg,
-    z_var=var_dict["ai_bins"],
-    cmap=ai_cmap,
-    plot_legend=False,
-    title="A",
-    median_by_pixel=True
-)
-
-plot_scatter_with_errorbar(
-    ax=axs[0, 1],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_theta_star_var"],
-    y_var=var_dict["q_q_var"],
-    z_var=var_dict["ai_bins"],
-    cmap=ai_cmap,
-    quantile=25,
-    title="B",
-    plot_logscale=False,
-    plot_legend=False,
-)
-
-plot_scatter_with_errorbar(
-    ax=axs[1, 0],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_ETmax_var"],
-    y_var=var_dict["q_q_var"],
-    z_var=var_dict["ai_bins"],
-    cmap=ai_cmap,
-    quantile=25,
-    title="C",
-    plot_logscale=False,
-    plot_legend=False,
-)
-plot_scatter_with_errorbar(
-    ax=axs[1, 1],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_ETmax_var"],
-    y_var=var_dict["q_theta_star_var"],
-    z_var=var_dict["ai_bins"],
-    cmap=ai_cmap,
-    quantile=25,
-    title="D",
-    plot_logscale=False,
-    plot_legend=False,
-)
-
-plt.tight_layout()
-plt.show()
-
-# Save the combined figure
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_var_by_pixel.png"), dpi=1200, bbox_inches="tight")
-fig.savefig(os.path.join(fig_dir, "sup_lossfnc_ai_var_by_pixel.pdf"), dpi=1200, bbox_inches="tight")
 
 
 # %%
@@ -1425,7 +1162,7 @@ plot_loss_func(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     plot_legend=False,
-    title="A",
+    title="(a)",
 )
 
 plot_scatter_with_errorbar(
@@ -1436,7 +1173,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     quantile=25,
-    title="B",
+    title="(b)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1449,7 +1186,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     quantile=25,
-    title="C",
+    title="(c)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1461,7 +1198,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     quantile=25,
-    title="D",
+    title="(d)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1469,13 +1206,9 @@ plot_scatter_with_errorbar(
 plt.tight_layout()
 plt.show()
 
-# Save the combined figure
-fig.savefig(
-    os.path.join(fig_dir, "sup_lossfnc_sand.png"), dpi=1200, bbox_inches="tight"
-)
-fig.savefig(
-    os.path.join(fig_dir, "sup_lossfnc_sand.pdf"), dpi=1200, bbox_inches="tight"
-)
+if save:
+    save_figure(fig, fig_dir, f"sup_lossfnc_sand", 'png', 1200)
+    save_figure(fig, fig_dir, f"sup_lossfnc_sand", 'pdf', 1200)
 
 # fig.savefig(os.path.join(fig_dir, "sup_lossfnc_sand_legend.png"), dpi=1200, bbox_inches="tight")
 # fig.savefig(os.path.join(fig_dir, "sup_lossfnc_sand_legend.pdf"), dpi=1200, bbox_inches="tight")
@@ -1490,7 +1223,7 @@ plot_loss_func(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     plot_legend=False,
-    title="A",
+    title="(a)",
     median_by_pixel=True
 )
 
@@ -1502,7 +1235,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     quantile=25,
-    title="B",
+    title="(b)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1515,7 +1248,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     quantile=25,
-    title="C",
+    title="(c)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1527,7 +1260,7 @@ plot_scatter_with_errorbar(
     z_var=var_dict["sand_bins"],
     cmap=sand_cmap,
     quantile=25,
-    title="D",
+    title="(d)",
     plot_logscale=False,
     plot_legend=False,
 )
@@ -1535,76 +1268,9 @@ plot_scatter_with_errorbar(
 plt.tight_layout()
 plt.show()
 
-# Save the combined figure
-fig.savefig(
-    os.path.join(fig_dir, "sup_lossfnc_sand_median.png"), dpi=1200, bbox_inches="tight"
-)
-fig.savefig(
-    os.path.join(fig_dir, "sup_lossfnc_sand_median.pdf"), dpi=1200, bbox_inches="tight"
-)
-# %%
-# sand - var
-
-fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-
-plot_loss_func(
-    ax=axs[0, 0],
-    df=df_filt_q_agg,
-    z_var=var_dict["sand_bins"],
-    cmap=sand_cmap,
-    plot_legend=False,
-    title="A",
-    median_by_pixel=True
-)
-
-plot_scatter_with_errorbar(
-    ax=axs[0, 1],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_theta_star_var"],
-    y_var=var_dict["q_q_var"],
-    z_var=var_dict["sand_bins"],
-    cmap=sand_cmap,
-    quantile=25,
-    title="B",
-    plot_logscale=False,
-    plot_legend=False,
-)
-
-plot_scatter_with_errorbar(
-    ax=axs[1, 0],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_ETmax_var"],
-    y_var=var_dict["q_q_var"],
-    z_var=var_dict["sand_bins"],
-    cmap=sand_cmap,
-    quantile=25,
-    title="C",
-    plot_logscale=False,
-    plot_legend=False,
-)
-plot_scatter_with_errorbar(
-    ax=axs[1, 1],
-    df=df_filt_q_agg,
-    x_var=var_dict["q_ETmax_var"],
-    y_var=var_dict["q_theta_star_var"],
-    z_var=var_dict["sand_bins"],
-    cmap=sand_cmap,
-    quantile=25,
-    title="D",
-    plot_logscale=False,
-    plot_legend=False,
-)
-
-plt.tight_layout()
-plt.show()
-
-# Save the combined figure
-fig.savefig(
-    os.path.join(fig_dir, "sup_lossfnc_sand_var.png"), dpi=1200, bbox_inches="tight"
-)
-fig.savefig(
-    os.path.join(fig_dir, "sup_lossfnc_sand_var.pdf"), dpi=1200, bbox_inches="tight"
-)
+if save:
+    save_figure(fig, fig_dir, f"sup_lossfnc_sand_median", 'png', 1200)
+    save_figure(fig, fig_dir, f"sup_lossfnc_sand_median", 'pdf', 1200)
 
 
 # %%
@@ -1669,10 +1335,8 @@ def get_df_percentage_q(
     percentage_df["weighted_percentage_q_gt_1"] = percentage_df["count_x_weight_q_gt_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
     percentage_df["weighted_percentage_q_le_1"] = percentage_df["count_x_weight_q_le_1"] / (percentage_df["count_x_weight_q_gt_1"]  + percentage_df["count_x_weight_q_le_1"]) * 100
     return percentage_df
-
-
 percentage_df = get_df_percentage_q(df=df_filt_q_conus, x1_varname="fractional_wood", x2_varname="AI", y_varname="q_q", weight_by="event_length")
-percentage_df_median = get_df_percentage_q(df=df_filt_q_conus_agg, x1_varname="fractional_wood_median", x2_varname="AI_median", y_varname="q_q_median", weight_by="event_length_median")
+# percentage_df_median = get_df_percentage_q(df=df_filt_q_conus_agg, x1_varname="fractional_wood_median", x2_varname="AI_median", y_varname="q_q_median", weight_by="event_length_median")
 
 #%%
 # Plot the q<1 and q>1 proportion with aridity and fractional woody vegetation cover 
@@ -1698,7 +1362,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
     
     # Determine unique values for grouping
     # Aridity bins
-    x_unique = df[x_column_to_plot].unique()
+    x_unique = df[x_column_to_plot].unique()[:-1]
     # Vegetation bins
     z_unique = df[z_var].unique()
     n_groups = len(z_unique)
@@ -1725,7 +1389,7 @@ def plot_grouped_stacked_bar(ax, df, x_column_to_plot, z_var, var_name, title_na
             group_offset = (bar_width + space_between_bars) * n_groups
             x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
             
-            # Get the subset of data for this group
+            # Get the subset of df for this group
             subset = df[(df[x_column_to_plot] == x) & (df[z_var] == z)]
             
             # Get bottom values for stacked bars
@@ -1809,30 +1473,6 @@ plot_grouped_stacked_bar(
 )
 plt.tight_layout()
 
-plt.rcParams.update({"font.size": 11})
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df_median,
-    x_column_to_plot="AI_median_binned2",
-    z_var="fractional_wood_median_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=False
-)
-plt.tight_layout()
-
-fig, ax = plt.subplots(figsize=(4, 4))
-plot_grouped_stacked_bar(
-    ax=ax,
-    df=percentage_df_median,
-    x_column_to_plot="AI_median_binned2",
-    z_var="fractional_wood_median_pct",
-    var_name="rangeland_wood",
-    title_name="",
-    weighted=True
-)
-plt.tight_layout()
 # %%
 def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=False):
 
@@ -1864,7 +1504,7 @@ def plot_grouped_stacked_bar_uni(ax, df, z_var, var_name, title_name, weighted=F
     # Create the grouped and stacked bars
     for z_i, z in enumerate(z_unique):
 
-        # Get the subset of data for this group
+        # Get the subset of df for this group
         subset = df[(df[z_var] == z)]#&(df["AI_binned2"] != exclude)]
         # print(subset.total_count.sum())
         # Check the sample size before plotting
@@ -2048,7 +1688,7 @@ def plot_histograms_with_mean_median(df, x_var, z_var, cmap=None, categories=Non
         ax.axvline(mean_value, color=colors[i], linestyle=":", lw=2, label="mean")
         ax.axvline(median_value, color=colors[i], linestyle="-", lw=2, label="median")
 
-        # Creating a KDE (Kernel Density Estimation) of the data
+        # Creating a KDE (Kernel Density Estimation) of the df
         kde = gaussian_kde(subset[x_var["column_name"]])
 
         # Creating a range of values to evaluate the KDE
@@ -2123,7 +1763,7 @@ fig_hist_q_sand2.savefig(
 
 # %%
 
-def stat_dist_test_binned(df, x_var, z_var, cmap=None, categories=None, colors=None):
+def stat_dist_test(df, x_var, z_var, cmap=None, categories=None, colors=None):
     if categories is None:
         # Get unique bins
         bins_in_range = df[z_var["column_name"]].unique()
@@ -2138,7 +1778,6 @@ def stat_dist_test_binned(df, x_var, z_var, cmap=None, categories=None, colors=N
     p_values_mw = pd.DataFrame(index=bins_sorted, columns=bins_sorted)
     p_values_ks = pd.DataFrame(index=bins_sorted, columns=bins_sorted)
     p_values_median = pd.DataFrame(index=bins_sorted, columns=bins_sorted)
-    p_values_wilcoxon = pd.DataFrame(index=bins_sorted, columns=bins_sorted)  # Only meaningful for paired data
 
     # For each row in the subset, calculate the loss for a range of theta values
     for i, category in enumerate(bins_sorted):
@@ -2190,17 +1829,15 @@ def stat_dist_test_binned(df, x_var, z_var, cmap=None, categories=None, colors=N
 
     return fig, _
 
-
-# %% df_filt_allq: Including extremely small  q values as well
 plt.rcParams.update({"font.size": 12})
-fig_stat_test_veg, _ = stat_dist_test_binned(
+fig_stat_test_veg, _ = stat_dist_test(
     df=df_filt_q,
     x_var=var_dict["q_q"],
     z_var=var_dict["veg_class"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
-# %%
+
 _, p_mw = mannwhitneyu(df_filt_q[var_dict["q_q"]["column_name"]].values, df_filt_q[var_dict["AI"]["column_name"]].values, alternative='two-sided')
 print(f"M-W U test: {p_mw:.3f}")
 _, p_ks = ks_2samp(df_filt_q[var_dict["q_q"]["column_name"]].values, df_filt_q[var_dict["AI"]["column_name"]].values)
@@ -2208,148 +1845,163 @@ print(f"K-S test: {p_ks:.3f}")
 stat, p_med, _, _ = median_test(df_filt_q[var_dict["q_q"]["column_name"]].values, df_filt_q[var_dict["AI"]["column_name"]].values)
 print(f"Median test: {p_med:.3f}")
 
-# fig_stat_test_ai, _ = stat_dist_test(
-#     df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["ai_bins"], cmap=ai_cmap
-# )
-# %%
-df_filt_q_clean = df_filt_q.dropna(subset=["q_q", "sand_fraction"])
-_, p_mw = mannwhitneyu(df_filt_q_clean[var_dict["q_q"]["column_name"]].values, df_filt_q_clean[var_dict["sand_fraction"]["column_name"]].values, alternative='two-sided')
-print(f"M-W U test: {p_mw:.3f}")
-_, p_ks = ks_2samp(df_filt_q_clean[var_dict["q_q"]["column_name"]].values, df_filt_q_clean[var_dict["sand_fraction"]["column_name"]].values)
-print(f"K-S test: {p_ks:.3f}")
-stat, p_med, _, _ = median_test(df_filt_q_clean[var_dict["q_q"]["column_name"]].values, df_filt_q_clean[var_dict["sand_fraction"]["column_name"]].values)
-print(f"Median test: {p_med:.3f}")
-
-# fig_stat_test_sand, _ = stat_dist_test(
-#     df=df_filt_q, x_var=var_dict["q_q"], z_var=var_dict["sand_bins"], cmap=sand_cmap
-# )
-
-# %%
 plt.rcParams.update({"font.size": 12})
-fig_stat_test_veg, _ = stat_dist_test_binned(
+fig_stat_test_veg, _ = stat_dist_test(
     df=df_filt_q_agg,
     x_var=var_dict["q_q_median"],
     z_var=var_dict["veg_class_mode"],
     categories=vegetation_color_dict.keys(),
     colors=list(vegetation_color_dict.values()),
 )
-fig_stat_test_ai, _ = stat_dist_test(
-    df=df_filt_q_agg, x_var=var_dict["q_q_median"], z_var=var_dict["ai_bins"], cmap=ai_cmap
-)
-# %%
-_, p_mw = mannwhitneyu(df_filt_q_agg["q_q_median"].values, df_filt_q_agg["AI_median"].values, alternative='two-sided')
-print(f"M-W U test: {p_mw:.3f}")
-_, p_ks = ks_2samp(df_filt_q_agg["q_q_median"].values, df_filt_q_agg["AI_median"].values)
-print(f"K-S test: {p_ks:.3f}")
-stat, p_med, _, _ = median_test(df_filt_q_agg["q_q_median"].values, df_filt_q_agg["AI_median"].values)
-print(f"Median test: {p_med:.3f}")
-# %%
-fig_stat_test_sand, _ = stat_dist_test(
-    df=df_filt_q_agg, x_var=var_dict["q_q_median"], z_var=var_dict["sand_bins"], cmap=sand_cmap
-)
-# %%
-df_filt_q_agg_clean = df_filt_q_agg.dropna(subset=["q_q_median", "sand_fraction_median"])
-_, p_mw = mannwhitneyu(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values, alternative='two-sided')
-print(f"M-W U test: {p_mw:.3f}")
-_, p_ks = ks_2samp(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values)
-print(f"K-S test: {p_ks:.3f}")
-stat, p_med, _, _ = median_test(df_filt_q_agg_clean["q_q_median"].values, df_filt_q_agg_clean["sand_fraction_median"].values)
-print(f"Median test: {p_med:.3f}")
-
-
-
 
 # %%
-# Plotting
-from scipy.stats import spearmanr
-import statsmodels.api as statsm
 
-def plot_scatter(df, x_var, y_var, cmap="YlGn"):
-    fig, ax = plt.subplots(figsize=(5, 4))
-    # # Setting up the discrete colormap
-    cmap=plt.get_cmap(cmap) 
-    x_bin_interval = (x_var["lim"][1] - x_var["lim"][0])/5
-    norm = plt.Normalize(vmin=x_var["lim"][0]-x_bin_interval, vmax=x_var["lim"][1])
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    
-    print(x_bin_interval)
-    print(np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval))
-    # Adding regression lines per 5-year segments
-    for start in np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval):
+###############################################################################
+###############################################################################
+###############################################################################
+# Other sandbox
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
 
-        # Get data subset
-        subset = df[(df[x_var["column_name"]] >= start) & (df[x_var["column_name"]] < start + x_bin_interval)]
 
-        # Get color 
-        midpoint = start + 2.5  # Midpoint for color indexing
-        color = cmap(norm(midpoint))
-        dark_color = [x * 0.8 for x in color[:3]] + [1]
+# Calculate the point density
+def plot_contour(df, x_var, y_var, cmap):
 
-        # Plot trendline and scatter
-        sns.scatterplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, alpha=0.3, color=color, ax=ax)
-        sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=subset, scatter=False,  color=dark_color, ax=ax)
-    
-    for line in ax.get_lines():
-        line.set_linestyle('--')
+    xdata = df[var_dict[x_var]['column_name']].values
+    ydata = df[var_dict[y_var]['column_name']].values
+    xy = np.vstack([xdata, ydata])
+    z = gaussian_kde(xy)(xy)
 
-    # Adding a trend line
-    sns.regplot(x=x_var["column_name"], y=y_var["column_name"], data=df, scatter=False, color='black', ax=ax)
+    # Sort the points by density, so that the densest points are plotted last
+    idx = z.argsort()
+    x, y, z = xdata[idx], ydata[idx], z[idx]
 
-    # Test the significance of the relationship
-    df_clean = df.dropna(subset=[x_var["column_name"], y_var["column_name"]])
+    fig, ax = plt.subplots()
+    ax.scatter(x, y, c=z, s=50, cmap=cmap)
+    # ax.set_title('Density Plot with Scatter')
 
-    # Compute Spearman correlation
-    correlation, p_value = spearmanr(df_clean[x_var["column_name"]].values, df_clean[y_var["column_name"]].values)
-    print("Spearman correlation")
-    print("Correlation:", correlation)
-    print("P-value:", p_value)
-
-    # Regression analysis 
-    x = statsm.add_constant(df_clean[x_var["column_name"]].values)
-    model = statsm.OLS(df_clean[y_var["column_name"]].values, x)
-    results = model.fit()
-    print(results.summary())
-
-    # Enhancing the plot
-    plt.title('')
-    plt.xlabel(f'{x_var["label"]} {x_var["symbol"]} {x_var["unit"]}')
-    plt.ylabel(f'{y_var["label"]} {y_var["symbol"]} {y_var["unit"]}')
-    # plt.ylim([y_var["lim"][0], y_var["lim"][1]])
-
+    ax.set_xlabel(f'{var_dict[x_var]["symbol"]} {var_dict[x_var]["unit"]}')
+    ax.set_ylabel(f'{var_dict[y_var]["symbol"]} {var_dict[y_var]["unit"]}')
     plt.show()
-# %%
-plt.rcParams.update({"font.size": 18})
-plot_scatter(df=df_filt_q_conus, x_var=var_dict["rangeland_wood"], y_var=var_dict["q_q"], cmap="YlGn")
-plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_median"], cmap="YlGn")
-plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_var"], cmap="YlGn")
-# %%
-plot_scatter(df=df_filt_q, x_var=var_dict["AI"], y_var=var_dict["q_q"], cmap=ai_cmap)
-plot_scatter(df=df_filt_q_agg, x_var=var_dict["AI_median"], y_var=var_dict["q_q_median"], cmap=ai_cmap)
-# TODO: debug this. only one color is showing up ... 
-# %%
-plot_scatter(df=df_filt_q, x_var=var_dict["sand_fraction"], y_var=var_dict["q_q"], cmap=sand_cmap)
-plot_scatter(df=df_filt_q_agg, x_var=var_dict["sand_fraction_median"], y_var=var_dict["q_q_median"], cmap=sand_cmap)
+
+plot_contour(df=df_filt_q_agg, x_var="AI_median", y_var="q_q_median", cmap="Blues")
+plot_contour(df=df_filt_q_agg.dropna(subset=["sand_fraction_median"]), x_var="sand_fraction_median", y_var="q_q_median", cmap="Blues")
 
 # %%
-plot_scatter(df=df_filt_q, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
-# plot_scatter(df=df_filt_q_agg, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+def using_mpl_scatter_density(df, x_var, y_var, cmap):
+    fig, ax = plt.subplots()
+    xdata = df[x_var['column_name']].values
+    ydata = df[y_var['column_name']].values
+    ax = fig.add_subplot(1, 1, 1, projection="scatter_density")
+    ax.scatter_density(xdata, ydata, cmap=cmap)
+    ax.set_xlim(x_var['lim'][0], x_var['lim'][1])
+    ax.set_ylim(y_var['lim'][0], y_var['lim'][1])
+    # fig.colorbar(ax, label="Number of points per pixel")
+    
+# %%
+using_mpl_scatter_density(df=df_filt_q, x_var=var_dict["AI"], y_var=var_dict["q_q"], cmap="Blues")
+using_mpl_scatter_density(df=df_filt_q_agg, x_var=var_dict["AI_median"], y_var=var_dict["q_q_median"], cmap="Blues")
 
 # %%
-df_filt_q.columns
+using_mpl_scatter_density(df=df_filt_q.dropna(subset=["sand_fraction"]), x_var=var_dict["sand_fraction"], y_var=var_dict["q_q"], cmap=sand_cmap)
+using_mpl_scatter_density(df=df_filt_q_agg.dropna(subset=["sand_fraction"]), x_var=var_dict["sand_fraction_median"], y_var=var_dict["q_q_median"], cmap=sand_cmap)
+
 # %%
 
-# # Change to percentage (TODO: fix this in the data management)
-# df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
-# df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
 
-# Print some statistics
-print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
-print(
-    f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
-)
-print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
+
 # %%
+
+
+# # %%
+# # Plotting
+# def plot_scatter(df, x_var, y_var, cmap="YlGn"):
+#     fig, ax = plt.subplots(figsize=(5, 4))
+#     # # Setting up the discrete colormap
+#     cmap=plt.get_cmap(cmap) 
+#     x_bin_interval = (x_var["lim"][1] - x_var["lim"][0])/5
+#     norm = plt.Normalize(vmin=x_var["lim"][0]-x_bin_interval, vmax=x_var["lim"][1])
+#     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+#     sm.set_array([])
+    
+#     print(x_bin_interval)
+#     print(np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval))
+#     # Adding regression lines per 5-year segments
+#     for start in np.arange(x_var["lim"][0], x_var["lim"][1], x_bin_interval):
+
+#         # Get df subset
+#         subset = df[(df[x_var["column_name"]] >= start) & (df[x_var["column_name"]] < start + x_bin_interval)]
+
+#         # Get color 
+#         midpoint = start + 2.5  # Midpoint for color indexing
+#         color = cmap(norm(midpoint))
+#         dark_color = [x * 0.8 for x in color[:3]] + [1]
+
+#         # Plot trendline and scatter
+#         sns.scatterplot(x=x_var["column_name"], y=y_var["column_name"], df=subset, alpha=0.3, color=color, ax=ax)
+#         sns.regplot(x=x_var["column_name"], y=y_var["column_name"], df=subset, scatter=False,  color=dark_color, ax=ax)
+    
+#     for line in ax.get_lines():
+#         line.set_linestyle('--')
+
+#     # Adding a trend line
+#     sns.regplot(x=x_var["column_name"], y=y_var["column_name"], df=df, scatter=False, color='black', ax=ax)
+
+#     # Test the significance of the relationship
+#     df_clean = df.dropna(subset=[x_var["column_name"], y_var["column_name"]])
+
+#     # Compute Spearman correlation
+#     correlation, p_value = spearmanr(df_clean[x_var["column_name"]].values, df_clean[y_var["column_name"]].values)
+#     print("Spearman correlation")
+#     print("Correlation:", correlation)
+#     print("P-value:", p_value)
+
+#     # Regression analysis 
+#     x = statsm.add_constant(df_clean[x_var["column_name"]].values)
+#     model = statsm.OLS(df_clean[y_var["column_name"]].values, x)
+#     results = model.fit()
+#     print(results.summary())
+
+#     # Enhancing the plot
+#     plt.title('')
+#     plt.xlabel(f'{x_var["label"]} {x_var["symbol"]} {x_var["unit"]}')
+#     plt.ylabel(f'{y_var["label"]} {y_var["symbol"]} {y_var["unit"]}')
+#     # plt.ylim([y_var["lim"][0], y_var["lim"][1]])
+
+#     plt.show()
+# # %%
+# plt.rcParams.update({"font.size": 18})
+# plot_scatter(df=df_filt_q_conus, x_var=var_dict["rangeland_wood"], y_var=var_dict["q_q"], cmap="YlGn")
+# plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_median"], cmap="YlGn")
+# plot_scatter(df=df_filt_q_conus_agg, x_var=var_dict["rangeland_wood_median"], y_var=var_dict["q_q_var"], cmap="YlGn")
+# # %%
+# plot_scatter(df=df_filt_q, x_var=var_dict["AI"], y_var=var_dict["q_q"], cmap=ai_cmap)
+# plot_scatter(df=df_filt_q_agg, x_var=var_dict["AI_median"], y_var=var_dict["q_q_median"], cmap=ai_cmap)
+# # TODO: debug this. only one color is showing up ... 
+
+# # %%
+
+# # %%
+# plot_scatter(df=df_filt_q, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+# # plot_scatter(df=df_filt_q_agg, x_var=var_dict["PET"], y_var=var_dict["q_q"], cmap=ai_cmap)
+
+# # %%
+# df_filt_q.columns
+# # %%
+
+# # # Change to percentage (TODO: fix this in the df management)
+# # df_filt_q_conus["fractional_wood"] = df_filt_q_conus["fractional_wood"] * 100
+# # df_filt_q_conus["fractional_herb"] = df_filt_q_conus["fractional_herb"] * 100
+
+# # Print some statistics
+# print(f"Total number of drydown event with successful q fits: {len(df_filt_q)}")
+# print(
+#     f"Total number of drydown event with successful q fits & within CONUS: {sum(~pd.isna(df_filt_q_conus['fractional_wood']))}"
+# )
+# print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2f}%")
+# # %%
 ###############################################################################################
 ###############################################################################################
 ###############################################################################################
@@ -2377,13 +2029,13 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #         sns.boxplot(
 #             x="name",
 #             y="AI",
-#             data=subset,
+#             df=subset,
 #             color=vegetation_color_dict[category],
 #             ax=ax,
 #             linewidth=2,
 #         )
 
-#     # ax = sns.violinplot(x='abbreviation', y='q_q', data=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
+#     # ax = sns.violinplot(x='abbreviation', y='q_q', df=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
 #     max_label_width = 20
 #     ax.set_xticklabels(
 #         [
@@ -2397,7 +2049,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #     ax.set_ylabel("Aridity index [MAP/MAE]")
 #     ax.set_xlabel("IGBP Landcover Class")
 #     ax.set_ylim(0, 2.0)
-#     ax.set_title("A", loc="left")
+#     ax.set_title("(a)", loc="left")
 #     plt.tight_layout()
 
 #     return fig, ax
@@ -2419,7 +2071,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 # #     z_var=var_dict["veg_class"],
 # #     categories=vegetation_color_dict.keys(),
 # #     colors=list(vegetation_color_dict.values()),
-# #     title="B",
+# #     title="(b)",
 # #     quantile=25,
 # #     plot_logscale=False,
 # #     plot_legend=False,
@@ -2433,7 +2085,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 # #     z_var=var_dict["veg_class"],
 # #     categories=vegetation_color_dict.keys(),
 # #     colors=list(vegetation_color_dict.values()),
-# #     title="C",
+# #     title="(c)",
 # #     quantile=25,
 # #     plot_logscale=True,
 # #     plot_legend=False,
@@ -2466,7 +2118,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #     sns.boxplot(
 #         x=x_var["column_name"],
 #         y=y_var["column_name"],
-#         data=df,
+#         df=df,
 #         boxprops=dict(facecolor="lightgray"),
 #         ax=ax,
 #     )
@@ -2505,7 +2157,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #     sns.boxplot(
 #         x=x_var["column_name"],
 #         y=y_var["column_name"],
-#         data=df,
+#         df=df,
 #         # hue=x_var['column_name'],
 #         legend=False,
 #         order=categories,
@@ -2771,7 +2423,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #     sns.barplot(
 #         x=x_column_to_plot,
 #         y=y_var_q_le_1,
-#         data=df,
+#         df=df,
 #         color="#FFE268",
 #         label=y_var_q_le_1,
 #         ax=ax,
@@ -2783,7 +2435,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #     sns.barplot(
 #         x=x_column_to_plot,
 #         y=y_var_q_gt_1,
-#         data=df,
+#         df=df,
 #         color="#22BBA9",
 #         label=y_var_q_gt_1,
 #         ax=ax,
@@ -2910,7 +2562,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #             group_offset = (bar_width + space_between_bars) * n_groups
 #             x_pos = x_i * (group_offset + space_between_groups) + (bar_width + space_between_bars) * z_i
             
-#             # Get the subset of data for this group
+#             # Get the subset of df for this group
 #             subset = df[(df[x_var] == x) & (df[z_var] == z)]
             
 #             # Get bottom values for stacked bars
@@ -3037,7 +2689,7 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 
 # # plot_q_ai_wood_scatter(longest_events_filtered)
 # # # %%
-# # # Assuming df is the DataFrame with the relevant data and it contains a column named 'data'
+# # # Assuming df is the DataFrame with the relevant df and it contains a column named 'df'
 # # # for which we want to calculate the coefficient of variation.
 # # # Group by 'EASE_row_index' and 'EASE_column_index' and filter groups with count 16
 
@@ -3219,3 +2871,65 @@ print(f"{sum(~pd.isna(df_filt_q_conus['fractional_wood']))/len(df_filt_q)*100:.2
 #         transparent=True,
 #     )
 # %%
+# # %%
+# # With variabiliity
+# plt.rcParams.update({"font.size": 18})
+# fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+# plot_loss_func(
+#     axs[0, 0],
+#     df_filt_q_agg,
+#     var_dict["veg_class_mode"],
+#     categories=vegetation_color_dict.keys(),
+#     colors=list(vegetation_color_dict.values()),
+#     plot_legend=False,
+#     title="(a)",
+#     median_by_pixel=True
+# )
+
+# plot_scatter_with_errorbar(
+#     ax=axs[0, 1],
+#     df=df_filt_q_agg,
+#     x_var=var_dict["q_theta_star_var"],
+#     y_var=var_dict["q_q_var"],
+#     z_var=var_dict["veg_class_mode"],
+#     quantile=25,
+#     categories=list(vegetation_color_dict.keys()),
+#     colors=list(vegetation_color_dict.values()),
+#     title="(b)",
+# )
+
+# plot_scatter_with_errorbar(
+#     ax=axs[1, 0],
+#     df=df_filt_q_agg,
+#     x_var=var_dict["q_ETmax_var"],
+#     y_var=var_dict["q_q_var"],
+#     z_var=var_dict["veg_class_mode"],
+#     quantile=25,
+#     categories=list(vegetation_color_dict.keys()),
+#     colors=list(vegetation_color_dict.values()),
+#     title="(c)",
+# )
+# plot_scatter_with_errorbar(
+#     ax=axs[1, 1],
+#     df=df_filt_q_agg,
+#     x_var=var_dict["q_theta_star_var"],
+#     y_var=var_dict["q_ETmax_var"],
+#     z_var=var_dict["veg_class_mode"],
+#     quantile=25,
+#     categories=list(vegetation_color_dict.keys()),
+#     colors=list(vegetation_color_dict.values()),
+#     title="(d)",
+# )
+
+# plt.tight_layout()
+# plt.show()
+
+# if save:
+#     # Save the combined figure
+#     fig.savefig(
+#         os.path.join(fig_dir, "sup_lossfnc_veg_var_by_pixel.png"), dpi=1200, bbox_inches="tight"
+#     )
+#     fig.savefig(
+#         os.path.join(fig_dir, "sup_lossfnc_veg_var_by_pixel.pdf"), dpi=1200, bbox_inches="tight"
+#     )
+# # fig.savefig(os.path.join(fig_dir, "sup_lossfnc_veg_legend.pdf"), dpi=1200, bbox_inches="tight")
