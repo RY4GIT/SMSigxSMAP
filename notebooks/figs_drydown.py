@@ -46,6 +46,7 @@ IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
 
+# %%
 # Read the output
 output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
 results_file = rf"all_results.csv"
@@ -321,11 +322,14 @@ def plot_drydown(
     df, event_id, days_after_to_plot=5, ax=None, plot_precip=True, save=False
 ):
 
-    linear_color = "#377eb8"
-    nonlinear_color = "#ff7f00"
+    linear_color = "tab:grey"  # "#377eb8"
 
     # Assuming 'df' is your DataFrame and 'event_id' is defined
     event = df.loc[event_id]
+    if event.q_q < 1:
+        nonlinear_color = "#F7CA0D"
+    else:
+        nonlinear_color = "#62AD5F"
 
     ####################################################
     # Get the event data
@@ -382,23 +386,6 @@ def plot_drydown(
         ax3 = fig.add_subplot(gs[0, 1])  # Second subplot
 
     # ___________________________________________________
-    # SOIL MOISTURE
-    df_ts = get_soil_moisture(event=event)
-    ax1.scatter(
-        df_ts[start_date:end_date].index,
-        df_ts[start_date:end_date].values,
-        color="grey",
-        label="SMAP observation",
-        s=markersize,
-    )
-    ax1.set_xlabel(f"Date in {start_date.year}")
-    ax1.set_ylabel("Soil moisture content" + "\n" + r"$\theta$ ($m^3$ $m^{-3}$)")
-    ax1.set_title(
-        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand; PET= {event.pet:.1f} mm)",
-        fontsize=base_fontsize,
-    )
-
-    # ___________________________________________________
     # PRECIPITATION
     if plot_precip:
         df_p = get_precipitation(event=event)
@@ -429,8 +416,7 @@ def plot_drydown(
         y_q,
         label=q_label,
         color=nonlinear_color,
-        linewidth=base_linewidth,
-        alpha=0.9,
+        linewidth=base_linewidth * 2,
     )
 
     # ___________________________________________________
@@ -453,7 +439,6 @@ def plot_drydown(
         label=exp_label,
         color=linear_color,
         linewidth=base_linewidth,
-        alpha=0.7,
     )
 
     # ___________________________________________________
@@ -482,9 +467,25 @@ def plot_drydown(
         y=event.est_theta_fc,
         color="tab:grey",
         linestyle=":",
-        alpha=0.5,
         linewidth=base_linewidth,
         label=r"Estimated $\theta_{fc}$",
+    )
+
+    # ___________________________________________________
+    # SOIL MOISTURE
+    df_ts = get_soil_moisture(event=event)
+    ax1.scatter(
+        df_ts[start_date:end_date].index,
+        df_ts[start_date:end_date].values,
+        color="grey",
+        label="SMAP observation",
+        s=markersize,
+    )
+    ax1.set_xlabel(f"Date in {start_date.year}")
+    ax1.set_ylabel("Soil moisture content" + "\n" + r"$\theta$ ($m^3$ $m^{-3}$)")
+    ax1.set_title(
+        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand; PET= {event.pet:.1f} mm)",
+        fontsize=base_fontsize,
     )
 
     # ___________________________________________________
@@ -538,8 +539,7 @@ def plot_drydown(
             theta_star=event.q_theta_star,
         ),
         color=nonlinear_color,
-        alpha=0.9,
-        linewidth=base_linewidth,
+        linewidth=base_linewidth * 2,
         label="Loss model:\nNonlinear",
     )
 
@@ -578,7 +578,6 @@ def plot_drydown(
         ),
         color=linear_color,
         linewidth=base_linewidth,
-        alpha=0.7,
         label="Linear",
     )
 
@@ -629,8 +628,8 @@ def plot_drydown(
         y_vals,
         color=linear_color,
         linestyle="--",
-        alpha=0.7,
         linewidth=base_linewidth,
+        alpha=0.7,
         label=r"$\tau$-based" + "\nLinear",
     )
 
@@ -667,7 +666,9 @@ save = True
 plot_drydown(
     df=df, event_id=155510, plot_precip=False, save=save, days_after_to_plot=14
 )
-plot_drydown(df=df, event_id=683982, plot_precip=False, save=save, days_after_to_plot=9)
+plot_drydown(df=df, event_id=548528, plot_precip=False, save=save, days_after_to_plot=9)
+plot_drydown(df=df, event_id=665086, plot_precip=False, save=save, days_after_to_plot=7)
+plot_drydown(df=df, event_id=135492, plot_precip=False, save=save, days_after_to_plot=6)
 
 # %%
 # Select the events to plot here
@@ -677,16 +678,17 @@ plot_drydown(df=df, event_id=683982, plot_precip=False, save=save, days_after_to
 # lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > 0.8)
+    (df["q_r_squared"] > 0.80)
     & (df["sm_range"] > 0.20)
-    & (df["large_q_criteria"] < 0.8)
-    & (df["first3_avail2"])
-    & (df["q_q"] > 1.0e-04)
+    & (df["large_q_criteria"] > 0.8)
+    # & (df["first3_avail2"])
+    # & (df["q_q"] < 1.0e-04)
     # & (df["q_q"] <= 0.8)
-    & (df["q_r_squared"] > df["tauexp_r_squared"])
+    # & (df["q_r_squared"] > df["tauexp_r_squared"])
     & (df["event_length"] >= 7)
-    & (df["name"] == "Woody savannas")
-    & (df["q_q"] > 1.2)
+    # & (df["name"] == "Woody savannas")
+    # & (df["q_q"] > 1.7)
+    # & (df["q_q"] < 2.0)
 ]
 # df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
 print(df_filt.index)
@@ -706,21 +708,19 @@ else:
 
 # %%|
 ################################################
-event_id = 155510
+event_id = 135492
 ################################################
 
 # q < 1: 743974, 155510
-# q > 1: 799057, 683982
+# q > 1: 799057, 683982, 648455, 547425, 271697
 save = True
 plot_drydown(
     df=df, event_id=event_id, plot_precip=False, save=save, days_after_to_plot=13
 )
 
-
 # print(df.loc[event_id])
 print(f"Next to try (in df): {df_filt.sample(n=1).index}")
 print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
-
 
 # check_1ts_range(df.loc[event_id], verbose=True)
 # %%

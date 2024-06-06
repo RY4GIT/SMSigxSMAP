@@ -57,14 +57,14 @@
     },
     "q_theta_star": {
         "column_name": "q_theta_star",
-        "symbol": "$\\hat{\\theta}^*$",
+        "symbol": "$\\hat{\\theta^*}$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0.15, 0.30]
     },
     "q_theta_star_median": {
         "column_name": "q_theta_star_median",
-        "symbol": "$\\hat{\\theta}^*$",
+        "symbol": "$\\hat{\\theta^*}$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0.15, 0.30]
@@ -80,7 +80,7 @@
         "column_name": "sand_bins",
         "symbol": "",
         "label": "Sand fraction",
-        "unit": "[-]",
+        "unit": "(-)",
         "lim": [0.0, 1.0]
     },
     "ai_bins": {
@@ -113,14 +113,14 @@
     },
     "AI": {
         "column_name": "AI",
-        "symbol": "AI",
+        "symbol": "Aridity Index",
         "label": "Aridity Index",
         "unit": "(MAP/MAE)",
         "lim": [0.0, 4]
     },
     "AI_median": {
         "column_name": "AI_median",
-        "symbol": "AI",
+        "symbol": "Aridity Index",
         "label": "Aridity Index",
         "unit": "(MAP/MAE)",
         "lim": [0.0, 1.5]
@@ -129,14 +129,14 @@
         "column_name": "sand_fraction",
         "symbol": "",
         "label": "Sand fraction",
-        "unit": "[-]",
+        "unit": "(-)",
         "lim": [0.0, 1.0]
     },
     "sand_fraction_median": {
         "column_name": "sand_fraction_median",
         "symbol": "Sand fraction",
         "label": "Sand fraction",
-        "unit": "[-]",
+        "unit": "(-)",
         "lim": [0.0, 1.0]
     },
     "diff_R2": {
