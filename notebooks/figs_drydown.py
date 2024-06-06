@@ -46,6 +46,7 @@ IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
 
+# %%
 # Read the output
 output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
 results_file = rf"all_results.csv"
@@ -191,6 +192,30 @@ print("done")
 
 
 # %%
+def check_1ts_range(row, verbose=False):
+    common_params = {
+        "q": row.q_q,
+        "ETmax": row.q_ETmax,
+        "theta_star": row.q_theta_star,
+        "theta_w": row.q_theta_w,
+    }
+
+    s_t_0 = q_model(t=0, theta_0=row.q_theta_star, **common_params)
+    s_t_1 = q_model(t=1, theta_0=row.q_theta_star, **common_params)
+
+    dsdt_0 = loss_model(theta=s_t_0, **common_params)
+    dsdt_1 = loss_model(theta=s_t_1, **common_params)
+
+    if verbose:
+        print(f"{(dsdt_0 - dsdt_1) / (row.q_ETmax / 50)*100:.1f} percent")
+    return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / 50) * (-1)
+
+
+print("Checking the potential first step drydown")
+df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
+print("done")
+
+# %%
 ############################################################
 # Get timeseries of SM data
 ############################################################
@@ -286,10 +311,25 @@ def get_precipitation(varname="SPL4SMGP", event=None):
 
 
 # %%
-def plot_drydown(df, event_id, ax=None, save=False):
+
+base_fontsize = 15
+plt.rcParams.update({"font.size": base_fontsize})
+base_linewidth = 2
+markersize = 30
+
+
+def plot_drydown(
+    df, event_id, days_after_to_plot=5, ax=None, plot_precip=True, save=False
+):
+
+    linear_color = "tab:grey"  # "#377eb8"
 
     # Assuming 'df' is your DataFrame and 'event_id' is defined
     event = df.loc[event_id]
+    if event.q_q < 1:
+        nonlinear_color = "#F7CA0D"
+    else:
+        nonlinear_color = "#62AD5F"
 
     ####################################################
     # Get the event data
@@ -312,8 +352,8 @@ def plot_drydown(df, event_id, ax=None, save=False):
     # Define variables and parameters
     t = np.arange(0, n_days, 1 / 24)
 
-    start_date = pd.to_datetime(event.event_start) - pd.Timedelta(3, "D")
-    end_date = pd.to_datetime(event.event_end) + pd.Timedelta(7, "D")
+    start_date = pd.to_datetime(event.event_start) - pd.Timedelta(1, "D")
+    end_date = pd.to_datetime(event.event_end) + pd.Timedelta(days_after_to_plot, "D")
     date_range = pd.date_range(
         start=pd.to_datetime(event.event_start),
         end=pd.to_datetime(event.event_end),
@@ -324,66 +364,37 @@ def plot_drydown(df, event_id, ax=None, save=False):
     # Drydown plot
     ####################################################
 
-    fig = plt.figure(figsize=(15, 3.5))
-
-    # Set up a GridSpec layout
-    gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
-
     # Create the subplots
-    ax1 = fig.add_subplot(gs[0])
-    ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    if plot_precip:
+        fig = plt.figure(figsize=(15, 4))
 
-    # ___________________________________________________
-    # SOIL MOISTURE
-    df_ts = get_soil_moisture(event=event)
-    ax1.scatter(
-        df_ts[start_date:end_date].index,
-        df_ts[start_date:end_date].values,
-        color="grey",
-        label="SMAP observation",
-    )
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("Soil moisture content" + "\n" + rf"$\theta$ $[m3/m3]$")
-    ax1.set_title(
-        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand; PET= {event.pet:.1f} mm)"
-    )
+        # Set up a GridSpec layout
+        gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
+
+        ax1 = fig.add_subplot(gs[0])
+        ax2 = fig.add_subplot(gs[1], sharex=ax1)
+    else:
+        date_factor = (end_date - start_date).days
+        plot_height = 3.75
+        first_plot_width = 10  # date_factor * 0.4
+        second_plot_width = 3.5
+        fig = plt.figure(figsize=(first_plot_width + second_plot_width, plot_height))
+
+        gs = gridspec.GridSpec(1, 2, width_ratios=[first_plot_width, second_plot_width])
+
+        ax1 = fig.add_subplot(gs[0, 0])  # First subplot
+        ax3 = fig.add_subplot(gs[0, 1])  # Second subplot
 
     # ___________________________________________________
     # PRECIPITATION
-    df_p = get_precipitation(event=event)
-    ax2.bar(
-        df_p[start_date:end_date].index,
-        df_p[start_date:end_date].values.flatten(),
-        color="grey",
-    )
-    ax2.set_ylabel("Precipitation \n[mm/d]")
-
-    # ___________________________________________________
-    # TAU-EXPONENTIAL
-    y_tauexp = tau_exp_model(
-        t, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
-    )
-    tauexp_label = rf"$\tau$-based Linear model ($R^2$={event.tauexp_r_squared:.2f}, $\tau$={event.tauexp_tau:.2f}, $\Delta \theta$={event.tauexp_delta_theta:.2f}), $\theta_w$={event.tauexp_theta_w:.2f})"
-    ax1.plot(
-        date_range[:-1],
-        y_tauexp,
-        label=tauexp_label,
-        color="darkblue",
-        alpha=0.5,
-        linestyle="--",
-    )
-
-    # ___________________________________________________
-    # EXPONENTIAL
-    y_exp = exp_model_piecewise(
-        t=t,
-        ETmax=event.exp_ETmax,
-        theta_0=event.exp_theta_0,
-        theta_star=event.exp_theta_star,
-        theta_w=event.exp_theta_w,
-    )
-    exp_label = rf"Linear model ($R^2$={event.exp_r_squared:.2f}, $ETmax$={event.exp_ETmax:.1f}, $\theta^*$={event.exp_theta_star:.2f}, $\theta_w$={event.exp_theta_w:.2f}, $\theta_0$={event.exp_theta_0:.2f})"
-    ax1.plot(date_range[:-1], y_exp, label=exp_label, color="darkblue", alpha=0.5)
+    if plot_precip:
+        df_p = get_precipitation(event=event)
+        ax2.bar(
+            df_p[start_date:end_date].index,
+            df_p[start_date:end_date].values.flatten(),
+            color="grey",
+        )
+        ax2.set_ylabel("Precipitation \n[mm/d]")
 
     # ___________________________________________________
     # Q MODEL
@@ -395,43 +406,114 @@ def plot_drydown(df, event_id, ax=None, save=False):
         theta_star=event.q_theta_star,
         theta_w=event.q_theta_w,
     )
-    q_label = rf"Nonlinear model ($R^2$={event.q_r_squared:.2f}, $q$={event.q_q:.1f}, $ETmax$={event.q_ETmax:.1f}, $\theta^*$={event.q_theta_star:.2f}, $\theta_w$={event.q_theta_w:.2f}, $\theta_0$={event.q_theta_0:.2f})"
-    ax1.plot(date_range[:-1], y_q, label=q_label, color="darkorange")
+    q_label = (
+        rf"Nonlinear model, $R^2$={event.q_r_squared:.3f} ($q$={event.q_q:.1f}, "
+        + "\n"
+        + rf"$ETmax$={event.q_ETmax:.1f}, $\theta^*$={event.q_theta_star:.2f}, $\theta_w$={event.q_theta_w:.2f}, $\theta_0$={event.q_theta_0:.2f})"
+    )
+    ax1.plot(
+        date_range[:-1],
+        y_q,
+        label=q_label,
+        color=nonlinear_color,
+        linewidth=base_linewidth * 2,
+    )
+
+    # ___________________________________________________
+    # EXPONENTIAL
+    y_exp = exp_model_piecewise(
+        t=t,
+        ETmax=event.exp_ETmax,
+        theta_0=event.exp_theta_0,
+        theta_star=event.exp_theta_star,
+        theta_w=event.exp_theta_w,
+    )
+    exp_label = (
+        rf"Linear model, $R^2$={event.exp_r_squared:.3f}"
+        + "\n"
+        + rf"($ETmax$={event.exp_ETmax:.1f}, $\theta^*$={event.exp_theta_star:.2f}, $\theta_w$={event.exp_theta_w:.2f}, $\theta_0$={event.exp_theta_0:.2f})"
+    )
+    ax1.plot(
+        date_range[:-1],
+        y_exp,
+        label=exp_label,
+        color=linear_color,
+        linewidth=base_linewidth,
+    )
+
+    # ___________________________________________________
+    # TAU-EXPONENTIAL
+    y_tauexp = tau_exp_model(
+        t, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
+    )
+    tauexp_label = (
+        rf"$\tau$-based Linear model, $R^2$={event.tauexp_r_squared:.3f}"
+        + "\n"
+        + rf"($\tau$={event.tauexp_tau:.2f}, $\Delta \theta$={event.tauexp_delta_theta:.2f}, $\theta_w$={event.tauexp_theta_w:.2f})"
+    )
+    ax1.plot(
+        date_range[:-1],
+        y_tauexp,
+        label=tauexp_label,
+        color=linear_color,
+        linewidth=base_linewidth,
+        alpha=0.7,
+        linestyle="--",
+    )
 
     # ___________________________________________________
     # Estimated theta_fc
     ax1.axhline(
         y=event.est_theta_fc,
         color="tab:grey",
-        linestyle="--",
-        alpha=0.5,
+        linestyle=":",
+        linewidth=base_linewidth,
         label=r"Estimated $\theta_{fc}$",
+    )
+
+    # ___________________________________________________
+    # SOIL MOISTURE
+    df_ts = get_soil_moisture(event=event)
+    ax1.scatter(
+        df_ts[start_date:end_date].index,
+        df_ts[start_date:end_date].values,
+        color="grey",
+        label="SMAP observation",
+        s=markersize,
+    )
+    ax1.set_xlabel(f"Date in {start_date.year}")
+    ax1.set_ylabel("Soil moisture content" + "\n" + r"$\theta$ ($m^3$ $m^{-3}$)")
+    ax1.set_title(
+        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand; PET= {event.pet:.1f} mm)",
+        fontsize=base_fontsize,
     )
 
     # ___________________________________________________
     # Formatting
     # Optional: Hide x-ticks for ax1 if they're redundant
-    ax1.legend(loc="upper right")
-    plt.setp(ax1.get_xticklabels(), visible=False)
+    legend_fontsize = 10.5
+    ax1.legend(loc="upper right", fontsize=legend_fontsize)
+    # Optional: Hide x-ticks for ax1 if they're redundant
+    if plot_precip:
+        plt.setp(ax1.get_xticklabels(), visible=False)
+    else:
+        plt.setp(ax1.get_xticklabels(), visible=True)
 
     # Adjust the subplots to prevent overlap
-    plt.subplots_adjust(hspace=0.1)  # Adjust the space between plots if necessary
+    # plt.subplots_adjust(hspace=0.1)  # Adjust the space between plots if necessary
 
     fig.tight_layout()
-    fig.autofmt_xdate()
+    import matplotlib.dates as mdates
 
-    if save:
-        fig.savefig(
-            os.path.join(fig_dir, f"event_{event_id}.png"),
-            dpi=1200,
-            bbox_inches="tight",
-        )
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%b-%d"))
+    # fig.autofmt_xdate()
 
     # ####################################################
     # # Loss function
     # ####################################################
 
-    fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
+    if plot_precip:
+        fig2, ax3 = plt.subplots(figsize=(3.5, 3.5))
 
     if np.isnan(event.est_theta_fc):
         est_fc = event.max_sm * 0.95
@@ -445,33 +527,42 @@ def plot_drydown(df, event_id, ax=None, save=False):
     t_obs = np.where(~np.isnan(theta_obs))[0]
 
     # ___________________________________________________
-    # LINEAR (EXPONENTIAL) MODEL
-    x_tau_in_L = tau_exp_model(
-        t_obs, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
-    )
-    y_tau_in_L = tau_exp_dash(
-        t_obs, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
-    )
-    ax3.scatter(
-        x_tau_in_L,
-        y_tau_in_L,
-        color="blue",
-        facecolors="none",
-        alpha=0.5,
+    # NONLINEAR (Q) MODEL
+    # Plot observed & fitted soil moisture
+    ax3.plot(
+        nonlinear_theta_plot,
+        loss_model(
+            nonlinear_theta_plot,
+            event.q_q,
+            event.q_ETmax,
+            theta_w=event.q_theta_w,
+            theta_star=event.q_theta_star,
+        ),
+        color=nonlinear_color,
+        linewidth=base_linewidth * 2,
+        label="Loss model:\nNonlinear",
     )
 
-    # Fit the linear regression model
-    slope, intercept = np.polyfit(x_tau_in_L, y_tau_in_L, 1)
-    tauexp_theta_plot = np.arange(event.tauexp_theta_w, est_fc, 0.001)
-    y_vals = slope * tauexp_theta_plot + intercept
-    ax3.plot(
-        tauexp_theta_plot,
-        y_vals,
-        color="darkblue",
-        linestyle="--",
-        alpha=0.9,
-        label=r"$\tau$-based Linear model",
+    nonlinear_est_theta_obs = q_model_piecewise(
+        t=t_obs,
+        q=event.q_q,
+        ETmax=event.q_ETmax,
+        theta_0=event.q_theta_0,
+        theta_star=event.q_theta_star,
+        theta_w=event.q_theta_w,
     )
+    # ax3.scatter(
+    #     nonlinear_est_theta_obs,
+    #     loss_model(
+    #         nonlinear_est_theta_obs,
+    #         event.q_q,
+    #         event.q_ETmax,
+    #         theta_w=event.q_theta_w,
+    #         theta_star=event.q_theta_star,
+    #     ),
+    #     color=nonlinear_color,
+    #     alpha=0.5,
+    # )
 
     # ___________________________________________________
     # LINEAR MODEL
@@ -485,9 +576,9 @@ def plot_drydown(df, event_id, ax=None, save=False):
             theta_w=event.exp_theta_w,
             theta_star=event.exp_theta_star,
         ),
-        color="darkblue",
-        alpha=0.9,
-        label="Linear model",
+        color=linear_color,
+        linewidth=base_linewidth,
+        label="Linear",
     )
 
     # Plot observed & fitted soil moisture
@@ -498,95 +589,87 @@ def plot_drydown(df, event_id, ax=None, save=False):
         theta_star=event.exp_theta_star,
         theta_w=event.exp_theta_w,
     )
-    ax3.scatter(
-        linear_est_theta_obs,
-        loss_model(
-            linear_est_theta_obs,
-            1,
-            event.exp_ETmax,
-            theta_w=event.exp_theta_w,
-            theta_star=event.exp_theta_star,
-        ),
-        color="darkblue",
-        alpha=0.5,
-        # label=r"Observed $\theta$" + "\n" + r"($d\theta/dt$ is estimated)",
-    )
+    # ax3.scatter(
+    #     linear_est_theta_obs,
+    #     loss_model(
+    #         linear_est_theta_obs,
+    #         1,
+    #         event.exp_ETmax,
+    #         theta_w=event.exp_theta_w,
+    #         theta_star=event.exp_theta_star,
+    #     ),
+    #     color=linear_color,
+    #     alpha=0.5,
+    #     # label=r"Observed $\theta$" + "\n" + r"($d\theta/dt$ is estimated)",
+    # )
 
     # ___________________________________________________
-    # NONLINEAR (Q) MODEL
-    # Plot observed & fitted soil moisture
-    ax3.plot(
-        nonlinear_theta_plot,
-        loss_model(
-            nonlinear_theta_plot,
-            event.q_q,
-            event.q_ETmax,
-            theta_w=event.q_theta_w,
-            theta_star=event.q_theta_star,
-        ),
-        color="darkorange",
-        alpha=0.9,
-        label="Nonlinear model",
+    # LINEAR (EXPONENTIAL) MODEL
+    x_tau_in_L = tau_exp_model(
+        t_obs, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
     )
+    y_tau_in_L = tau_exp_dash(
+        t_obs, event.tauexp_delta_theta, event.tauexp_theta_w, event.tauexp_tau
+    )
+    # ax3.scatter(
+    #     x_tau_in_L,
+    #     y_tau_in_L,
+    #     color=linear_color,
+    #     facecolors="none",
+    #     alpha=0.5,
+    # )
 
-    nonlinear_est_theta_obs = q_model_piecewise(
-        t=t_obs,
-        q=event.q_q,
-        ETmax=event.q_ETmax,
-        theta_0=event.q_theta_0,
-        theta_star=event.q_theta_star,
-        theta_w=event.q_theta_w,
-    )
-    ax3.scatter(
-        nonlinear_est_theta_obs,
-        loss_model(
-            nonlinear_est_theta_obs,
-            event.q_q,
-            event.q_ETmax,
-            theta_w=event.q_theta_w,
-            theta_star=event.q_theta_star,
-        ),
-        color="darkorange",
-        alpha=0.5,
+    # Fit the linear regression model
+    slope, intercept = np.polyfit(x_tau_in_L, y_tau_in_L, 1)
+    tauexp_theta_plot = np.arange(event.tauexp_theta_w, est_fc, 0.001)
+    y_vals = slope * tauexp_theta_plot + intercept
+    ax3.plot(
+        tauexp_theta_plot,
+        y_vals,
+        color=linear_color,
+        linestyle="--",
+        linewidth=base_linewidth,
+        alpha=0.7,
+        label=r"$\tau$-based" + "\nLinear",
     )
 
     # ___________________________________________________
     # FORMATTING
-    ax3.set_xlabel(r"$\theta$ [$m^3$ $m^{-3}$]")
-    ax3.set_ylabel(r"$d\theta/dt$ [$m^3$ $m^{-3}$ $day^{-1}$]")
-    ax3.legend(loc="upper left")
+    ax3.set_xlabel(r"$\theta$ ($m^3$ $m^{-3}$)")
+    ax3.set_ylabel(r"$d\theta/dt$ ($m^3$ $m^{-3}$ $day^{-1}$)")
+    ax3.legend(loc="upper left", fontsize=legend_fontsize)
     title_value = check_1ts_range(df.loc[event_id], verbose=True)
-    ax3.set_title(
+    # ax3.set_title("(b)", loc="left")
+    print(
         f"1st timestep drydown covers {title_value*100:.0f}% of the range"
         + "\n"
         + f"sm range covers {event.sm_range*100:.0f}% of the historical"
     )
+    print(start_date)
     ax3.invert_yaxis()
 
-
-# %%
-def check_1ts_range(row, verbose=False):
-    common_params = {
-        "q": row.q_q,
-        "ETmax": row.q_ETmax,
-        "theta_star": row.q_theta_star,
-        "theta_w": row.q_theta_w,
-    }
-
-    s_t_0 = q_model(t=0, theta_0=row.q_theta_star, **common_params)
-    s_t_1 = q_model(t=1, theta_0=row.q_theta_star, **common_params)
-
-    dsdt_0 = loss_model(theta=s_t_0, **common_params)
-    dsdt_1 = loss_model(theta=s_t_1, **common_params)
-
-    if verbose:
-        print(f"{(dsdt_0 - dsdt_1) / (row.q_ETmax / 50)*100:.1f} percent")
-    return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / 50) * (-1)
+    fig.tight_layout()
+    if save:
+        fig.savefig(
+            os.path.join(fig_dir, f"event_{event_id}.png"),
+            dpi=1200,
+            bbox_inches="tight",
+        )
+        fig.savefig(
+            os.path.join(fig_dir, f"event_{event_id}.pdf"),
+            dpi=1200,
+            bbox_inches="tight",
+        )
 
 
-print("Checking the potential first step drydown")
-df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
-print("done")
+save = True
+plot_drydown(
+    df=df, event_id=155510, plot_precip=False, save=save, days_after_to_plot=14
+)
+plot_drydown(df=df, event_id=548528, plot_precip=False, save=save, days_after_to_plot=9)
+plot_drydown(df=df, event_id=665086, plot_precip=False, save=save, days_after_to_plot=7)
+plot_drydown(df=df, event_id=135492, plot_precip=False, save=save, days_after_to_plot=6)
+
 # %%
 # Select the events to plot here
 
@@ -595,13 +678,17 @@ print("done")
 # lon_min, lon_max = -125.000000, -66.934570
 
 df_filt = df[
-    (df["q_r_squared"] > 0.8)
-    & (df["diff_R2"] > 0)
-    & (df["sm_range"] > 0.15)
-    & (df["large_q_criteria"] < 0.6)
-    & (df["first3_avail2"])
-    & (df["q_q"] > 1.0e-04)
-    & (df["q_q"] > 1.4)
+    (df["q_r_squared"] > 0.80)
+    & (df["sm_range"] > 0.20)
+    & (df["large_q_criteria"] > 0.8)
+    # & (df["first3_avail2"])
+    # & (df["q_q"] < 1.0e-04)
+    # & (df["q_q"] <= 0.8)
+    # & (df["q_r_squared"] > df["tauexp_r_squared"])
+    & (df["event_length"] >= 7)
+    # & (df["name"] == "Woody savannas")
+    # & (df["q_q"] > 1.7)
+    # & (df["q_q"] < 2.0)
 ]
 # df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
 print(df_filt.index)
@@ -619,14 +706,22 @@ if len(not_in_filt_indices) >= 5:
 else:
     print("Not enough indices to sample 5.")
 
-# %%
+# %%|
 ################################################
-event_id = 297033
+event_id = 135492
 ################################################
-plot_drydown(df=df, event_id=event_id)
+
+# q < 1: 743974, 155510
+# q > 1: 799057, 683982, 648455, 547425, 271697
+save = True
+plot_drydown(
+    df=df, event_id=event_id, plot_precip=False, save=save, days_after_to_plot=13
+)
+
 # print(df.loc[event_id])
 print(f"Next to try (in df): {df_filt.sample(n=1).index}")
 print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
+
 # check_1ts_range(df.loc[event_id], verbose=True)
 # %%
 plt.scatter(df["event_length"], df["q_q"])
