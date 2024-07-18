@@ -26,6 +26,15 @@ import matplotlib.colors as mcolors
 import json
 
 # Math font
+import matplotlib as mpl
+
+plt.rcParams["font.family"] = "DejaVu Sans"  # Or any other available font
+plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]  # Ensure the font is set correctly
+
+# mpl.rcParams["font.family"] = "sans-serif"
+# mpl.rcParams["font.sans-serif"] = "Myriad Pro"
+mpl.rcParams["font.size"] = 12.0
+mpl.rcParams["axes.titlesize"] = 12.0
 plt.rcParams["mathtext.fontset"] = (
     "stixsans"  #'stix'  # Or 'cm' (Computer Modern), 'stixsans', etc.
 )
@@ -36,7 +45,6 @@ import sys
 
 
 # Ryoko do not have this font on my system
-# import matplotlib as mpl
 
 # mpl.font_manager.findSystemFonts(fontpaths=None, fontext='ttf')
 # font_files = mpl.font_manager.findSystemFonts(fontpaths=['/home/brynmorgan/Fonts/'])
@@ -44,8 +52,6 @@ import sys
 # for font_file in font_files:
 #     mpl.font_manager.fontManager.addfont(font_file)
 
-# mpl.rcParams['font.family'] = 'sans-serif'
-# mpl.rcParams['font.sans-serif'] = 'Myriad Pro'
 
 # %% Plot config
 
@@ -73,21 +79,11 @@ with open(os.path.join(note_dir, "fig_variable_labels.json"), "r") as file:
 # Data dir
 user_name = getpass.getuser()
 data_dir = rf"/home/{user_name}/waves/projects/smap-drydown/data"
-datarods_dir = "datarods"
-anc_dir = "SMAP_L1_L3_ANC_STATIC"
-anc_file = "anc_info.csv"
-anc_rangeland_file = "anc_info_rangeland.csv"
-anc_rangeland_processed_file = "anc_info_rangeland_processed.csv"
-anc_Bassiouni_params_file = "anc_info_Bassiouni.csv"
-IGBPclass_file = "IGBP_class.csv"
-ai_file = "AridityIndex_from_datarods.csv"
-coord_info_file = "coord_info.csv"
 
 # Read the model output (results)
 output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
-results_file = rf"all_results.csv"
-_df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
-_df["year"] = pd.to_datetime(_df["event_start"]).dt.year
+results_file = rf"all_results_processed.csv"
+df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 print("Loaded results file")
 
 # Create figure output directory in the model output directory
@@ -103,38 +99,7 @@ f = open(os.path.join(fig_dir, "log.txt"), "w")
 original_stdout = sys.stdout  # Save the original stdout
 sys.stdout = f  # Change the stdout to the file handle
 
-# ANCILLARY DATA IMPORT
-# Read coordinate information
-coord_info = pd.read_csv(os.path.join(data_dir, datarods_dir, coord_info_file))
-df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
-print("Loaded coordinate information")
-
-# Ancillary df
-df_anc = pd.read_csv(os.path.join(data_dir, datarods_dir, anc_file)).drop(
-    ["spatial_ref", "latitude", "longitude"], axis=1
-)
-df_anc.loc[df_anc["sand_fraction"] < 0, "sand_fraction"] = np.nan
-print("Loaded ancillary information (sand fraction and land-cover)")
-
-# Aridity indices
-df_ai = pd.read_csv(os.path.join(data_dir, datarods_dir, ai_file)).drop(
-    ["latitude", "longitude"], axis=1
-)
-df_ai.loc[df_ai["AI"] < 0, "AI"] = np.nan
-print("Loaded ancillary information (aridity index)")
-
-# Land cover
-IGBPclass = pd.read_csv(os.path.join(data_dir, anc_dir, IGBPclass_file))
-
-df = df.merge(df_anc, on=["EASE_row_index", "EASE_column_index"], how="left")
-df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
-df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
-# df["name"][df["name"]=="Croplands"] = "Cropland/natural vegetation"
-# df["name"][df["name"]=="Cropland/natural vegetation mosaics"] = "Cropland/natural vegetation"
-print("Loaded ancillary information (land-cover)")
-print(df["name"].unique())
-# Get the binned ancillary information
-
+############################################################
 # sand
 sand_bin_list = [i * 0.1 for i in range(11)]
 sand_bin_list = sand_bin_list[1:]
@@ -154,100 +119,15 @@ first_I = df["ai_bins"].cat.categories[0]
 new_I = pd.Interval(0, first_I.right)
 df["ai_bins"] = df["ai_bins"].cat.rename_categories({first_I: new_I})
 
-# %% ############################################################################
-# Calculate some stats for evaluation
-
-# Difference between R2 values of two models
-df = df.assign(diff_R2_q_tauexp=df["q_r_squared"] - df["tauexp_r_squared"])
-df = df.assign(diff_R2_q_exp=df["q_r_squared"] - df["exp_r_squared"])
-
-
-def df_availability(row):
-    # Check df point availability in the first 3 time steps of observation
-    # Define a helper function to convert string to list
-    def str_to_list(s):
-        return list(map(int, s.strip("[]").split()))
-
-    # Convert the 'time' column from string of lists to actual lists
-    time_list = str_to_list(row["time"])
-
-    # Check if first three items are [0, 1, 2]
-    # condition = time_list[:3] == [0, 1, 2]
-
-    # Check if at least 2 elements exist in any combination (0 and 1, 0 and 2, or 1 and 2) in the first 3 elements
-    first_3_elements = set(time_list[:3])
-    required_elements = [{0, 1}, {0, 2}, {1, 2}]
-
-    condition = any(
-        required.issubset(first_3_elements) for required in required_elements
-    )
-
-    return condition
-
-
-# Soil mositure range covered by the observation
-def calculate_sm_range(row):
-    input_string = row.sm
-
-    # Processing the string
-    input_string = input_string.replace("\n", " np.nan")
-    input_string = input_string.replace(" nan", " np.nan")
-    input_string = input_string.strip("[]")
-
-    # Converting to numpy array and handling np.nan
-    sm = np.array(
-        [
-            float(value) if value != "np.nan" else np.nan
-            for value in input_string.split()
-        ]
-    )
-
-    # Calculating sm_range
-    sm_range = (
-        (np.nanmax(sm) - np.nanmin(sm)) / (row.max_sm - row.min_sm)
-        if row.max_sm != row.min_sm
-        else np.nan
-    )
-    return np.abs(sm_range)
-
-
-def check_1ts_range(row, verbose=False):
-    common_params = {
-        "q": row.q_q,
-        "ETmax": row.q_ETmax,
-        "theta_star": row.q_theta_star,
-        "theta_w": row.q_theta_w,
-    }
-
-    s_t_0 = q_model(t=0, theta_0=row.q_theta_star, **common_params)
-    s_t_1 = q_model(t=1, theta_0=row.q_theta_star, **common_params)
-
-    dsdt_0 = loss_model(theta=s_t_0, **common_params)
-    dsdt_1 = loss_model(theta=s_t_1, **common_params)
-
-    if verbose:
-        print(f"{(dsdt_0 - dsdt_1) / (row.q_ETmax / z_mm)*100:.1f} percent")
-    return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / z_mm) * (-1)
-
-
-# Create new columns
-df["first3_avail2"] = df.apply(df_availability, axis=1)
-df["sm_range"] = df.apply(calculate_sm_range, axis=1)
-df["event_length"] = (
-    pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
-).dt.days + 1
-df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
 
 # %% ###################################################
 # Exclude model fits failure
-
-
 def count_median_number_of_events_perGrid(df):
     grouped = df.groupby(["EASE_row_index", "EASE_column_index"]).agg(
         median_diff_R2_q_tauexp=("diff_R2_q_tauexp", "median"),
         count=("diff_R2_q_tauexp", "count"),
     )
-    print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}")
+    print(f"Median number of drydowns per SMAP grid: {grouped['count'].median()}\n")
 
 
 print(f"Total number of events: {len(df)}")
@@ -295,22 +175,22 @@ df_filt_q_and_exp = filter_df(df, criteria_q & criteria_exp)
 
 # Printing success messages and calculating events
 print_model_success("q model fit successful:", df_filt_q)
+print_model_success("exp model fit successful:", df_filt_exp)
+print_model_success("tau-exp model fit successful:", df_filt_tauexp)
+print_model_success("both q and exp model fit successful:", df_filt_q_and_exp)
+print_model_success("both q and tau-exp model fit successful:", df_filt_q_and_tauexp)
+# print_model_success("either q or tau-exp:", df_filt_q_or_tauexp)
+# print_model_success("either q or exp model fit successful:", df_filt_q_or_exp)
 print_model_success(
     "q model fit successful (not filtering q parameter values):", df_filt_allq
 )
-print_model_success("tau-exp model fit successful:", df_filt_tauexp)
-print_model_success("exp model fit successful:", df_filt_exp)
-print_model_success("either q or tau-exp:", df_filt_q_or_tauexp)
-print_model_success("both q and tau-exp model fit successful:", df_filt_q_and_tauexp)
-print_model_success("either q or exp model fit successful:", df_filt_q_or_exp)
-print_model_success("both q and exp model fit successful:", df_filt_q_and_exp)
 
 
 def print_performance_comparison(df, model1, model2):
     n_better = sum(df[model1] > df[model2])
     percentage_better = n_better / len(df) * 100
     print(
-        f"Of successful fits, {model1} performed better in {percentage_better:.0f} percent of events: {n_better}"
+        f"Of successful fits, {model1} performed better in {percentage_better:.1f} percent of events: {n_better}"
     )
 
 
@@ -1846,7 +1726,7 @@ def stat_dist_test(df, x_var, z_var, cmap=None, categories=None, colors=None):
 
     # Create a custom colormap
     colors = ["#2b8cbe", "#a6bddb", "#ece7f2"]  # dark blue, blue, white
-    boundaries = [0, 0.01, 0.05, 1]  # values for the boundaries between colors
+    boundaries = [0, 1.0e-2, 0.05, 1]  # values for the boundaries between colors
     cmap = ListedColormap(colors)
     norm = BoundaryNorm(boundaries, len(colors), clip=True)
 
@@ -1969,7 +1849,7 @@ def plot_contour(ax, df, x_var, y_var, cmap, title):
 
     # Display correlation and p-value
     correlation, p_value = spearmanr(x, y)
-    if p_value < 1.0e-3:
+    if p_value < 1.0e-2:
         extension = "*"
     else:
         extension = ""

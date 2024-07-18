@@ -36,42 +36,42 @@
     },
     "q_ETmax": {
         "column_name": "q_ETmax",
-        "symbol": "$\\hat{ET_{\\mathrm{max}}}$",
+        "symbol": "$\\hat{\\mathrm{ET}_{\\mathrm{max}}}$",
         "label": "Maximum ET",
         "unit": "(mm day$^{-1}$)",
         "lim": [1, 4.5]
     },
     "q_ETmax_median": {
         "column_name": "q_ETmax_median",
-        "symbol": "$\\hat{ET_{\\mathrm{max}}}$",
+        "symbol": "$\\hat{\\mathrm{ET}_{\\mathrm{max}}}$",
         "label": "Maximum ET",
         "unit": "(mm day$^{-1}$)",
         "lim": [1.0, 3.25]
     },
     "q_ETmax_var": {
         "column_name": "q_ETmax_var",
-        "symbol": "$s^2(ET_{\\mathrm{max}})$",
+        "symbol": "$s^2(\\mathrm{ET}_{\\mathrm{max}})$",
         "label": "Variance of maxET",
         "unit": "(mm day$^{-1}$)",
         "lim": [0, 3.5]
     },
     "q_theta_star": {
         "column_name": "q_theta_star",
-        "symbol": "$\\hat{\\theta^*}$",
+        "symbol": "$\\hat{\\theta_*}$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0.15, 0.30]
     },
     "q_theta_star_median": {
         "column_name": "q_theta_star_median",
-        "symbol": "$\\hat{\\theta^*}$",
+        "symbol": "$\\hat{\\theta_*}$",
         "label": "Critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0.15, 0.30]
     },
     "q_theta_star_var": {
         "column_name": "q_theta_star_var",
-        "symbol": "$s^2(\\theta^*)$",
+        "symbol": "$s^2(\\theta_*)$",
         "label": "Variance of critical soil moisture content",
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0, 1.0e-3]

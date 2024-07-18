@@ -15,6 +15,19 @@ from functions import (
     loss_model,
 )
 
+# Math font
+import matplotlib as mpl
+
+plt.rcParams["font.family"] = "DejaVu Sans"  # Or any other available font
+plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]  # Ensure the font is set correctly
+
+# mpl.rcParams["font.family"] = "sans-serif"
+# mpl.rcParams["font.sans-serif"] = "Myriad Pro"
+mpl.rcParams["font.size"] = 12.0
+mpl.rcParams["axes.titlesize"] = 12.0
+plt.rcParams["mathtext.fontset"] = (
+    "stixsans"  #'stix'  # Or 'cm' (Computer Modern), 'stixsans', etc.
+)
 
 # %%
 
@@ -50,21 +63,21 @@ var_dict = {
         "symbol": r"$\theta$",
         # "label": r"Soil moisture",
         "label": r"Soil moisture, $\theta$",
-        "unit": r"($m^3$ $m^{-3}$)",
+        "unit": r"($\mathrm{m}^3$ $\mathrm{m}^{-3}$)",
         "lim": [0, theta_fc],
     },
     "dtheta": {
         "column_name": "",
         "symbol": r"$-\frac{d\theta}{dt}$",
         "label": r"$\minus\frac{d\theta}{dt}$",
-        "unit": r"($m^3$ $m^{-3}$ $day^{-1}$)",
+        "unit": r"($\mathrm{m}^3$ $\mathrm{m}^{-3}$ $\mathrm{day}^{-1}$)",
         "lim": [-0.08, 0],
     },
     "t": {
         "column_name": "",
         "symbol": r"$t$",
         "label": r"$t$",
-        "unit": r"($day$)",
+        "unit": r"(day)",
     },
 }
 theta_vardict = var_dict["theta"]
@@ -121,10 +134,11 @@ ax1.set(
 ax1.set_title(label="(c)", loc="left")
 ax1.set_xticks(
     [theta_w1, theta_star, theta_star + fc_minus_star],
-    [r"$\theta_{wp}$", r"$\theta^{*}$", r"$\theta_{fc}$"],
+    [r"$\theta_{\mathrm{wp}}$", r"$\theta_{*}$", r"$\theta_{\mathrm{fc}}$"],
 )
 ax1.set_yticks(
-    [0, -(theta_fc - theta_w1) / tau1], [0, r"$\frac{(\theta_{fc}-\theta_{wp})}{\tau}$"]
+    [0, -(theta_fc - theta_w1) / tau1],
+    [0, r"$\frac{(\theta_{\mathrm{fc}}-\theta_{\mathrm{wp}})}{\tau}$"],
 )
 
 # _________________________________________________________________________
@@ -161,7 +175,8 @@ ax2.set(
 ax2.set_title(label="(d)", loc="left")  # "Soil moisture drydown",
 # ax2.set_xticks([5, 15], [" ", " "])
 ax2.set_yticks(
-    [theta_w, theta_star, theta_fc], [r"$\theta_{wp}$", r"$\theta^*$", r"$\theta_{fc}$"]
+    [theta_w, theta_star, theta_fc],
+    [r"$\theta_{\mathrm{wp}}$", r"$\theta_*$", r"$\theta_{\mathrm{fc}}$"],
 )
 
 fig.tight_layout()
