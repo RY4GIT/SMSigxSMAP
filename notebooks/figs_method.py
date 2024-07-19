@@ -255,8 +255,6 @@ fig.savefig(os.path.join(out_dir, f"theory_q.pdf"), dpi=600, bbox_inches="tight"
 
 # Just to get q = 1 texts ...
 
-import matplotlib.pyplot as plt
-
 # Create a figure and axis
 fig, ax = plt.subplots()
 
