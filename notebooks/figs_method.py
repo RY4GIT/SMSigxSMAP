@@ -15,6 +15,19 @@ from functions import (
     loss_model,
 )
 
+# Math font
+import matplotlib as mpl
+
+plt.rcParams["font.family"] = "DejaVu Sans"  # Or any other available font
+plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]  # Ensure the font is set correctly
+
+# mpl.rcParams["font.family"] = "sans-serif"
+# mpl.rcParams["font.sans-serif"] = "Myriad Pro"
+mpl.rcParams["font.size"] = 12.0
+mpl.rcParams["axes.titlesize"] = 12.0
+plt.rcParams["mathtext.fontset"] = (
+    "stixsans"  #'stix'  # Or 'cm' (Computer Modern), 'stixsans', etc.
+)
 # %%
 # Define parameters
 
@@ -56,21 +69,21 @@ var_dict = {
         "symbol": r"$\theta$",
         # "label": r"Soil moisture",
         "label": r"Soil moisture, $\theta$",
-        "unit": r"($m^3$ $m^{-3}$)",
+        "unit": r"($\mathrm{m}^3$ $\mathrm{m}^{-3}$)",
         "lim": [0, theta_fc],
     },
     "dtheta": {
         "column_name": "",
         "symbol": r"$-\frac{d\theta}{dt}$",
         "label": r"$\minus\frac{d\theta}{dt}$",
-        "unit": r"($m^3$ $m^{-3}$ $day^{-1}$)",
+        "unit": r"($\mathrm{m}^3$ $\mathrm{m}^{-3}$ $\mathrm{day}^{-1}$)",
         "lim": [-0.08, 0],
     },
     "t": {
         "column_name": "",
         "symbol": r"$t$",
         "label": r"$t$",
-        "unit": r"($day$)",
+        "unit": r"(day)",
     },
 }
 theta_vardict = var_dict["theta"]
@@ -136,9 +149,9 @@ ax1.set_title(
 )  # rf"Normalized loss function $L(\theta)/\Delta z$",)
 ax1.set_xticks(
     [theta_w, theta_star, theta_star + fc_minus_star],
-    [r"$\theta_{wp}$", r"$\theta^{*}$", r"$\theta_{fc}$"],
+    [r"$\theta_{\mathrm{wp}}$", r"$\theta_{*}$", r"$\theta_{\mathrm{fc}}$"],
 )
-ax1.set_yticks([0, k], [0, r"$\frac{ET_{max}}{\Delta z}$"])
+ax1.set_yticks([0, k], [0, r"$\frac{\mathrm{ET}_{\mathrm{max}}}{\Delta z}$"])
 
 # _________________________________________________________________________
 # Drydown plot
@@ -220,7 +233,8 @@ ax2.set(
 ax2.set_title(label="(b)", loc="left")  # "Soil moisture drydown",
 # ax2.set_xticks([5, 15], [" ", " "])
 ax2.set_yticks(
-    [theta_w, theta_star, theta_fc], [r"$\theta_{wp}$", r"$\theta^*$", r"$\theta_{fc}$"]
+    [theta_w, theta_star, theta_fc],
+    [r"$\theta_{\mathrm{wp}}$", r"$\theta_*$", r"$\theta_{\mathrm{fc}}$"],
 )
 fig.tight_layout()
 
@@ -237,4 +251,27 @@ if not os.path.exists(out_dir):
 
 # %%
 fig.savefig(os.path.join(out_dir, f"theory_q.pdf"), dpi=600, bbox_inches="tight")
+# %%
+
+# Just to get q = 1 texts ...
+
+# Create a figure and axis
+fig, ax = plt.subplots()
+
+# Set limits and remove axis
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.axis("off")
+
+# Plot text in the middle of the figure
+ax.text(0.5, 0.7, r"$q=1$", fontsize=20, ha="center", va="center")
+ax.text(0.5, 0.5, r"$q<1$", fontsize=20, ha="center", va="center")
+ax.text(0.5, 0.3, r"$q>1$", fontsize=20, ha="center", va="center")
+ax.text(0.7, 0.7, r"small", fontsize=20, ha="center", va="center")
+ax.text(0.7, 0.5, r"large", fontsize=20, ha="center", va="center")
+
+
+# Show the plot
+plt.show()
+fig.savefig(os.path.join(out_dir, f"theory_q_text.pdf"), dpi=600, bbox_inches="tight")
 # %%

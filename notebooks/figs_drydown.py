@@ -17,6 +17,7 @@ from functions import (
 )
 import matplotlib.gridspec as gridspec
 import json
+import matplotlib as mpl
 
 # %% Plot config
 
@@ -39,48 +40,19 @@ with open("fig_variable_labels.json", "r") as file:
 # Data dir
 user_name = getpass.getuser()
 data_dir = rf"/home/{user_name}/waves/projects/smap-drydown/data"
-datarod_dir = "datarods"
+output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
+datarods_dir = "datarods"
 anc_dir = "SMAP_L1_L3_ANC_STATIC"
 anc_file = "anc_info.csv"
 IGBPclass_file = "IGBP_class.csv"
 ai_file = "AridityIndex_from_datarods.csv"
 coord_info_file = "coord_info.csv"
+results_file = rf"all_results_processed.csv"
 
 # %%
-# Read the output
-output_dir = rf"/home/{user_name}/waves/projects/smap-drydown/output"
-results_file = rf"all_results.csv"
-_df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
+df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
 print("Loaded results file")
-
-# Read coordinate information
-coord_info = pd.read_csv(os.path.join(data_dir, datarod_dir, coord_info_file))
-df = _df.merge(coord_info, on=["EASE_row_index", "EASE_column_index"], how="left")
-print("Loaded coordinate information")
-
-# Ancillary data
-df_anc = pd.read_csv(os.path.join(data_dir, datarod_dir, anc_file)).drop(
-    ["spatial_ref", "latitude", "longitude"], axis=1
-)
-df_anc.loc[df_anc["sand_fraction"] < 0, "sand_fraction"] = np.nan
-print("Loaded ancillary information (sand fraction and land-cover)")
-
-# Aridity indices
-df_ai = pd.read_csv(os.path.join(data_dir, datarod_dir, ai_file)).drop(
-    ["latitude", "longitude"], axis=1
-)
-df_ai.loc[df_ai["AI"] < 0, "AI"] = np.nan
-print("Loaded ancillary information (aridity index)")
-
-IGBPclass = pd.read_csv(os.path.join(data_dir, anc_dir, IGBPclass_file))
-IGBPclass.rename({"name": "landcover_name"}, inplace=True)
-
-df = df.merge(df_anc, on=["EASE_row_index", "EASE_column_index"], how="left")
-df = df.merge(df_ai, on=["EASE_row_index", "EASE_column_index"], how="left")
-df = pd.merge(df, IGBPclass, left_on="IGBP_landcover", right_on="class", how="left")
-print("Loaded ancillary information (land-cover)")
-
-print(f"Total number of drydown event: {len(df)}")
+coord_info = pd.read_csv(os.path.join(data_dir, datarods_dir, coord_info_file))
 
 # %% Create output directory
 fig_dir = os.path.join(output_dir, dir_name, "figs", "events")
@@ -89,131 +61,6 @@ if not os.path.exists(fig_dir):
     print(f"Created dir: {fig_dir}")
 else:
     print(f"Already exists: {fig_dir}")
-# %% Get some stats
-###################################
-# Get some stats
-
-# Difference between R2 values of two models
-df = df.assign(diff_R2=df["q_r_squared"] - df["exp_r_squared"])
-
-
-def data_availability(row):
-    # Define a helper function to convert string to list
-    def str_to_list(s):
-        return list(map(int, s.strip("[]").split()))
-
-    # Convert the 'time' column from string of lists to actual lists
-    time_list = str_to_list(row["time"])
-
-    # Check if first three items are [0, 1, 2]
-    # condition = time_list[:3] == [0, 1, 2]
-
-    # Check if at least 2 elements exist in any combination (0 and 1, 0 and 2, or 1 and 2) in the first 3 elements
-    first_3_elements = set(time_list[:3])
-    required_elements = [{0, 1}, {0, 2}, {1, 2}]
-
-    condition = any(
-        required.issubset(first_3_elements) for required in required_elements
-    )
-
-    return condition
-
-
-# Assuming df is your DataFrame
-print("Checking first 3 days data availability")
-# df["first3_avail2"] = df.apply(data_availability, axis=1)
-df["first3_avail2"] = df.apply(data_availability, axis=1)
-print("done")
-
-
-# Soil mositure range covered by the observation
-def calculate_sm_range(row):
-    input_string = row.sm
-
-    # Processing the string
-    input_string = input_string.replace("\n", " np.nan")
-    input_string = input_string.replace(" nan", " np.nan")
-    input_string = input_string.strip("[]")
-
-    # Converting to numpy array and handling np.nan
-    sm = np.array(
-        [
-            float(value) if value != "np.nan" else np.nan
-            for value in input_string.split()
-        ]
-    )
-
-    # Calculating sm_range
-    sm_range = (
-        (np.nanmax(sm) - np.nanmin(sm)) / (row.max_sm - row.min_sm)
-        if row.max_sm != row.min_sm
-        else np.nan
-    )
-    return sm_range
-
-
-print("Checking the soil moisture range covered by each event")
-# Applying the function to each row and creating a new column 'sm_range'
-df["sm_range"] = df.apply(calculate_sm_range, axis=1)
-print("done")
-
-
-def calculate_n_days(row):
-    input_string = row.sm
-
-    # Processing the string
-    input_string = input_string.replace("\n", " np.nan")
-    input_string = input_string.replace(" nan", " np.nan")
-    input_string = input_string.strip("[]")
-
-    # Converting to numpy array and handling np.nan
-    sm = np.array(
-        [
-            float(value) if value != "np.nan" else np.nan
-            for value in input_string.split()
-        ]
-    )
-
-    # Calculating sm_range
-    n_days = len(sm)
-    return n_days
-
-
-print("Checking the number data point available in each event")
-# Applying the function to each row and creating a new column 'sm_range'
-df["n_days"] = df.apply(calculate_n_days, axis=1)
-print("done")
-
-print("Checking the length of the drydown event")
-df["event_length"] = (
-    pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
-).dt.days
-print("done")
-
-
-# %%
-def check_1ts_range(row, verbose=False):
-    common_params = {
-        "q": row.q_q,
-        "ETmax": row.q_ETmax,
-        "theta_star": row.q_theta_star,
-        "theta_w": row.q_theta_w,
-    }
-
-    s_t_0 = q_model(t=0, theta_0=row.q_theta_star, **common_params)
-    s_t_1 = q_model(t=1, theta_0=row.q_theta_star, **common_params)
-
-    dsdt_0 = loss_model(theta=s_t_0, **common_params)
-    dsdt_1 = loss_model(theta=s_t_1, **common_params)
-
-    if verbose:
-        print(f"{(dsdt_0 - dsdt_1) / (row.q_ETmax / 50)*100:.1f} percent")
-    return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / 50) * (-1)
-
-
-print("Checking the potential first step drydown")
-df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
-print("done")
 
 # %%
 ############################################################
@@ -313,7 +160,16 @@ def get_precipitation(varname="SPL4SMGP", event=None):
 # %%
 
 base_fontsize = 15
-plt.rcParams.update({"font.size": base_fontsize})
+plt.rcParams["font.family"] = "DejaVu Sans"  # Or any other available font
+plt.rcParams["font.sans-serif"] = ["DejaVu Sans"]  # Ensure the font is set correctly
+# mpl.rcParams["font.family"] = "sans-serif"
+# mpl.rcParams["font.sans-serif"] = "Myriad Pro"
+mpl.rcParams["font.size"] = base_fontsize  # 12.0
+mpl.rcParams["axes.titlesize"] = 12.0
+plt.rcParams["mathtext.fontset"] = (
+    "stixsans"  #'stix'  # Or 'cm' (Computer Modern), 'stixsans', etc.
+)
+
 base_linewidth = 2
 markersize = 30
 
@@ -339,14 +195,7 @@ def plot_drydown(
     input_string = (
         event.sm.replace("\n", " np.nan").replace(" nan", " np.nan").strip("[]")
     )
-    # sm = np.array(
-    #     [
-    #         float(value) if value != "np.nan" else np.nan
-    #         for value in input_string.split()
-    #     ]
-    # )
-    # values = event.time.strip("[]").split()
-    # Calculating n_days
+
     n_days = (pd.to_datetime(event.event_end) - pd.to_datetime(event.event_start)).days
 
     # Define variables and parameters
@@ -407,9 +256,18 @@ def plot_drydown(
         theta_w=event.q_theta_w,
     )
     q_label = (
-        rf"Nonlinear model, $R^2$={event.q_r_squared:.3f} ($q$={event.q_q:.1f}, "
+        rf"Nonlinear model, $R^2$={event.q_r_squared:.3f} ("
+        + r"$\hat{q}$"
+        + f"={event.q_q:.1f}, "
         + "\n"
-        + rf"$ETmax$={event.q_ETmax:.1f}, $\theta^*$={event.q_theta_star:.2f}, $\theta_w$={event.q_theta_w:.2f}, $\theta_0$={event.q_theta_0:.2f})"
+        + r"($\hat{\mathrm{ET}_{\mathrm{max}}}$"
+        + f"={event.q_ETmax:.1f}, "
+        + r"$\hat{\theta_*}$"
+        + f"={event.q_theta_star:.2f}, "
+        + r"$\hat{\theta_{\mathrm{wp}}}$"
+        + f"={event.q_theta_w:.2f}, "
+        + r"$\hat{\theta_{\mathrm{0}}}$"
+        + f"={event.q_theta_0:.2f})"
     )
     ax1.plot(
         date_range[:-1],
@@ -431,7 +289,14 @@ def plot_drydown(
     exp_label = (
         rf"Linear model, $R^2$={event.exp_r_squared:.3f}"
         + "\n"
-        + rf"($ETmax$={event.exp_ETmax:.1f}, $\theta^*$={event.exp_theta_star:.2f}, $\theta_w$={event.exp_theta_w:.2f}, $\theta_0$={event.exp_theta_0:.2f})"
+        + r"($\hat{\mathrm{ET}_{\mathrm{max}}}$"
+        + f"={event.exp_ETmax:.1f}, "
+        + r"$\hat{\theta_*}$"
+        + f"={event.exp_theta_star:.2f}, "
+        + r"$\hat{\theta_{\mathrm{wp}}}$"
+        + f"={event.exp_theta_w:.2f}, "
+        + r"$\hat{\theta_{\mathrm{0}}}$"
+        + f"={event.exp_theta_0:.2f})"
     )
     ax1.plot(
         date_range[:-1],
@@ -439,6 +304,7 @@ def plot_drydown(
         label=exp_label,
         color=linear_color,
         linewidth=base_linewidth,
+        alpha=0.8,
     )
 
     # ___________________________________________________
@@ -448,8 +314,13 @@ def plot_drydown(
     )
     tauexp_label = (
         rf"$\tau$-based Linear model, $R^2$={event.tauexp_r_squared:.3f}"
-        + "\n"
-        + rf"($\tau$={event.tauexp_tau:.2f}, $\Delta \theta$={event.tauexp_delta_theta:.2f}, $\theta_w$={event.tauexp_theta_w:.2f})"
+        + "\n("
+        + r"$\hat{\tau}$"
+        + f"={event.tauexp_tau:.2f}, "
+        + r"$\hat{\Delta \theta}$"
+        + f"={event.tauexp_delta_theta:.2f}, "
+        + r"$\hat{\theta_{\mathrm{wp}}}$"
+        + f"={event.tauexp_theta_w:.2f})"
     )
     ax1.plot(
         date_range[:-1],
@@ -468,7 +339,7 @@ def plot_drydown(
         color="tab:grey",
         linestyle=":",
         linewidth=base_linewidth,
-        label=r"Estimated $\theta_{fc}$",
+        label=r"Estimated $\hat{\theta_{\mathrm{fc}}}$",
     )
 
     # ___________________________________________________
@@ -482,9 +353,11 @@ def plot_drydown(
         s=markersize,
     )
     ax1.set_xlabel(f"Date in {start_date.year}")
-    ax1.set_ylabel("Soil moisture content" + "\n" + r"$\theta$ ($m^3$ $m^{-3}$)")
+    ax1.set_ylabel(
+        "Soil moisture content" + "\n" + r"$\theta$ ($\mathrm{m}^3$ $\mathrm{m}^{-3}$)"
+    )
     ax1.set_title(
-        f"Latitude: {event.latitude:.1f}; Longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand; PET= {event.pet:.1f} mm)",
+        f"latitude: {event.latitude:.1f}, longitude: {event.longitude:.1f} ({event['name']}; aridity index {event.AI:.1f}; {event.sand_fraction*100:.0f}% sand)",  # PET= {event.pet:.1f} mm)
         fontsize=base_fontsize,
     )
 
@@ -498,9 +371,6 @@ def plot_drydown(
         plt.setp(ax1.get_xticklabels(), visible=False)
     else:
         plt.setp(ax1.get_xticklabels(), visible=True)
-
-    # Adjust the subplots to prevent overlap
-    # plt.subplots_adjust(hspace=0.1)  # Adjust the space between plots if necessary
 
     fig.tight_layout()
     import matplotlib.dates as mdates
@@ -543,14 +413,14 @@ def plot_drydown(
         label="Loss model:\nNonlinear",
     )
 
-    nonlinear_est_theta_obs = q_model_piecewise(
-        t=t_obs,
-        q=event.q_q,
-        ETmax=event.q_ETmax,
-        theta_0=event.q_theta_0,
-        theta_star=event.q_theta_star,
-        theta_w=event.q_theta_w,
-    )
+    # nonlinear_est_theta_obs = q_model_piecewise(
+    #     t=t_obs,
+    #     q=event.q_q,
+    #     ETmax=event.q_ETmax,
+    #     theta_0=event.q_theta_0,
+    #     theta_star=event.q_theta_star,
+    #     theta_w=event.q_theta_w,
+    # )
     # ax3.scatter(
     #     nonlinear_est_theta_obs,
     #     loss_model(
@@ -579,16 +449,17 @@ def plot_drydown(
         color=linear_color,
         linewidth=base_linewidth,
         label="Linear",
+        alpha=0.8,
     )
 
-    # Plot observed & fitted soil moisture
-    linear_est_theta_obs = exp_model_piecewise(
-        t=t_obs,
-        ETmax=event.exp_ETmax,
-        theta_0=event.exp_theta_0,
-        theta_star=event.exp_theta_star,
-        theta_w=event.exp_theta_w,
-    )
+    # # Plot observed & fitted soil moisture
+    # linear_est_theta_obs = exp_model_piecewise(
+    #     t=t_obs,
+    #     ETmax=event.exp_ETmax,
+    #     theta_0=event.exp_theta_0,
+    #     theta_star=event.exp_theta_star,
+    #     theta_w=event.exp_theta_w,
+    # )
     # ax3.scatter(
     #     linear_est_theta_obs,
     #     loss_model(
@@ -635,16 +506,18 @@ def plot_drydown(
 
     # ___________________________________________________
     # FORMATTING
-    ax3.set_xlabel(r"$\theta$ ($m^3$ $m^{-3}$)")
-    ax3.set_ylabel(r"$d\theta/dt$ ($m^3$ $m^{-3}$ $day^{-1}$)")
-    ax3.legend(loc="upper left", fontsize=legend_fontsize)
-    title_value = check_1ts_range(df.loc[event_id], verbose=True)
-    # ax3.set_title("(b)", loc="left")
-    print(
-        f"1st timestep drydown covers {title_value*100:.0f}% of the range"
-        + "\n"
-        + f"sm range covers {event.sm_range*100:.0f}% of the historical"
+    ax3.set_xlabel(r"$\theta$ ($\mathrm{m}^3$ $\mathrm{m}^{-3}$)")
+    ax3.set_ylabel(
+        r"$d\theta/dt$ ($\mathrm{m}^3$ $\mathrm{m}^{-3}$ $\mathrm{day}^{-1}$)"
     )
+    ax3.legend(loc="upper left", fontsize=legend_fontsize)
+    # title_value = check_1ts_range(df.loc[event_id], verbose=True)
+    # ax3.set_title("(b)", loc="left")
+    # print(
+    #     f"1st timestep drydown covers {title_value*100:.0f}% of the range"
+    #     + "\n"
+    #     + f"sm range covers {event.sm_range*100:.0f}% of the historical"
+    # )
     print(start_date)
     ax3.invert_yaxis()
 
@@ -669,8 +542,11 @@ plot_drydown(
 plot_drydown(df=df, event_id=548528, plot_precip=False, save=save, days_after_to_plot=9)
 plot_drydown(df=df, event_id=665086, plot_precip=False, save=save, days_after_to_plot=7)
 plot_drydown(df=df, event_id=135492, plot_precip=False, save=save, days_after_to_plot=6)
+# %%
+plot_drydown(df=df, event_id=683982, plot_precip=False, save=save, days_after_to_plot=6)
 
 # %%
+##########################################################
 # Select the events to plot here
 
 # # CONUS
@@ -680,38 +556,38 @@ plot_drydown(df=df, event_id=135492, plot_precip=False, save=save, days_after_to
 df_filt = df[
     (df["q_r_squared"] > 0.80)
     & (df["sm_range"] > 0.20)
-    & (df["large_q_criteria"] > 0.8)
+    & (df["large_q_criteria"] < 0.8)
     # & (df["first3_avail2"])
-    # & (df["q_q"] < 1.0e-04)
-    # & (df["q_q"] <= 0.8)
-    # & (df["q_r_squared"] > df["tauexp_r_squared"])
+    & (df["q_q"] > 1.0e-04)
+    & (df["q_q"] <= 0.8)
+    & (df["q_r_squared"] > df["tauexp_r_squared"])
     & (df["event_length"] >= 7)
-    # & (df["name"] == "Woody savannas")
+    & (df["name"] == "Grasslands")
     # & (df["q_q"] > 1.7)
     # & (df["q_q"] < 2.0)
 ]
-# df_filt = df[(df["q_r_squared"] < 0.8) & (df["q_r_squared"] > 0.7)]
-print(df_filt.index)
-print(f"Try: {df_filt.sample(n=5).index}")
 
+print(f"Try (in df): {df_filt.sample(n=5).index}")
+
+# %%
 # Get the indices that are NOT in df_filt
-not_in_filt_indices = df[~df.index.isin(df_filt.index)].index
 
 # Display the indices
+not_in_filt_indices = df[~df.index.isin(df_filt.index)].index
 print(not_in_filt_indices)
 
 # Ensure there are enough indices to sample from
 if len(not_in_filt_indices) >= 5:
-    print(f"Try: {not_in_filt_indices.to_series().sample(n=5).index}")
+    print(f"Try (not in df): {not_in_filt_indices.to_series().sample(n=5).index}")
 else:
     print("Not enough indices to sample 5.")
 
 # %%|
 ################################################
-event_id = 135492
+event_id = 190323
 ################################################
 
-# q < 1: 743974, 155510
+# q < 1: 743974, 155510, 278218
 # q > 1: 799057, 683982, 648455, 547425, 271697
 save = True
 plot_drydown(
@@ -721,19 +597,22 @@ plot_drydown(
 # print(df.loc[event_id])
 print(f"Next to try (in df): {df_filt.sample(n=1).index}")
 print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
+# %%
+# # check_1ts_range(df.loc[event_id], verbose=True)
+# # %%
+# plt.scatter(df["event_length"], df["q_q"])
+# plt.scatter(df_filt["event_length"], df_filt["q_q"])
 
-# check_1ts_range(df.loc[event_id], verbose=True)
-# %%
-plt.scatter(df["event_length"], df["q_q"])
-plt.scatter(df_filt["event_length"], df_filt["q_q"])
-
-# %%
-plt.scatter(df["large_q_criteria"], df["q_q"])
-plt.scatter(df_filt["large_q_criteria"], df_filt["q_q"])
-# %%
-# %%
-df_filt["q_r_squared"].hist()
-plt.xlim([0, 1])
-# %%
-plt.scatter(df_filt["q_q"], df_filt["q_ETmax"])
+# # %%
+# plt.scatter(df["large_q_criteria"], df["q_q"])
+# plt.scatter(df_filt["large_q_criteria"], df_filt["q_q"])
+# # %%
+# # %%
+# df_filt["q_r_squared"].hist()
+# plt.xlim([0, 1])
+# # %%
+# plt.scatter(df_filt["q_q"], df_filt["q_ETmax"])
+# # %%
+# ax = df["q_q"].hist(vmin=0, vmax=4)
+# ax.set_xlim([0, 3])
 # %%
