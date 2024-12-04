@@ -33,8 +33,14 @@ import sys
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-05-13_global_piecewise"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-12-03_revision"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ############################|###############################################
+# f"raraki_2024-05-13_global_piecewise" was used for the 1st version of the manuscript
+
+# Ryoko Araki, Bryn Morgan, Hilary K McMillan, Kelly K Caylor. 
+# Nonlinear Soil Moisture Loss Function Reveals Vegetation Responses to Water Availability. ESS Open Archive . August 01, 2024.
+# DOI: 10.22541/essoar.172251989.99347091/v1
+
 # %%
 # Define some variables
 z_mm = 50  # Soil thickness
@@ -118,14 +124,18 @@ print("Loaded ancillary information (land-cover)")
 print(df["name"].unique())
 # Get the binned ancillary information
 
-
+# %%
+df.columns
 # %% ############################################################################
 # Calculate some stats for evaluation
 
 # Difference between R2 values of two models
 df = df.assign(diff_R2_q_tauexp=df["q_r_squared"] - df["tauexp_r_squared"])
 df = df.assign(diff_R2_q_exp=df["q_r_squared"] - df["exp_r_squared"])
-
+df = df.assign(diff_aic_q_tauexp=df["q_aic"] - df["tauexp_aic"])
+df = df.assign(diff_aic_q_exp=df["q_aic"] - df["exp_aic"])
+df = df.assign(diff_bic_q_tauexp=df["q_bic"] - df["tauexp_bic"])
+df = df.assign(diff_bic_q_exp=df["q_bic"] - df["exp_bic"])
 
 def df_availability(row):
     # Check df point availability in the first 3 time steps of observation
