@@ -50,8 +50,8 @@ def main():
     # Run the model
     if run_mode == "serial":
         results = agent.run(
-            [85, 206]
-        )  # Pick your EASE_row_index and EASE_column_index of interest
+            [5, 254]
+        )  # Pick your EASE_row_index and EASE_column_index of interest: [85, 206]
     elif run_mode == "parallel":
         nprocess = cfg.getint("MULTIPROCESSING", "nprocess")
         with mp.Pool(nprocess) as pool:

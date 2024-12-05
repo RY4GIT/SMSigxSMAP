@@ -76,6 +76,20 @@
         "unit": "(m$^3$ m$^{-3}$)",
         "lim": [0, 1.0e-3]
     },
+    "tauexp_tau": {
+        "column_name": "tauexp_tau",
+        "symbol": "$\\tau$",
+        "label": "$\\tau$",
+        "unit": "($days$)",
+        "lim": [2.0, 6.0]
+    },
+    "q_eq_1_p": {
+        "column_name": "q_eq_1_p",
+        "symbol": "$p$($H_0$)",
+        "label": "$p$($H_0$); $H_0$:$q=1$",
+        "unit": "",
+        "lim": [0, 80]
+    },
     "sand_bins": {
         "column_name": "sand_bins",
         "symbol": "",
@@ -159,6 +173,34 @@
         "label": "$R^2$ (Nonlinear - $\\tau$-based linear)",
         "unit": "",
         "lim": [-0.01, 0.01]
+    },
+    "diff_aic_q_exp": {
+        "column_name": "diff_aic_q_exp",
+        "symbol": "",
+        "label": "$AIC$ (Nonlinear - linear)",
+        "unit": "",
+        "lim": [-5, 5]
+    },
+    "diff_aic_q_tauexp": {
+        "column_name": "diff_aic_q_tauexp",
+        "symbol": "",
+        "label": "$AIC$ (Nonlinear - $\\tau$-based linear)",
+        "unit": "",
+        "lim": [-5, 5]
+    },
+    "diff_bic_q_exp": {
+        "column_name": "diff_aic_q_exp",
+        "symbol": "",
+        "label": "$BIC$ (Nonlinear - linear)",
+        "unit": "",
+        "lim": [-5, 5]
+    },
+    "diff_bic_q_tauexp": {
+        "column_name": "diff_aic_q_tauexp",
+        "symbol": "",
+        "label": "$BIC$ (Nonlinear - $\\tau$-based linear)",
+        "unit": "",
+        "lim": [-5, 5]
     },
     "rangeland_wood": {
         "column_name": "fractional_wood",

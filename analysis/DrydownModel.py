@@ -1,4 +1,3 @@
-from scipy.optimize import curve_fit
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,7 +5,8 @@ import os
 from MyLogger import getLogger
 import threading
 from scipy.integrate import solve_ivp
-from scipy.optimize import minimize
+from scipy.optimize import curve_fit, minimize
+from scipy.stats import t
 
 __author__ = "Ryoko Araki"
 __contact__ = "raraki@ucsb.edu"
@@ -265,8 +265,10 @@ class DrydownModel:
         # Fit tau exponential model
         if self.run_tau_exp_model:
             try:
-                popt, r_squared, y_opt = self.fit_tau_exp_model(event)
-                event.add_attributes("tau_exp", popt, r_squared, y_opt)
+                popt, pcov, y_opt, r_squared, aic, bic, _ = self.fit_tau_exp_model(
+                    event
+                )
+                event.add_attributes("tau_exp", popt, pcov, y_opt, r_squared, aic, bic)
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
                 return None
@@ -275,7 +277,7 @@ class DrydownModel:
         # Fit tau exponential model
         if self.run_exp_model:
             try:
-                popt, r_squared, y_opt = self.fit_exp_model(event)
+                popt, pcov, y_opt, r_squared, aic, bic, _ = self.fit_exp_model(event)
 
                 if self.is_stage1ET_active:
                     est_theta_star = popt[2]
@@ -284,7 +286,16 @@ class DrydownModel:
                 est_theta_w = self.norm_min
 
                 event.add_attributes(
-                    "exp", popt, r_squared, y_opt, est_theta_star, est_theta_w
+                    "exp",
+                    popt,
+                    pcov,
+                    y_opt,
+                    r_squared,
+                    aic,
+                    bic,
+                    np.nan,
+                    est_theta_star,
+                    est_theta_w,
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -294,7 +305,9 @@ class DrydownModel:
         # Fit q model
         if self.run_q_model:
             try:
-                popt, r_squared, y_opt = self.fit_q_model(event)
+                popt, pcov, y_opt, r_squared, aic, bic, p_value = self.fit_q_model(
+                    event
+                )
 
                 if self.is_stage1ET_active:
                     est_theta_star = popt[3]
@@ -303,7 +316,16 @@ class DrydownModel:
                 est_theta_w = self.norm_min
 
                 event.add_attributes(
-                    "q", popt, r_squared, y_opt, est_theta_star, est_theta_w
+                    "q",
+                    popt,
+                    pcov,
+                    y_opt,
+                    r_squared,
+                    aic,
+                    bic,
+                    p_value,
+                    est_theta_star,
+                    est_theta_w,
                 )
             except Exception as e:
                 log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
@@ -325,7 +347,7 @@ class DrydownModel:
 
         return event
 
-    def fit_model(self, event, model, bounds, p0):
+    def fit_model(self, event, model, bounds, p0, param_names):
         """Base function for fitting models
 
         Args:
@@ -342,7 +364,7 @@ class DrydownModel:
             y_fit = event.y
 
             # Fit the model
-            popt, _ = curve_fit(
+            popt, pcov = curve_fit(
                 f=model, xdata=event.x, ydata=y_fit, p0=p0, bounds=bounds
             )
 
@@ -350,14 +372,72 @@ class DrydownModel:
             y_opt = model(event.x, *popt)
 
             # Calculate the residuals
-            residuals = event.y - y_opt
-            ss_res = np.sum(residuals**2)
-            r_squared = 1 - ss_res / np.sum((event.y - np.nanmean(event.y)) ** 2)
+            r_squared, aic, bic, p_value = self.calc_performance_metrics(
+                y_obs=event.y,
+                y_pred=y_opt,
+                popt=popt,
+                pcov=pcov,
+                param_names=param_names,
+            )
 
-            return popt, r_squared, y_opt
+            return popt, pcov, y_opt, r_squared, aic, bic, p_value
 
         except Exception as e:
             log.debug(f"Exception raised in the thread {self.thread_name}: {e}")
+
+    def calc_performance_metrics(self, y_obs, y_pred, popt, pcov, param_names):
+
+        # Residual sum of squares
+        ss_res = np.sum((y_obs - y_pred) ** 2)
+
+        # Total sum of squares
+        ss_tot = np.sum((y_obs - np.mean(y_obs)) ** 2)
+
+        # Number of observations and parameters
+        n = len(y_obs)
+        k = len(popt)
+        dof = n - k
+
+        ############################
+        # R^2 calculation
+        r_squared = 1 - (ss_res / ss_tot)
+        ############################
+
+        ############################
+        # AIC and BIC
+        try:
+            aic = n * np.log(ss_res / n) + 2 * k
+        except:
+            aic = np.nan
+
+        try:
+            bic = n * np.log(ss_res / n) + k * np.log(n)
+        except:
+            aic = np.nan
+        ############################
+
+        if "q" in param_names:
+            # t-scores
+            # Find the index of parameter "q"
+            q_index = param_names.index("q")
+
+            # Extract estimate and standard error for "q"
+            q_estimate = popt[q_index]
+            q_variance = pcov[q_index, q_index]
+            q_se = np.sqrt(q_variance)
+
+            ############################
+            # Compute the t-statistic: t_stat = param - 1 / param_SE
+            t_stat = (q_estimate - 1) / q_se
+            try:
+                p_value = 2 * (1 - t.cdf(abs(t_stat), dof))
+            except:
+                p_value = np.nan
+
+        else:
+            p_value = np.nan
+
+        return r_squared, aic, bic, p_value
 
     def fit_tau_exp_model(self, event):
         """Fits an exponential model to the given event data and returns the fitted parameters.
@@ -392,10 +472,17 @@ class DrydownModel:
             (max_delta_theta, max_theta_w, max_tau),
         ]
         p0 = [ini_delta_theta, ini_theta_w, ini_tau]
+        param_names = ["delta_theta", "theta_w", "tau"]
 
         # ______________________________________________________________________________________
         # Execute the event fit
-        return self.fit_model(event=event, model=tau_exp_model, bounds=bounds, p0=p0)
+        return self.fit_model(
+            event=event,
+            model=tau_exp_model,
+            bounds=bounds,
+            p0=p0,
+            param_names=param_names,
+        )
 
     def fit_exp_model(self, event):
         """Fits an exponential model to the given event data and returns the fitted parameters.
@@ -453,6 +540,7 @@ class DrydownModel:
                 (max_ETmax, max_theta_0, max_theta_star),
             ]
             p0 = [ini_ETmax, ini_theta_0, ini_theta_star]
+            param_names = ["ETmax", "theta_0", "theta_star"]
             return self.fit_model(
                 event=event,
                 model=lambda t, ETmax, theta_0, theta_star: exp_model_piecewise(
@@ -465,10 +553,12 @@ class DrydownModel:
                 ),
                 bounds=bounds,
                 p0=p0,
+                param_names=param_names,
             )
         else:
             bounds = [(min_ETmax, min_theta_0), (max_ETmax, max_theta_0)]
             p0 = [ini_ETmax, ini_theta_0]
+            param_names = ["ETmax", "theta_0"]
             return self.fit_model(
                 event=event,
                 model=lambda t, ETmax, theta_0: exp_model(
@@ -481,6 +571,7 @@ class DrydownModel:
                 ),
                 bounds=bounds,
                 p0=p0,
+                param_names=param_names,
             )
 
     def fit_q_model(self, event):
@@ -541,6 +632,7 @@ class DrydownModel:
                 (max_q, max_ETmax, max_theta_0, max_theta_star),
             ]
             p0 = [ini_q, ini_ETmax, ini_theta_0, ini_theta_star]
+            param_names = ["q", "ETmax", "theta_0", "theta_star"]
             return self.fit_model(
                 event=event,
                 model=lambda t, q, ETmax, theta_0, theta_star: q_model_piecewise(
@@ -554,10 +646,12 @@ class DrydownModel:
                 ),
                 bounds=bounds,
                 p0=p0,
+                param_names=param_names,
             )
         else:
             bounds = [(min_q, min_ETmax, min_theta_0), (max_q, max_ETmax, max_theta_0)]
             p0 = [ini_q, ini_ETmax, ini_theta_0]
+            param_names = ["q", "ETmax", "theta_0"]
             return self.fit_model(
                 event=event,
                 model=lambda t, q, ETmax, theta_0: q_model(
@@ -571,6 +665,7 @@ class DrydownModel:
                 ),
                 bounds=bounds,
                 p0=p0,
+                param_names=param_names,
             )
 
     def fit_sigmoid_model(self, event):
@@ -673,7 +768,19 @@ class DrydownModel:
                             "tauexp_delta_theta": event.tau_exp["delta_theta"],
                             "tauexp_theta_w": event.tau_exp["theta_w"],
                             "tauexp_tau": event.tau_exp["tau"],
+                            "tauexp_var_delta_theta": event.tau_exp["var_delta_theta"],
+                            "tauexp_var_theta_w": event.tau_exp["var_theta_w"],
+                            "tauexp_var_tau": event.tau_exp["var_tau"],
+                            "tauexp_cov_delta_theta_theta_w": event.tau_exp[
+                                "cov_delta_theta_theta_w"
+                            ],
+                            "tauexp_cov_delta_theta_tau": event.tau_exp[
+                                "cov_delta_theta_tau"
+                            ],
+                            "tauexp_cov_theta_w_tau": event.tau_exp["cov_theta_w_tau"],
                             "tauexp_r_squared": event.tau_exp["r_squared"],
+                            "tauexp_aic": event.tau_exp["aic"],
+                            "tauexp_bic": event.tau_exp["bic"],
                             "tauexp_y_opt": event.tau_exp["y_opt"],
                         }
                     )
@@ -685,7 +792,19 @@ class DrydownModel:
                             "exp_theta_0": event.exp["theta_0"],
                             "exp_theta_star": event.exp["theta_star"],
                             "exp_theta_w": event.exp["theta_w"],
+                            "exp_var_ETmax": event.exp["var_ETmax"],
+                            "exp_var_theta_0": event.exp["var_theta_0"],
+                            "exp_var_theta_star": event.exp["var_theta_star"],
+                            "exp_cov_ETmax_theta_0": event.exp["cov_ETmax_theta_0"],
+                            "exp_cov_ETmax_theta_star": event.exp[
+                                "cov_ETmax_theta_star"
+                            ],
+                            "exp_cov_theta_0_theta_star": event.exp[
+                                "cov_theta_0_theta_star"
+                            ],
                             "exp_r_squared": event.exp["r_squared"],
+                            "exp_aic": event.exp["aic"],
+                            "exp_bic": event.exp["bic"],
                             "exp_y_opt": event.exp["y_opt"],
                         }
                     )
@@ -698,7 +817,22 @@ class DrydownModel:
                             "q_theta_0": event.q["theta_0"],
                             "q_theta_star": event.q["theta_star"],
                             "q_theta_w": event.q["theta_w"],
+                            "q_var_q": event.q["var_q"],
+                            "q_var_ETmax": event.q["var_ETmax"],
+                            "q_var_theta_0": event.q["var_theta_0"],
+                            "q_var_theta_star": event.q["var_theta_star"],
+                            "q_cov_q_ETmax": event.q["cov_q_ETmax"],
+                            "q_cov_q_theta_0": event.q["cov_q_theta_0"],
+                            "q_cov_q_theta_star": event.q["cov_q_theta_star"],
+                            "q_cov_ETmax_theta_0": event.q["cov_ETmax_theta_0"],
+                            "q_cov_ETmax_theta_star": event.q["cov_ETmax_theta_star"],
+                            "q_cov_theta_0_theta_star": event.q[
+                                "cov_theta_0_theta_star"
+                            ],
                             "q_r_squared": event.q["r_squared"],
+                            "q_aic": event.q["aic"],
+                            "q_bic": event.q["bic"],
+                            "q_eq_1_p": event.q["q_eq_1_p"],
                             "q_y_opt": event.q["y_opt"],
                         }
                     )

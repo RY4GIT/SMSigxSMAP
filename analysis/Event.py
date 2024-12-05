@@ -42,39 +42,155 @@ class Event:
         self,
         model_type="",
         popt=[],
-        r_squared=np.nan,
+        pcov=[],
         y_opt=[],
+        r_squared=np.nan,
+        aic=np.nan,
+        bic=np.nan,
+        p_value=np.nan,
         est_theta_star=np.nan,
         est_theta_w=np.nan,
     ):
         if model_type == "tau_exp":
+            param_names = ["delta_theta", "theta_w", "tau"]
+            var_delta_theta = pcov[
+                param_names.index("delta_theta"), param_names.index("delta_theta")
+            ]
+            var_theta_w = pcov[
+                param_names.index("theta_w"), param_names.index("theta_w")
+            ]
+            var_tau = pcov[param_names.index("tau"), param_names.index("tau")]
+            cov_delta_theta_theta_w = pcov[
+                param_names.index("delta_theta"), param_names.index("theta_w")
+            ]
+            cov_delta_theta_tau = pcov[
+                param_names.index("delta_theta"), param_names.index("tau")
+            ]
+            cov_theta_w_tau = pcov[
+                param_names.index("theta_w"), param_names.index("tau")
+            ]
+
             self.tau_exp = {
                 "delta_theta": popt[0],
                 "theta_w": popt[1],
                 "tau": popt[2],
-                "r_squared": r_squared,
+                "var_delta_theta": var_delta_theta,
+                "var_theta_w": var_theta_w,
+                "var_tau": var_tau,
+                "cov_delta_theta_theta_w": cov_delta_theta_theta_w,
+                "cov_delta_theta_tau": cov_delta_theta_tau,
+                "cov_theta_w_tau": cov_theta_w_tau,
                 "y_opt": y_opt.tolist(),
+                "r_squared": r_squared,
+                "aic": aic,
+                "bic": bic,
             }
 
         if model_type == "exp":
+            param_names = ["ETmax", "theta_0", "theta_star"]
+
+            var_ETmax = pcov[param_names.index("ETmax"), param_names.index("ETmax")]
+            var_theta_0 = pcov[
+                param_names.index("theta_0"), param_names.index("theta_0")
+            ]
+            if len(popt) == 3:
+                var_theta_star = pcov[
+                    param_names.index("theta_star"), param_names.index("theta_star")
+                ]
+            else:
+                var_theta_star = np.nan
+
+            # Extract covariances
+            cov_ETmax_theta_0 = pcov[
+                param_names.index("ETmax"), param_names.index("theta_0")
+            ]
+
+            if len(popt) == 3:
+                cov_ETmax_theta_star = pcov[
+                    param_names.index("ETmax"), param_names.index("theta_star")
+                ]
+                cov_theta_0_theta_star = pcov[
+                    param_names.index("theta_0"), param_names.index("theta_star")
+                ]
+            else:
+                cov_ETmax_theta_star = np.nan
+                cov_theta_0_theta_star = np.nan
+
             self.exp = {
                 "ETmax": popt[0],
                 "theta_0": popt[1],
                 "theta_star": est_theta_star,
                 "theta_w": est_theta_w,
-                "r_squared": r_squared,
+                "var_ETmax": var_ETmax,
+                "var_theta_0": var_theta_0,
+                "var_theta_star": var_theta_star,
+                "cov_ETmax_theta_0": cov_ETmax_theta_0,
+                "cov_ETmax_theta_star": cov_ETmax_theta_star,
+                "cov_theta_0_theta_star": cov_theta_0_theta_star,
                 "y_opt": y_opt.tolist(),
+                "r_squared": r_squared,
+                "aic": aic,
+                "bic": bic,
             }
 
         if model_type == "q":
+            param_names = ["q", "ETmax", "theta_0", "theta_star"]
+
+            # Extract variances
+            var_q = pcov[param_names.index("q"), param_names.index("q")]
+            var_ETmax = pcov[param_names.index("ETmax"), param_names.index("ETmax")]
+            var_theta_0 = pcov[
+                param_names.index("theta_0"), param_names.index("theta_0")
+            ]
+            if len(popt) == 4:
+                var_theta_star = pcov[
+                    param_names.index("theta_star"), param_names.index("theta_star")
+                ]
+            else:
+                var_theta_star = np.nan
+
+            # Extract covariances
+            cov_q_ETmax = pcov[param_names.index("q"), param_names.index("ETmax")]
+            cov_q_theta_0 = pcov[param_names.index("q"), param_names.index("theta_0")]
+            cov_ETmax_theta_0 = pcov[
+                param_names.index("ETmax"), param_names.index("theta_0")
+            ]
+            if len(popt) == 4:
+                cov_q_theta_star = pcov[
+                    param_names.index("q"), param_names.index("theta_star")
+                ]
+                cov_ETmax_theta_star = pcov[
+                    param_names.index("ETmax"), param_names.index("theta_star")
+                ]
+                cov_theta_0_theta_star = pcov[
+                    param_names.index("theta_0"), param_names.index("theta_star")
+                ]
+            else:
+                cov_q_theta_star = np.nan
+                cov_ETmax_theta_star = np.nan
+                cov_theta_0_theta_star = np.nan
+
             self.q = {
                 "q": popt[0],
                 "ETmax": popt[1],
                 "theta_0": popt[2],
                 "theta_star": est_theta_star,
                 "theta_w": est_theta_w,
-                "r_squared": r_squared,
+                "var_q": var_q,
+                "var_ETmax": var_ETmax,
+                "var_theta_0": var_theta_0,
+                "var_theta_star": var_theta_star,
+                "cov_q_ETmax": cov_q_ETmax,
+                "cov_q_theta_0": cov_q_theta_0,
+                "cov_q_theta_star": cov_q_theta_star,
+                "cov_ETmax_theta_0": cov_ETmax_theta_0,
+                "cov_ETmax_theta_star": cov_ETmax_theta_star,
+                "cov_theta_0_theta_star": cov_theta_0_theta_star,
                 "y_opt": y_opt.tolist(),
+                "r_squared": r_squared,
+                "aic": aic,
+                "bic": bic,
+                "q_eq_1_p": p_value,
             }
 
         if model_type == "sgm":
