@@ -22,8 +22,10 @@ import matplotlib as mpl
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-05-13_global_piecewise"  # f"raraki_2024-04-26"
+dir_name = f"raraki_2024-12-03_revision"  # f"raraki_2024-04-26"
 ###########################################################################
+# f"raraki_2024-05-13_global_piecewise" was used for the 1st version of the manuscript
+# f"raraki_2024-12-03_revision" was used for the revised version of the manuscript
 
 ################ CHANGE HERE FOR PLOT VISUAL CONFIG #########################
 
@@ -95,7 +97,7 @@ def get_dataframe(varname, event):
         EASE_row_index=event.EASE_row_index,
         EASE_column_index=event.EASE_column_index,
     )
-    _df = pd.read_csv(os.path.join(data_dir, datarod_dir, varname, fn))
+    _df = pd.read_csv(os.path.join(data_dir, datarods_dir, varname, fn))
 
     # Set time index and crop
     df = set_time_index(_df, index_name="time")
@@ -598,21 +600,55 @@ plot_drydown(
 print(f"Next to try (in df): {df_filt.sample(n=1).index}")
 print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
 # %%
-# # check_1ts_range(df.loc[event_id], verbose=True)
-# # %%
-# plt.scatter(df["event_length"], df["q_q"])
-# plt.scatter(df_filt["event_length"], df_filt["q_q"])
 
-# # %%
-# plt.scatter(df["large_q_criteria"], df["q_q"])
-# plt.scatter(df_filt["large_q_criteria"], df_filt["q_q"])
-# # %%
-# # %%
-# df_filt["q_r_squared"].hist()
-# plt.xlim([0, 1])
-# # %%
-# plt.scatter(df_filt["q_q"], df_filt["q_ETmax"])
-# # %%
-# ax = df["q_q"].hist(vmin=0, vmax=4)
-# ax.set_xlim([0, 3])
+# %%
+##########################################################
+# Select plot for revision
+
+# # CONUS
+# lat_min, lat_max = 24.396308, 49.384358
+# lon_min, lon_max = -125.000000, -66.934570
+# Define bounding box coordinates
+lon_min, lon_max = 67.507970, 89.653185
+lat_min, lat_max = 9.279354, 31.365056
+
+df_filt = df[
+    (df["q_r_squared"] < df["tauexp_r_squared"])
+    & (df["q_r_squared"] < 0.95)
+    & (df["q_r_squared"] > 0.8)
+    & (df["sm_range"] > 0.20)
+    & (df["large_q_criteria"] < 0.8)
+    & (df["first3_avail2"])
+    & (df["q_q"] > 1.0e-04)
+    & (df["event_length"] >= 7)
+    & (df["AI"] < 0.5)
+    # & (df["latitude"] >= lat_min)
+    # & (df["latitude"] <= lat_max)
+    # & (df["longitude"] >= lon_min)
+    # & (df["longitude"] <= lon_max)
+    # & (df["q_q"] > 1.7)
+    # & (df["q_q"] < 2.0)
+    & (df["sand_fraction"] > 0.7)
+]
+# print(df_filt)
+print(f"Try (in df): {df_filt.sample(n=5).index}")
+
+# %%
+df_filt.columns
+# %%|
+################################################
+event_id = 304485
+################################################
+
+# Arid example: 462921, 127783, 602222, 218603: 816131, 304485, 320094
+# Cropland example: 506447, 484442,
+
+save = True
+plot_drydown(
+    df=df, event_id=event_id, plot_precip=False, save=save, days_after_to_plot=13
+)
+
+# print(df.loc[event_id])
+print(f"Next to try (in df): {df_filt.sample(n=1).index}")
+print(f"Next to try (not in df): {not_in_filt_indices.to_series().sample(n=1).index}")
 # %%

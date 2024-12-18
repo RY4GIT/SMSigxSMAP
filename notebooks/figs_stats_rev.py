@@ -52,6 +52,7 @@ plt.rcParams["mathtext.fontset"] = (
 dir_name = f"raraki_2024-12-03_revision"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ###########################################################################
 # f"raraki_2024-05-13_global_piecewise" was used for the 1st version of the manuscript
+# f"raraki_2024-12-03_revision" was used for the revised version of the manuscript
 
 # Ryoko Araki, Bryn Morgan, Hilary K McMillan, Kelly K Caylor.
 # Nonlinear Soil Moisture Loss Function Reveals Vegetation Responses to Water Availability. ESS Open Archive . August 01, 2024.
@@ -103,10 +104,11 @@ sys.stdout = f  # Change the stdout to the file handle
 # DATA IMPORT
 
 df = pd.read_csv(os.path.join(output_dir, dir_name, results_file))
-print("Loaded results file")
+print("Loaded results file\n")
 
 coord_info = pd.read_csv(os.path.join(data_dir, datarods_dir, coord_info_file))
 
+# %%
 # Get bins for ancillary data
 sand_bin_list = [i * 0.1 for i in range(11)]
 sand_bin_list = sand_bin_list[1:]
@@ -193,8 +195,13 @@ df_filt_q_and_exp = filter_df(df, criteria_q & criteria_exp)
 print_model_success("q model fit successful:", df_filt_q)
 print_model_success("exp model fit successful:", df_filt_exp)
 print_model_success("tau-exp model fit successful:", df_filt_tauexp)
-print_model_success("both q and exp model fit successful:", df_filt_q_and_exp)
-print_model_success("both q and tau-exp model fit successful:", df_filt_q_and_tauexp)
+print_model_success(
+    "both q and exp model fit successful (used for comparison):", df_filt_q_and_exp
+)
+print_model_success(
+    "both q and tau-exp model fit successful (used for comparison):",
+    df_filt_q_and_tauexp,
+)
 # print_model_success("either q or tau-exp:", df_filt_q_or_tauexp)
 # print_model_success("either q or exp model fit successful:", df_filt_q_or_exp)
 print_model_success(
@@ -210,17 +217,31 @@ def print_performance_comparison(df, model1, model2):
     )
 
 
+# %% In terms of AIC, BIC, and p-values
+print("============ EVENT-WISE COMPARISON ==============")
+print(r"In terms of $R^2$")
+print("tau-linear vs nonlinear")
 print_performance_comparison(df_filt_q_and_tauexp, "q_r_squared", "tauexp_r_squared")
+print("linear vs nonlinear")
 print_performance_comparison(df_filt_q_and_exp, "q_r_squared", "exp_r_squared")
 
-# %% In terms of AIC, BIC, and p-values
+
+print("\n")
+print(r"In terms of $AIC$")
+print("tau-linear vs nonlinear")
 print_performance_comparison(df_filt_q_and_tauexp, "q_aic", "tauexp_aic")
+print("linear vs nonlinear")
 print_performance_comparison(df_filt_q_and_exp, "q_aic", "exp_aic")
 
+print("\n")
+print(r"In terms of $AIC$")
+print("tau-linear vs nonlinear")
 print_performance_comparison(df_filt_q_and_tauexp, "q_bic", "tauexp_bic")
+print("linear vs nonlinear")
 print_performance_comparison(df_filt_q_and_exp, "q_bic", "exp_bic")
 
 
+# %%
 def print_p_value(df, varname, thresh):
     n_better = sum(df[varname] < thresh)
     percentage_better = n_better / len(df) * 100
@@ -229,7 +250,11 @@ def print_p_value(df, varname, thresh):
     )
 
 
+print("\n")
+print(r"In terms of $p$-value")
+print("Pre-filtered q values")
 print_p_value(df_filt_q, "q_eq_1_p", 0.05)
+print("All q values")
 print_p_value(df_filt_allq, "q_eq_1_p", 0.05)
 
 
@@ -276,17 +301,24 @@ def count_model_performance(df, varname):
     # sns.histplot(grouped["count"], binwidth=0.5, color="#2c7fb8", fill=False, linewidth=3)
 
 
-print("\nIn terms of $R^2$")
-count_model_performance(df_filt_q_or_exp, "diff_R2_q_tauexp")
-count_model_performance(df_filt_q_or_exp, "diff_R2_q_exp")
+print("============ GRID-WISE COMPARISON ==============")
+print(r"In terms of $R^2$")
+print("tau-linear vs nonlinear")
+count_model_performance(df_filt_q_and_tauexp, "diff_R2_q_tauexp")
+print("linear vs nonlinear")
+count_model_performance(df_filt_q_and_exp, "diff_R2_q_exp")
 
-print("\nIn terms of $AIC$")
-count_model_performance(df_filt_q_or_exp, "diff_aic_q_tauexp")
-count_model_performance(df_filt_q_or_exp, "diff_aic_q_exp")
+print(r"In terms of $AIC$")
+print("tau-linear vs nonlinear")
+count_model_performance(df_filt_q_and_tauexp, "diff_aic_q_tauexp")
+print("linear vs nonlinear")
+count_model_performance(df_filt_q_and_exp, "diff_aic_q_exp")
 
-print("\nIn terms of $BIC$")
-count_model_performance(df_filt_q_or_exp, "diff_bic_q_tauexp")
-count_model_performance(df_filt_q_or_exp, "diff_bic_q_exp")
+print(r"In terms of $BIC$")
+print("tau-linear vs nonlinear")
+count_model_performance(df_filt_q_and_tauexp, "diff_bic_q_tauexp")
+print("linear vs nonlinear")
+count_model_performance(df_filt_q_and_exp, "diff_bic_q_exp")
 
 
 # %%
@@ -655,6 +687,43 @@ plot_map(
 
 save_figure(fig_map_tau, fig_dir, f"tau_map_{stat_type}", "png", 900)
 # save_figure(fig_map_q, fig_dir, f"q_map_{stat_type}", "pdf", 1200)
+
+
+# %%
+def plot_hist(df, var_key):
+    fig, ax = plt.subplots(figsize=(5.5, 5))
+
+    # Create the histogram with a bin width of 1
+    sns.histplot(
+        df[var_key], binwidth=0.2, color="tab:blue", fill=False, linewidth=3, ax=ax
+    )
+
+    # Calculate median and mean
+    median_value = df[var_key].median()
+    mean_value = df[var_key].mean()
+
+    # Add median and mean as vertical lines
+    ax.axvline(
+        median_value, color="tab:grey", linestyle="--", linewidth=3, label=f"Median"
+    )
+    ax.axvline(mean_value, color="tab:grey", linestyle=":", linewidth=3, label=f"Mean")
+
+    # Setting the x limit
+    ax.set_xlim(0, 10)
+
+    # Adding title and labels
+    ax.set_xlabel(var_dict[var_key]["symbol"])
+    ax.set_ylabel("Frequency")
+    fig.legend(loc="upper right", bbox_to_anchor=(0.93, 0.9), fontsize="small")
+
+    return fig, ax
+
+
+plt.rcParams.update({"font.size": 30})
+fig_q_hist, _ = plot_hist(df=df_filt_q, var_key="tauexp_tau")
+if save:
+    save_figure(fig_q_hist, fig_dir, f"tau_hist", "png", 900)
+    save_figure(fig_q_hist, fig_dir, f"tau_hist", "pdf", 1200)
 # %%
 print(f"Global median q: {df_filt_q['tauexp_tau'].median()}")
 print(f"Global mean q: {df_filt_q['tauexp_tau'].mean()}")
@@ -734,5 +803,208 @@ plot_map_counts(
 plt.show()
 if save:
     save_figure(fig_map_events, fig_dir, f"map_eventcounts", "png", 900)
+
+
+# %%
+import matplotlib.cm as cm
+
+
+def plot_boxplots(df, x_var, y_var, cmap_name):
+    plt.rcParams.update({"font.size": 12})
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    # Extract unique categories for the x variable
+    categories = df[x_var["column_name"]].dropna().unique()
+    categories = sorted(
+        categories, key=lambda x: x.left
+    )  # Sort intervals by their left edge
+
+    # Generate a colormap for the categories
+    cmap = cm.get_cmap(cmap_name, len(categories))
+    colors = [cmap(i) for i in range(len(categories))]
+    palette = dict(zip(categories, colors))  # Map categories to colors
+
+    sns.boxplot(
+        x=x_var["column_name"],
+        y=y_var["column_name"],
+        data=df,
+        palette=cmap_name,
+        # boxprops=dict(facecolor="lightgray"),
+        ax=ax,
+    )
+
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_xlabel(f'{x_var["label"]} {x_var["unit"]}')
+    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+    ax.set_ylim(y_var["lim"][0] * 5, y_var["lim"][1] * 5)
+    fig.tight_layout()
+
+    return fig, ax
+
+
+# %% sand
+fig_box_sand, _ = plot_boxplots(
+    df_filt_q_and_tauexp,
+    var_dict["sand_bins"],
+    var_dict["diff_R2_tauexp"],
+    cmap_name=sand_cmap,
+)
+fig_box_sand.savefig(
+    os.path.join(fig_dir, f"box_diff_R2_tauexp_sand.png"),
+    dpi=600,
+    bbox_inches="tight",
+)
+
+# %% Aridity index
+# %% sand
+fig_box_ai, _ = plot_boxplots(
+    df_filt_q_and_tauexp,
+    var_dict["ai_bins"],
+    var_dict["diff_R2_tauexp"],
+    cmap_name=ai_cmap,
+)
+fig_box_ai.savefig(
+    os.path.join(fig_dir, f"box_diff_R2_tauexp_ai.png"),
+    dpi=600,
+    bbox_inches="tight",
+)
+# %% sand
+fig_box_sand, _ = plot_boxplots(
+    df_filt_q_and_exp,
+    var_dict["sand_bins"],
+    var_dict["diff_aic_q_exp"],
+    cmap_name=sand_cmap,
+)
+fig_box_sand.savefig(
+    os.path.join(fig_dir, f"box_diff_aic_exp_sand.png"),
+    dpi=600,
+    bbox_inches="tight",
+)
+
+# %% Aridity index
+fig_box_ai, _ = plot_boxplots(
+    df_filt_q_and_exp,
+    var_dict["ai_bins"],
+    var_dict["diff_aic_q_exp"],
+    cmap_name=ai_cmap,
+)
+fig_box_ai.savefig(
+    os.path.join(fig_dir, f"box_diff_aic_exp_ai.png"),
+    dpi=600,
+    bbox_inches="tight",
+)
+
+
+# %% Vegatation
+def wrap_at_space(text, max_width):
+    parts = text.split(" ")
+    wrapped_parts = [wrap(part, max_width) for part in parts]
+    return "\n".join([" ".join(wrapped_part) for wrapped_part in wrapped_parts])
+
+
+def plot_boxplots_categorical(df, x_var, y_var, categories, colors):
+    # Create the figure and axes
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    # Plot the boxplot with specified colors and increased alpha
+    sns.boxplot(
+        x=x_var["column_name"],
+        y=y_var["column_name"],
+        data=df,
+        # hue=x_var['column_name'],
+        legend=False,
+        order=categories,
+        palette=colors,
+        ax=ax,
+    )
+
+    for patch in ax.artists:
+        r, g, b, a = patch.get_facecolor()
+        patch.set_facecolor(mcolors.to_rgba((r, g, b), alpha=0.5))
+
+    # Optionally, adjust layout
+    plt.tight_layout()
+    ax.set_xlabel(f'{x_var["label"]}')
+    max_label_width = 20
+    ax.set_xticklabels(
+        [
+            wrap_at_space(label.get_text(), max_label_width)
+            for label in ax.get_xticklabels()
+        ]
+    )
+    plt.setp(ax.get_xticklabels(), rotation=45)
+    ax.set_ylabel(f'{y_var["label"]} {y_var["unit"]}')
+    # Show the plot
+    ax.set_ylim(y_var["lim"][0] * 5, y_var["lim"][1] * 5)
+    plt.tight_layout()
+    plt.show()
+
+    return fig, ax
+
+
+# %%
+fig_box_veg, _ = plot_boxplots_categorical(
+    df_filt_q_and_tauexp,
+    var_dict["veg_class"],
+    var_dict["diff_R2_tauexp"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+)
+fig_box_veg.savefig(
+    os.path.join(fig_dir, f"box_diff_R2_tauexp_veg.png"), dpi=600, bbox_inches="tight"
+)
+
+# %%
+fig_box_veg, _ = plot_boxplots_categorical(
+    df_filt_q_and_exp,
+    var_dict["veg_class"],
+    var_dict["diff_aic_q_exp"],
+    categories=vegetation_color_dict.keys(),
+    colors=list(vegetation_color_dict.values()),
+)
+fig_box_veg.savefig(
+    os.path.join(fig_dir, f"box_diff_aic_exp_veg.png"), dpi=600, bbox_inches="tight"
+)
+
+
+# def plot_box_ai_veg(df):
+#     plt.rcParams.update({"font.size": 26})  # Adjust the font size as needed
+
+#     fig, ax = plt.subplots(figsize=(20, 8))
+#     for i, category in enumerate(vegetation_color_dict.keys()):
+#         subset = df[df["name"] == category]
+#         sns.boxplot(
+#             x="name",
+#             y="AI",
+#             df=subset,
+#             color=vegetation_color_dict[category],
+#             ax=ax,
+#             linewidth=2,
+#         )
+
+#     # ax = sns.violinplot(x='abbreviation', y='q_q', df=filtered_df, order=vegetation_orders, palette=palette_dict) # boxprops=dict(facecolor='lightgray'),
+#     max_label_width = 20
+#     ax.set_xticklabels(
+#         [
+#             wrap_at_space(label.get_text(), max_label_width)
+#             for label in ax.get_xticklabels()
+#         ]
+#     )
+#     plt.setp(ax.get_xticklabels(), rotation=45)
+
+#     # ax.set_xticklabels([textwrap.fill(t.get_text(), 10) for t in ax.get_xticklabels()])
+#     ax.set_ylabel("Aridity index [MAP/MAE]")
+#     ax.set_xlabel("IGBP Landcover Class")
+#     ax.set_ylim(0, 2.0)
+#     ax.set_title("(a)", loc="left")
+#     plt.tight_layout()
+
+#     return fig, ax
+
+
+# fig_box_ai_veg, _ = plot_box_ai_veg(df_filt_q)
+# fig_box_ai_veg.savefig(
+#     os.path.join(fig_dir, f"sup_box_ai_veg.png"), dpi=1200, bbox_inches="tight"
+# )
 
 # %%
