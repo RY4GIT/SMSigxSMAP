@@ -1,1 +1,0 @@
-wget --http-user=id --http-password=pass --load-cookies mycookies.txt --save-cookies mycookies.txt --keep-session-cookies --no-check-certificate --auth-no-challenge -r --reject "index.html*" -np -e robots=off https://n5eil02u.ecs.nsidc.org/esir/5000003983740.zip?1
