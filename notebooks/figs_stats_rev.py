@@ -49,7 +49,7 @@ plt.rcParams["mathtext.fontset"] = (
 
 ################ CHANGE HERE FOR PATH CONFIG ##################################
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-12-03_revision"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-12-03_revision"  # f"raraki_2024-12-03_revision"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ###########################################################################
 # f"raraki_2024-05-13_global_piecewise" was used for the 1st version of the manuscript
 # f"raraki_2024-12-03_revision" was used for the revised version of the manuscript
@@ -308,18 +308,26 @@ count_model_performance(df_filt_q_and_tauexp, "diff_R2_q_tauexp")
 print("linear vs nonlinear")
 count_model_performance(df_filt_q_and_exp, "diff_R2_q_exp")
 
+print("\n")
 print(r"In terms of $AIC$")
 print("tau-linear vs nonlinear")
 count_model_performance(df_filt_q_and_tauexp, "diff_aic_q_tauexp")
 print("linear vs nonlinear")
 count_model_performance(df_filt_q_and_exp, "diff_aic_q_exp")
 
+print("\n")
 print(r"In terms of $BIC$")
 print("tau-linear vs nonlinear")
 count_model_performance(df_filt_q_and_tauexp, "diff_bic_q_tauexp")
 print("linear vs nonlinear")
 count_model_performance(df_filt_q_and_exp, "diff_bic_q_exp")
 
+print("\n")
+print(r"In terms of $AICc$")
+print("tau-linear vs nonlinear")
+count_model_performance(df_filt_q_and_tauexp, "diff_aicc_q_tauexp")
+print("linear vs nonlinear")
+count_model_performance(df_filt_q_and_exp, "diff_aicc_q_exp")
 
 # %%
 ############################################################################
@@ -356,8 +364,14 @@ def plot_model_metrics(df, linearmodel, metric_name, threshold=None, save=False)
     plt.rcParams.update({"font.size": 30})
 
     # Read df
-    x = df[f"{linearmodel}_{metric_name}"].values
-    y = df[f"q_{metric_name}"].values
+    x_varname = f"{linearmodel}_{metric_name}"
+    y_varname = f"q_{metric_name}"
+
+    df = df[df[x_varname].notna() & np.isfinite(df[x_varname])]
+    df = df[df[y_varname].notna() & np.isfinite(df[y_varname])]
+
+    x = df[x_varname].values
+    y = df[y_varname].values
 
     # Create a scatter plot
     # $ fig, ax = plt.subplots(figsize=(4.5 * 1.2, 4 * 1.2),)
@@ -457,6 +471,13 @@ plot_model_metrics(
 )
 plot_model_metrics(
     df=df_filt_q_and_tauexp, linearmodel="tauexp", metric_name="bic", save=save
+)
+
+plot_model_metrics(
+    df=df_filt_q_and_exp, linearmodel="exp", metric_name="aicc", save=save
+)
+plot_model_metrics(
+    df=df_filt_q_and_tauexp, linearmodel="tauexp", metric_name="aicc", save=save
 )
 
 
@@ -612,6 +633,52 @@ print_global_stats(
     df_filt_q_and_tauexp, "diff_aic_q_exp", "nonlinear - tau-based linear"
 )
 
+# %%
+var_key_exp = "diff_aicc_q_exp"
+var_key_tauexp = "diff_aicc_q_tauexp"
+
+# Plot and save maps for exp model
+plt.rcParams.update({"font.size": 12})
+fig_map_aicc, ax = plt.subplots(
+    figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+)
+plot_map(
+    ax=ax,
+    df=df_filt_q_and_exp,
+    coord_info=coord_info,
+    cmap="RdBu_r",
+    norm=norm_exp,
+    var_item=var_dict[var_key_exp],
+    stat_type=stat_type,
+    bar_label=var_dict[var_key_exp]["label"],
+)
+if save:
+    save_figure(fig_map_aicc, fig_dir, f"aicc_map_{stat_type}_and_exp", "png", 900)
+
+# Print statistical summaries for exp model
+print_global_stats(df_filt_q_and_exp, "diff_aicc_q_exp", "nonlinear - linear")
+
+# Plot and save maps for tauexp model
+fig_map_aicc, ax = plt.subplots(
+    figsize=(9, 9), subplot_kw={"projection": ccrs.Robinson()}
+)
+plot_map(
+    ax=ax,
+    df=df_filt_q_and_tauexp,
+    coord_info=coord_info,
+    cmap="RdBu_r",
+    norm=norm_tauexp,
+    var_item=var_dict[var_key_tauexp],
+    stat_type=stat_type,
+    bar_label=var_dict[var_key_tauexp]["label"],
+)
+if save:
+    save_figure(fig_map_aicc, fig_dir, f"aicc_map_{stat_type}_and_tauexp", "png", 900)
+
+# Print statistical summaries for tauexp model
+print_global_stats(
+    df_filt_q_and_tauexp, "diff_aicc_q_exp", "nonlinear - tau-based linear"
+)
 # %%
 # Setup common variables
 var_key_exp = "diff_bic_q_exp"

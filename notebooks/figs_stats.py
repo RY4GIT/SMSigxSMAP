@@ -49,11 +49,11 @@ plt.rcParams["mathtext.fontset"] = (
 
 ################ CHANGE HERE FOR PATH CONFIG ##################################
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-05-13_global_piecewise"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-12-18_init_q_0p5"  # f"raraki_2024-05-13_global_piecewise"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ###########################################################################
 # f"raraki_2024-05-13_global_piecewise" was used for the 1st version of the manuscript
 
-# Ryoko Araki, Bryn Morgan, Hilary K McMillan, Kelly K Caylor. 
+# Ryoko Araki, Bryn Morgan, Hilary K McMillan, Kelly K Caylor.
 # Nonlinear Soil Moisture Loss Function Reveals Vegetation Responses to Water Availability. ESS Open Archive . August 01, 2024.
 # DOI: 10.22541/essoar.172251989.99347091/v1
 
