@@ -33,7 +33,7 @@ import sys
 # %% Plot config
 
 ############ CHANGE HERE FOR CHECKING DIFFERENT RESULTS ###################
-dir_name = f"raraki_2024-12-03_revision"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
+dir_name = f"raraki_2024-12-03_revision"  # f"raraki_2024-12-03_revision"  # "raraki_2024-02-02"  # f"raraki_2023-11-25_global_95asmax"
 ############################|###############################################
 # f"raraki_2024-05-13_global_piecewise" was used for the 1st version of the manuscript
 
@@ -125,7 +125,8 @@ print(df["name"].unique())
 # Get the binned ancillary information
 
 # %%
-df.columns
+print(df.columns)
+
 # %% ############################################################################
 # Calculate some stats for evaluation
 
@@ -206,6 +207,32 @@ def check_1ts_range(row, verbose=False):
     return (dsdt_0 - dsdt_1) / (row["q_ETmax"] / z_mm) * (-1)
 
 
+import numpy as np
+
+
+def count_nonnan_sm(row):
+    input_string = row.sm
+
+    # Processing the string
+    input_string = input_string.replace("\n", " np.nan")
+    input_string = input_string.replace(" nan", " np.nan")
+    input_string = input_string.strip("[]")
+
+    # Converting to numpy array and handling np.nan
+    sm = np.array(
+        [
+            float(value) if value != "np.nan" else np.nan
+            for value in input_string.split()
+        ]
+    )
+
+    # Counting the number of non-NaN values
+    count_non_nan = np.sum(~np.isnan(sm))
+
+    # Return the sm_range and the count of non-NaN values
+    return count_non_nan
+
+
 # Create new columns
 df["first3_avail2"] = df.apply(df_availability, axis=1)
 df["sm_range"] = df.apply(calculate_sm_range, axis=1)
@@ -213,8 +240,26 @@ df["event_length"] = (
     pd.to_datetime(df["event_end"]) - pd.to_datetime(df["event_start"])
 ).dt.days + 1
 df["large_q_criteria"] = df.apply(check_1ts_range, axis=1)
+df["event_ndays"] = df.apply(count_nonnan_sm, axis=1)
 
 
+# # %%
+# def calculate_aicc(row, k, aic_col):
+#     n = row["event_ndays"]
+#     aic = row[aic_col]
+#     if n > k + 1:  # Avoid division by zero or invalid cases
+#         aicc = aic + (2 * k * (k + 1)) / (n - k - 1)
+#     else:
+#         aicc = np.nan  # AICc is undefined if n <= k + 1
+#     return aicc
+
+
+# # Apply the calculation to each row in the DataFrame
+# df["tauexp_aicc"] = df.apply(lambda row: calculate_aicc(row, 4, "tauexp_aic"), axis=1)
+# df["exp_aicc"] = df.apply(lambda row: calculate_aicc(row, 3, "tauexp_aic"), axis=1)
+# df["q_aicc"] = df.apply(lambda row: calculate_aicc(row, 4, "q_aic"), axis=1)
+df = df.assign(diff_aicc_q_tauexp=df["q_aicc"] - df["tauexp_aicc"])
+df = df.assign(diff_aicc_q_exp=df["q_aicc"] - df["exp_aicc"])
 # %%
 output_path = os.path.join(output_dir, dir_name, "all_results_processed.csv")
 df.to_csv(output_path)

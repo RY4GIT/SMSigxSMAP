@@ -188,6 +188,20 @@
         "unit": "",
         "lim": [-5, 5]
     },
+    "diff_aicc_q_exp": {
+        "column_name": "diff_aicc_q_exp",
+        "symbol": "",
+        "label": "$AIC_c$ (Nonlinear - linear)",
+        "unit": "",
+        "lim": [-5, 5]
+    },
+    "diff_aicc_q_tauexp": {
+        "column_name": "diff_aicc_q_tauexp",
+        "symbol": "",
+        "label": "$AIC_c$ (Nonlinear - $\\tau$-based linear)",
+        "unit": "",
+        "lim": [-5, 5]
+    },
     "diff_bic_q_exp": {
         "column_name": "diff_aic_q_exp",
         "symbol": "",
